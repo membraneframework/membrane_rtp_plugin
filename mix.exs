@@ -8,23 +8,26 @@ defmodule Membrane.Element.RTP.MixProject do
     [
       app: :membrane_rtp,
       version: @version,
-      elixir: "~> 1.7",
+      elixir: "~> 1.9",
       elixirc_paths: elixirc_paths(Mix.env()),
-      start_permanent: Mix.env() == :prod,
+      deps: deps(),
+
+      # hex
       description: "Membrane Multimedia Framework plugin for RTP",
       package: package(),
+
+      # docs
       name: "Membrane RTP plugin",
       source_url: @github_url,
-      docs: docs(),
       homepage_url: "https://membraneframework.org",
       test_coverage: [tool: ExCoveralls],
-      deps: deps(),
       preferred_cli_env: [
         coveralls: :test,
         "coveralls.detail": :test,
         "coveralls.post": :test,
         "coveralls.html": :test
-      ]
+      ],
+      docs: docs()
     ]
   end
 
@@ -59,9 +62,13 @@ defmodule Membrane.Element.RTP.MixProject do
   defp deps do
     [
       {:membrane_core, "~> 0.5.0"},
+      {:membrane_caps_rtp, "~> 0.1"},
+      {:bunch, "~> 1.0"},
+      {:heap, "~> 2.0.2"},
+
+      # Dev
       {:ex_doc, "~> 0.21", only: :dev, runtime: false},
       {:dialyxir, "~> 1.0.0", only: :dev, runtime: false},
-      {:membrane_caps_rtp, "~> 0.1"},
       {:excoveralls, ">= 0.8.0", only: :test}
     ]
   end
