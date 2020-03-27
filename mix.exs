@@ -69,7 +69,11 @@ defmodule Membrane.Element.RTP.MixProject do
       # Dev
       {:ex_doc, "~> 0.21", only: :dev, runtime: false},
       {:dialyxir, "~> 1.0.0", only: :dev, runtime: false},
-      {:excoveralls, ">= 0.8.0", only: :test}
+      {:excoveralls, ">= 0.8.0", only: :test},
+      {:membrane_element_rtp_h264, "~> 0.2.0", only: :test},
+      {:membrane_element_rtp_mpeguadio, "~> 0.3.0", only: :test},
+      {:membrane_element_ffmpeg_h264, "~> 0.2.0", only: :test},
+      {:membrane_element_pcap, github: "membraneframework/membrane-element-pcap", only: :test}
     ]
   end
 end
