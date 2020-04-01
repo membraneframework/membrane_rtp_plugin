@@ -5,7 +5,7 @@ defmodule Membrane.RTCP.ByePacket do
   """
   use Bunch
 
-  alias Membrane.RTCP.PacketParser
+  alias Membrane.RTCP.Packet
 
   @type t :: %__MODULE__{
           ssrcs: [non_neg_integer()],
@@ -29,7 +29,7 @@ defmodule Membrane.RTCP.ByePacket do
       end
 
     body = ssrcs <> reason
-    length = PacketParser.calc_length(body)
+    length = Packet.calc_length(body)
 
     header = <<2::2, 0::1, count::5, 203::8, length::16>>
 

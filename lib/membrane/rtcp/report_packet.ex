@@ -27,7 +27,7 @@ defmodule Membrane.RTCP.ReportPacket do
     rc = report.reports |> length()
     pt = if report.sender_info == nil, do: 201, else: 200
     body = <<report.ssrc::32>> <> sender_info <> blocks
-    length = RTCP.calc_length(body)
+    length = RTCP.Packet.calc_length(body)
 
     header = <<2::2, 0::1, rc::5, pt::8, length::16>>
     header <> body

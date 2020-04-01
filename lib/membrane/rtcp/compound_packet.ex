@@ -8,13 +8,12 @@ defmodule Membrane.RTCP.CompoundPacket do
   # parse_subpacket - parses an extracted binary into a single subpacket (single SR/RR/BYE/etc)
 
   alias Membrane.RTCP.{
+    Packet,
     AppPacket,
     ByePacket,
     ReportPacket,
     SdesPacket
   }
-
-  alias Membrane.RTP.PacketParser
 
   defstruct [:subpackets, :srtcp_index]
 
@@ -45,17 +44,6 @@ defmodule Membrane.RTCP.CompoundPacket do
     end
   end
 
-  def calc_length(binary) do
-    binary |> byte_size |> div(4)
-  end
-
-  def pad(body) do
-    # TODO remove?
-    pad_count = body |> byte_size |> rem(4)
-    end_pad = Enum.map(1..pad_count, fn _ -> <<0>> end) |> Enum.join()
-    body <> end_pad
-  end
-
   defp unsecure(compound_packet, nil), do: {:ok, compound_packet}
 
   defp unsecure(compound_packet, context) do
@@ -83,7 +71,7 @@ defmodule Membrane.RTCP.CompoundPacket do
     body_size = 4 * length
     <<body::binary-size(body_size), rest::binary>> = body_and_rest
 
-    body = PacketParser.ignore_padding(body, p == 1)
+    body = Packet.ignore_padding(body, p == 1)
 
     with {:ok, packet} <- parse_subpacket(body, count, pt) do
       parse(rest, [packet | packets])
