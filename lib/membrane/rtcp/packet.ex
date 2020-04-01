@@ -20,7 +20,11 @@ defmodule Membrane.RTCP.Packet do
   @spec calc_length(binary()) :: pos_integer()
   def calc_length(body) do
     words = body |> byte_size() |> div(4)
-    words - 1
+
+    # TODO: RFC clearly states should be `words - 1`. However the tests using binary RTCP packet are failing if that difference
+    # is used. Need to check which one is wrong
+    # words - 1
+    words
   end
 
   # TODO: Remove if it won't be used

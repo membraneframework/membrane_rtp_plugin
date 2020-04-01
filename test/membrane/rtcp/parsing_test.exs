@@ -8,15 +8,15 @@ defmodule Membrane.RTCP.ParsingTest do
 
   test "parses compound packets" do
     packet = SamplePacket.sample_rtcp_packet()
-    assert {:ok, packets} = RTCP.parse_compound(packet, nil)
-    assert %RTCP.Report{reports: [], sender_info: _, ssrc: @sample_ssrc} = hd(packets)
-    assert %RTCP.Bye{ssrcs: [@sample_ssrc]} = Enum.at(packets, 1)
+    assert {:ok, packets} = RTCP.CompoundPacket.parse(packet, nil)
+    assert %RTCP.ReportPacket{reports: [], sender_info: _, ssrc: @sample_ssrc} = hd(packets)
+    assert %RTCP.ByePacket{ssrcs: [@sample_ssrc]} = Enum.at(packets, 1)
   end
 
   test "parsed packets are equal to constructed packets" do
     packet = SamplePacket.sample_rtcp_packet()
-    assert {:ok, packets} = RTCP.parse_compound(packet, nil)
-    tb = RTCP.to_binary(packets, nil)
+    assert {:ok, packets} = RTCP.CompoundPacket.parse(packet, nil)
+    tb = RTCP.CompoundPacket.to_binary(packets, nil)
     assert tb == packet
   end
 end

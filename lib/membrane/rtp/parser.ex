@@ -9,7 +9,7 @@ defmodule Membrane.RTP.Parser do
   alias Membrane.Buffer
   alias Membrane.Caps.RTP, as: Caps
   alias Membrane.Element.Action
-  alias Membrane.RTP.{Header, Packet, PacketParser, PayloadTypeDecoder}
+  alias Membrane.RTP.{Header, Packet, PayloadTypeDecoder}
 
   @metadata_fields [:timestamp, :sequence_number, :ssrc, :payload_type]
 
@@ -36,7 +36,7 @@ defmodule Membrane.RTP.Parser do
 
   @impl true
   def handle_process(:input, %Buffer{payload: buffer_payload} = buffer, _ctx, state) do
-    with {:ok, %Packet{} = packet} <- PacketParser.parse_packet(buffer_payload),
+    with {:ok, %Packet{} = packet} <- Packet.parse(buffer_payload),
          {commands, state} <- build_commands(packet, buffer, state) do
       {{:ok, commands}, state}
     else

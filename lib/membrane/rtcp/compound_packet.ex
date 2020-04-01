@@ -3,8 +3,8 @@ defmodule Membrane.RTCP.CompoundPacket do
   Parses compound RTCP packets into a list of subpackets.
   """
 
-  # parse_compound - authenticates/decryptes an entire compound packet
-  # parse - removes padding from compound packet
+  # parse - authenticates/decryptes an entire compound packet
+  # do_parse - removes padding from compound packet
   # parse_subpacket - parses an extracted binary into a single subpacket (single SR/RR/BYE/etc)
 
   alias Membrane.RTCP.{
@@ -32,14 +32,14 @@ defmodule Membrane.RTCP.CompoundPacket do
     |> Enum.join()
   end
 
-  @spec parse_compound(
+  @spec parse(
           binary(),
           Context.t() | nil
         ) ::
           {:ok, [subpacket_t()]} | {:error, any()}
-  def parse_compound(compound_packet, context \\ nil) do
+  def parse(compound_packet, context \\ nil) do
     with {:ok, unsecured_compound} <- unsecure(compound_packet, context),
-         {:ok, subpackets} <- parse(unsecured_compound, []) do
+         {:ok, subpackets} <- do_parse(unsecured_compound, []) do
       {:ok, subpackets}
     end
   end
@@ -62,9 +62,9 @@ defmodule Membrane.RTCP.CompoundPacket do
     {:ok, packets}
   end
 
-  defp parse(<<>>, acc), do: {:ok, Enum.reverse(acc)}
+  defp do_parse(<<>>, acc), do: {:ok, Enum.reverse(acc)}
 
-  defp parse(
+  defp do_parse(
          <<2::2, p::1, count::5, pt::8, length::16, body_and_rest::binary>>,
          packets
        ) do
@@ -74,7 +74,7 @@ defmodule Membrane.RTCP.CompoundPacket do
     body = Packet.ignore_padding(body, p == 1)
 
     with {:ok, packet} <- parse_subpacket(body, count, pt) do
-      parse(rest, [packet | packets])
+      do_parse(rest, [packet | packets])
     end
   end
 

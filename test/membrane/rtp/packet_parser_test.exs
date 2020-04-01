@@ -1,11 +1,11 @@
 defmodule Membrane.RTP.PacketParserTest do
   use ExUnit.Case
 
-  alias Membrane.RTP.{Header, HeaderExtension, Packet, PacketParser, SamplePacket}
+  alias Membrane.RTP.{Header, HeaderExtension, Packet, SamplePacket}
 
   describe "RTP parser" do
     test "parses valid packets" do
-      assert PacketParser.parse_packet(SamplePacket.sample_packet()) ==
+      assert Packet.parse(SamplePacket.sample_packet()) ==
                {:ok,
                 %Packet{
                   header: SamplePacket.sample_header(),
@@ -14,11 +14,11 @@ defmodule Membrane.RTP.PacketParserTest do
     end
 
     test "returns error when version is not supported" do
-      assert PacketParser.parse_packet(<<1::2, 1233::1022>>) == {:error, :wrong_version}
+      assert Packet.parse(<<1::2, 1233::1022>>) == {:error, :wrong_version}
     end
 
     test "returns error when packet is too short" do
-      assert PacketParser.parse_packet(<<128, 127, 0, 0, 1>>) == {:error, :packet_malformed}
+      assert Packet.parse(<<128, 127, 0, 0, 1>>) == {:error, :packet_malformed}
     end
 
     test "parses csrcs correctly" do
@@ -26,7 +26,7 @@ defmodule Membrane.RTP.PacketParserTest do
       test_packet = <<header_1::4, 2::4, header_2::88, 12::32, 21::32, payload::binary()>>
       expected_header = %Header{SamplePacket.sample_header() | csrcs: [21, 12], csrc_count: 2}
 
-      assert PacketParser.parse_packet(test_packet) ==
+      assert Packet.parse(test_packet) ==
                {:ok,
                 %Packet{
                   header: expected_header,
@@ -47,7 +47,7 @@ defmodule Membrane.RTP.PacketParserTest do
 
       expected_header = %Header{SamplePacket.sample_header() | padding: true}
 
-      assert PacketParser.parse_packet(test_packet) ==
+      assert Packet.parse(test_packet) ==
                {:ok,
                 %Packet{
                   header: expected_header,
@@ -76,7 +76,7 @@ defmodule Membrane.RTP.PacketParserTest do
           extension_header_data: expected_parsed_extension_header
       }
 
-      assert PacketParser.parse_packet(test_packet) ==
+      assert Packet.parse(test_packet) ==
                {:ok,
                 %Packet{
                   header: expected_header,
