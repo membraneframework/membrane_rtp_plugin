@@ -1,6 +1,6 @@
-defmodule Membrane.RTCP.PacketParser do
+defmodule Membrane.RTCP.CompoundPacket do
   @moduledoc """
-  Parses compound RTCP and SRTCP packets into a list of subpackets.
+  Parses compound RTCP packets into a list of subpackets.
   """
 
   # parse_compound - authenticates/decryptes an entire compound packet
@@ -8,17 +8,17 @@ defmodule Membrane.RTCP.PacketParser do
   # parse_subpacket - parses an extracted binary into a single subpacket (single SR/RR/BYE/etc)
 
   alias Membrane.RTCP.{
-    App,
-    Bye,
-    Report,
-    SDES
+    AppPacket,
+    ByePacket,
+    ReportPacket,
+    SdesPacket
   }
 
   alias Membrane.RTP.PacketParser
 
   defstruct [:subpackets, :srtcp_index]
 
-  @type subpacket_t :: App.t() | Bye.t() | Report.t() | SDES.t()
+  @type subpacket_t :: AppPacket.t() | ByePacket.t() | ReportPacket.t() | SdesPacket.t()
 
   @type t :: %__MODULE__{
           subpackets: [subpacket_t()],
@@ -91,10 +91,10 @@ defmodule Membrane.RTCP.PacketParser do
   end
 
   defp parse_subpacket(packet, _count, pt) when pt in [200, 201],
-    do: Report.parse(packet, pt == 200)
+    do: ReportPacket.parse(packet, pt == 200)
 
-  defp parse_subpacket(packet, _count, 202), do: SDES.parse(packet)
-  defp parse_subpacket(packet, count, 203), do: Bye.parse(packet, count)
-  defp parse_subpacket(packet, count, 204), do: App.parse(packet, count)
+  defp parse_subpacket(packet, _count, 202), do: SdesPacket.parse(packet)
+  defp parse_subpacket(packet, count, 203), do: ByePacket.parse(packet, count)
+  defp parse_subpacket(packet, count, 204), do: AppPacket.parse(packet, count)
   defp parse_subpacket(_packet, _count, _pt), do: {:error, :unknown_pt}
 end

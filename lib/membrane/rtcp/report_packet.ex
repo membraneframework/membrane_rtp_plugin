@@ -1,10 +1,9 @@
-defmodule Membrane.RTCP.Report do
+defmodule Membrane.RTCP.ReportPacket do
   @moduledoc """
   Parses and constructs RTCP Sender and Receiver Reports defined in
   [RFC3550](https://tools.ietf.org/html/rfc3550#section-6.4)
   """
   alias Membrane.RTCP
-  alias Membrane.RTCP.ReportBlock
 
   defstruct [:ssrc, :reports, :sender_info]
 
@@ -17,13 +16,13 @@ defmodule Membrane.RTCP.Report do
 
   @type t :: %__MODULE__{
           ssrc: non_neg_integer(),
-          reports: [ReportBlock.t()],
+          reports: [__MODULE__.Block.t()],
           sender_info: sender_info_t() | nil
         }
 
   def to_binary(report) do
     sender_info = sender_info_to_binary(report.sender_info)
-    blocks = report.reports |> Enum.map(&ReportBlock.to_binary(&1)) |> Enum.join(<<>>)
+    blocks = report.reports |> Enum.map(&__MODULE__.Block.to_binary(&1)) |> Enum.join(<<>>)
 
     rc = report.reports |> length()
     pt = if report.sender_info == nil, do: 201, else: 200
@@ -45,7 +44,7 @@ defmodule Membrane.RTCP.Report do
   @spec parse(packet :: binary(), is_sender_info_present :: boolean()) :: {:ok, t()}
   def parse(<<ssrc::32, rest::binary>>, is_info_present) do
     {sender_info, blocks} = parse_sender_info(rest, is_info_present)
-    reports = ReportBlock.parse(blocks)
+    reports = __MODULE__.Block.parse(blocks)
     data = %__MODULE__{ssrc: ssrc, reports: reports, sender_info: sender_info}
     {:ok, data}
   end

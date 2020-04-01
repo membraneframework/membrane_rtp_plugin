@@ -1,6 +1,6 @@
-defmodule Membrane.RTCP.SDES do
+defmodule Membrane.RTCP.SdesPacket do
   @moduledoc """
-  Parses Source Description RTCP Packets defined in
+  Parses Source Description (SDES) RTCP Packets defined in
   [RFC3550](https://tools.ietf.org/html/rfc3550#section-6.5)
   """
   @sdes_types %{

@@ -1,4 +1,4 @@
-defmodule Membrane.RTCP.ReportBlock do
+defmodule Membrane.RTCP.ReportPacket.Block do
   @moduledoc """
   Parses and constructs report blocks, which are parts of RTCP Sender and Receiver Reports
   defined in [RFC3550](https://tools.ietf.org/html/rfc3550#section-6.4)

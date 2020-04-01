@@ -1,4 +1,4 @@
-defmodule Membrane.RTCP.Bye do
+defmodule Membrane.RTCP.ByePacket do
   @moduledoc """
   Parses and constructs RTCP BYE packets defined in
   [RFC3550](https://tools.ietf.org/html/rfc3550#section-6.6)

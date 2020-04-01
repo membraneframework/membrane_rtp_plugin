@@ -1,6 +1,7 @@
-defmodule Membrane.RTCP.App do
+defmodule Membrane.RTCP.AppPacket do
   @moduledoc """
-  Parses RTCP APP packets defined in [RFC3550](https://tools.ietf.org/html/rfc3550#section-6.7)
+  Parses RTCP Application-defined (APP) packets
+  defined in [RFC3550](https://tools.ietf.org/html/rfc3550#section-6.7)
   """
   defstruct [:subtype, :ssrc, :name, :data]
 
