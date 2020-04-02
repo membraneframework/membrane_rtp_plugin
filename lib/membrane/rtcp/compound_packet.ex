@@ -68,6 +68,8 @@ defmodule Membrane.RTCP.CompoundPacket do
          <<2::2, p::1, count::5, pt::8, length::16, body_and_rest::binary>>,
          packets
        ) do
+    # we use `length` instead of `length - 1` because we've already parsed 32bits - the header
+    # TODO: Refactor needed to allow parsing header by packets
     body_size = 4 * length
     <<body::binary-size(body_size), rest::binary>> = body_and_rest
 

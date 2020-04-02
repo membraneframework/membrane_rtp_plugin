@@ -6,7 +6,8 @@ defmodule Membrane.RTCP.Packet do
   # TODO: Add a behaviour for packets
 
   @doc """
-  Calculates the value of length field based on body.
+  Calculates the value of length field based on body. Includes the size of a header
+  in which it should be put.
 
   To quote the RFC:
 
@@ -21,9 +22,7 @@ defmodule Membrane.RTCP.Packet do
   def calc_length(body) do
     words = body |> byte_size() |> div(4)
 
-    # TODO: RFC clearly states should be `words - 1`. However the tests using binary RTCP packet are failing if that difference
-    # is used. Need to check which one is wrong
-    # words - 1
+    # Simplified from `words - 1 + 1` to include header
     words
   end
 

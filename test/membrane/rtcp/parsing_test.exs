@@ -16,7 +16,6 @@ defmodule Membrane.RTCP.ParsingTest do
   test "parsed packets are equal to constructed packets" do
     packet = SamplePacket.sample_rtcp_packet()
     assert {:ok, packets} = RTCP.CompoundPacket.parse(packet, nil)
-    tb = RTCP.CompoundPacket.to_binary(packets, nil)
-    assert tb == packet
+    assert RTCP.CompoundPacket.to_binary(packets, nil) == packet
   end
 end
