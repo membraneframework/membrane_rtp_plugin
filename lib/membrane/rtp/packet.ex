@@ -4,7 +4,7 @@ defmodule Membrane.RTP.Packet do
   Based on [RFC3550](https://tools.ietf.org/html/rfc3550#page-13)
   """
 
-  alias Membrane.RTP.{Header, HeaderExtension, Packet}
+  alias Membrane.RTP.{Header, Packet}
 
   @type t :: %__MODULE__{
           header: Header.t(),
@@ -65,7 +65,7 @@ defmodule Membrane.RTP.Packet do
   defp extract_extension_header(1, binary_data) do
     <<profile_specific::16, len::16, header_ext::binary-size(len), rest::binary>> = binary_data
 
-    extension_data = %HeaderExtension{
+    extension_data = %Header.Extension{
       profile_specific: profile_specific,
       header_extension: header_ext
     }

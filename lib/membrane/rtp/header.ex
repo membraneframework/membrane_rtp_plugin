@@ -19,7 +19,6 @@ defmodule Membrane.RTP.Header do
   """
 
   alias Membrane.Caps.RTP
-  alias Membrane.RTP.HeaderExtension
 
   @typedoc """
   This field identifies the version of RTP. The version defined by this specification is 2.
@@ -53,7 +52,7 @@ defmodule Membrane.RTP.Header do
           timestamp: non_neg_integer(),
           sequence_number: non_neg_integer(),
           csrcs: [non_neg_integer()],
-          extension_header_data: HeaderExtension.t() | nil
+          extension_header_data: __MODULE__.Extension.t() | nil
         }
 
   @enforce_keys [

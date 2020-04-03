@@ -1,7 +1,7 @@
 defmodule Membrane.RTP.PacketParserTest do
   use ExUnit.Case
 
-  alias Membrane.RTP.{Header, HeaderExtension, Packet, SamplePacket}
+  alias Membrane.RTP.{Header, Packet, SamplePacket}
 
   describe "RTP parser" do
     test "parses valid packets" do
@@ -58,7 +58,7 @@ defmodule Membrane.RTP.PacketParserTest do
     test "reads extension header" do
       extension_header = <<0::16, 4::16, 254::32>>
 
-      expected_parsed_extension_header = %HeaderExtension{
+      expected_parsed_extension_header = %Header.Extension{
         header_extension: <<254::32>>,
         profile_specific: 0
       }

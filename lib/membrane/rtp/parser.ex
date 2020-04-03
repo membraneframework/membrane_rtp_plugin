@@ -9,7 +9,7 @@ defmodule Membrane.RTP.Parser do
   alias Membrane.Buffer
   alias Membrane.Caps.RTP, as: Caps
   alias Membrane.Element.Action
-  alias Membrane.RTP.{Header, Packet, PayloadTypeDecoder}
+  alias Membrane.RTP.{Header, Packet}
 
   @metadata_fields [:timestamp, :sequence_number, :ssrc, :payload_type]
 
@@ -73,8 +73,9 @@ defmodule Membrane.RTP.Parser do
     } = header
 
     caps = %Caps{
+      # TODO: Rename raw_payload_type -> payload_type, payload_type -> encoding_name + maybe use strings instead of atoms
       raw_payload_type: payload_type,
-      payload_type: PayloadTypeDecoder.decode_payload_type(payload_type)
+      payload_type: Packet.PayloadType.get_encoding_name(payload_type)
     }
 
     {:caps, {:output, caps}}

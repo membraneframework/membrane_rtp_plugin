@@ -32,9 +32,15 @@ defmodule Membrane.RTCP.Packet do
   # """
   # @spec align(binary()) :: binary()
   # def align(body) do
-  #   pad_bits = body |> bit_size |> rem(32)
-  #   end_pad = <<0::size(pad_bits)>>
-  #   body <> end_pad
+  #   case body |> bit_size |> rem(32) do
+  #     0 ->
+  #       body
+
+  #     unaligned_bits ->
+  #       pad_bits = 32 - unaligned_bits
+  #       end_pad = <<0::size(pad_bits)>>
+  #       body <> end_pad
+  #   end
   # end
 
   defdelegate ignore_padding(body, present?), to: Membrane.RTP.Packet
