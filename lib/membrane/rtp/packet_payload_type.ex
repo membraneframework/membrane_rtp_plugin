@@ -3,7 +3,7 @@ defmodule Membrane.RTP.Packet.PayloadType do
   This module contains utility to translate numerical payload type into an atom value.
   """
 
-  alias Membrane.Caps.RTP
+  alias Membrane.RTP
 
   @doc """
   Gets the name of used encoding from numerical payload according to [RFC3551](https://tools.ietf.org/html/rfc3551#page-32).

@@ -2,9 +2,9 @@ defmodule Membrane.RTP.Session.SourceTest do
   use ExUnit.Case
   alias Membrane.Testing
 
-  alias Membrane.RTP.Session.Source
   alias Membrane.RTP
-  alias Membrane.Element.RTP.H264
+  alias Membrane.RTP.Session.Source
+  alias Membrane.RTP.H264
 
   import Testing.Assertions
 

@@ -18,7 +18,7 @@ defmodule Membrane.RTP.Header do
   ```
   """
 
-  alias Membrane.Caps.RTP
+  alias Membrane.RTP
 
   @typedoc """
   This field identifies the version of RTP. The version defined by this specification is 2.

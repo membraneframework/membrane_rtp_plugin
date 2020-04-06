@@ -3,24 +3,24 @@ defmodule Membrane.RTP.JitterBuffer do
   Element that buffers and reorders RTP packets based on sequence_number.
   """
   use Membrane.Filter
-  use Bunch
-  alias __MODULE__.{BufferStore, Record}
-  alias Membrane.Caps.RTP, as: Caps
-
   use Membrane.Log
+  use Bunch
+
+  alias Membrane.RTP
+  alias __MODULE__.{BufferStore, Record}
 
   @type packet_index :: non_neg_integer()
   @type sequence_number :: 0..65_535
   @type timestamp :: pos_integer()
 
   def_output_pad :output,
-    caps: Caps
+    caps: RTP
 
   def_input_pad :input,
-    caps: Caps,
+    caps: RTP,
     demand_unit: :buffers
 
-  @default_latency 200 |> Membrane.Time.millisecond()
+  @default_latency 200 |> Membrane.Time.milliseconds()
 
   def_options latency: [
                 type: :time,

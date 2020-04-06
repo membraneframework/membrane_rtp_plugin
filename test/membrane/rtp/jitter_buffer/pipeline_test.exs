@@ -64,17 +64,17 @@ defmodule Membrane.RTP.JitterBuffer.PipelineTest do
   end
 
   test "Jitter Buffer works in a Pipeline with small latency" do
-    test_pipeline(300, 10, 200 |> Membrane.Time.millisecond())
+    test_pipeline(300, 10, 200 |> Membrane.Time.milliseconds())
   end
 
   test "Jitter Buffer works in a Pipeline with large latency" do
-    test_pipeline(100, 30, 1000 |> Membrane.Time.millisecond())
+    test_pipeline(100, 30, 1000 |> Membrane.Time.milliseconds())
   end
 
   @tag :long_running
   @tag timeout: 70_000 * 10 + 10000
   test "Jitter Buffer works in a long-running Pipeline with small latency" do
-    test_pipeline(70_000, 10, 100 |> Membrane.Time.millisecond())
+    test_pipeline(70_000, 10, 100 |> Membrane.Time.milliseconds())
   end
 
   defp test_pipeline(buffers, buffer_delay_ms, latency) do

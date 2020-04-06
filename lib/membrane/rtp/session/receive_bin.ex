@@ -19,17 +19,17 @@ defmodule Membrane.RTP.Session.ReceiveBin do
 
   @known_depayloaders %{
     # TODO: Rename the elements
-    h264: Membrane.Element.RTP.H264.Depayloader,
-    mpa: Membrane.Element.RTP.MPEGAudio.Depayloader
+    h264: Membrane.RTP.H264.Depayloader,
+    mpa: Membrane.RTP.MPEGAudio.Depayloader
   }
 
   def_options fmt_mapping: [
-                spec: %{integer => RTP.Description.payload_type()},
+                spec: %{integer => RTP.payload_type()},
                 default: %{},
                 description: "Mapping of the custom payload types (for fmt > 95)"
               ],
               custom_depayloaders: [
-                spec: %{RTP.Description.payload_type() => module()},
+                spec: %{RTP.payload_type() => module()},
                 default: %{},
                 description: "Mapping from a payload type to a custom depayloader module"
               ]
