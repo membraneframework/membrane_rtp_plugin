@@ -13,9 +13,7 @@ defmodule Membrane.RTP.Session.ReceiveBin do
 
   alias Membrane.ParentSpec
   alias Membrane.RTP
-  alias Membrane.RTP.PayloadTypeDecoder
-
-  alias Membrane.Caps.RTP, as: RTPDescription
+  alias Membrane.RTP.Packet.PayloadType
 
   @bin_input_buffer_params [warn_size: 250, fail_size: 500]
 
@@ -26,12 +24,12 @@ defmodule Membrane.RTP.Session.ReceiveBin do
   }
 
   def_options fmt_mapping: [
-                spec: %{integer => RTPDescription.payload_type()},
+                spec: %{integer => RTP.Description.payload_type()},
                 default: %{},
                 description: "Mapping of the custom payload types (for fmt > 95)"
               ],
               custom_depayloaders: [
-                spec: %{RTPDescription.payload_type() => module()},
+                spec: %{RTP.Description.payload_type() => module()},
                 default: %{},
                 description: "Mapping from a payload type to a custom depayloader module"
               ]
@@ -133,7 +131,7 @@ defmodule Membrane.RTP.Session.ReceiveBin do
     %State{ssrc_pt_mapping: ssrc_pt_mapping, fmt_mapping: fmt_map} = state
 
     pt_name =
-      case PayloadTypeDecoder.decode_payload_type(pt_num) do
+      case PayloadType.get_encoding_name(pt_num) do
         :dynamic -> fmt_map[pt_num]
         pt -> pt
       end
