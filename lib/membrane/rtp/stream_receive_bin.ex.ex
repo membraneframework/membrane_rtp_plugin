@@ -1,4 +1,4 @@
-defmodule Membrane.RTP.Session.Source do
+defmodule Membrane.RTP.StreamReceiveBin do
   @moduledoc """
   This bin gets a parsed RTP stream on input and outputs raw media stream.
   Its responsibility is to depayload the RTP stream and compensate the

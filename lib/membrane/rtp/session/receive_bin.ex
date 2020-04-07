@@ -1,12 +1,13 @@
 defmodule Membrane.RTP.Session.ReceiveBin do
   # TODO: Either rename and add sending support or wrap in a bin handling both receiving and sending
   @moduledoc """
-  A bin consuming one or more RTP streams on each input and outputting a stream from one ssrc on each output
+  A bin handling the receive part of RTP session.
 
-  Every stream is parsed and then (based on ssrc field) an
-  appropriate rtp session is initiated. It notifies its parent about each new
-  stream with a notification of the format `{:new_rtp_stream, ssrc, payload_type}`.
-  Parent should then connect to RTP bin dynamic output pad instance that will
+  Consumes one or more RTP streams on each input and outputs a stream from one SSRC on each output.
+
+  Every stream is parsed and then (based on SSRC field) RTP streams are separated, depacketized and sent further.
+  It notifies its parent about each new stream with a notification of the format `{:new_rtp_stream, ssrc, payload_type}`.
+  Parent should then connect to this bin's dynamic output pad instance that will
   have an id == `ssrc`.
   """
   use Membrane.Bin
@@ -93,18 +94,18 @@ defmodule Membrane.RTP.Session.ReceiveBin do
         depayloader -> depayloader
       end
 
-    rtp_session_name = {:rtp_session, make_ref()}
-    new_children = [{rtp_session_name, %RTP.Session.Source{depayloader: depayloader}}]
+    rtp_stream_name = {:rtp_stream, make_ref()}
+    new_children = [{rtp_stream_name, %RTP.StreamReceiveBin{depayloader: depayloader}}]
 
     new_links = [
       link(:ssrc_router)
       |> via_out(Pad.ref(:output, ssrc))
-      |> to(rtp_session_name)
+      |> to(rtp_stream_name)
       |> to_bin_output(pad)
     ]
 
     new_spec = %ParentSpec{children: new_children, links: new_links}
-    new_children_by_pads = state.children_by_pads |> Map.put(pad, rtp_session_name)
+    new_children_by_pads = state.children_by_pads |> Map.put(pad, rtp_stream_name)
 
     {{:ok, spec: new_spec}, %State{state | children_by_pads: new_children_by_pads}}
   end
@@ -119,9 +120,10 @@ defmodule Membrane.RTP.Session.ReceiveBin do
 
   @impl true
   def handle_pad_removed(Pad.ref(:output, _ssrc) = pad, _ctx, state) do
-    {session_to_remove, new_children_by_pads} = state.children_by_pads |> Map.pop(pad)
+    # TODO: parent may not know when to unlink, we need to timout SSRCs and notify about that and BYE packets over RTCP
+    {stream_to_remove, new_children_by_pads} = state.children_by_pads |> Map.pop(pad)
 
-    {{:ok, remove_child: session_to_remove},
+    {{:ok, remove_child: stream_to_remove},
      %State{state | children_by_pads: new_children_by_pads}}
   end
 

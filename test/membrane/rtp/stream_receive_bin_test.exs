@@ -1,9 +1,9 @@
-defmodule Membrane.RTP.Session.SourceTest do
+defmodule Membrane.RTP.StreamReceiveBinTest do
   use ExUnit.Case
   alias Membrane.Testing
 
   alias Membrane.RTP
-  alias Membrane.RTP.Session.Source
+  alias Membrane.RTP.StreamReceiveBin
   alias Membrane.RTP.H264
 
   import Testing.Assertions
@@ -37,7 +37,7 @@ defmodule Membrane.RTP.Session.SourceTest do
       elements: [
         pcap: %Membrane.Element.Pcap.Source{path: @pcap_file},
         rtp_parser: RTP.Parser,
-        rtp: %Source{depayloader: H264.Depayloader},
+        rtp: %StreamReceiveBin{depayloader: H264.Depayloader},
         video_parser: %Membrane.Element.FFmpeg.H264.Parser{framerate: {30, 1}},
         frame_counter: FrameCounter
       ]
