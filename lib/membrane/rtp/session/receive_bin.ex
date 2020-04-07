@@ -18,7 +18,6 @@ defmodule Membrane.RTP.Session.ReceiveBin do
   @bin_input_buffer_params [warn_size: 250, fail_size: 500]
 
   @known_depayloaders %{
-    # TODO: Rename the elements
     h264: Membrane.RTP.H264.Depayloader,
     mpa: Membrane.RTP.MPEGAudio.Depayloader
   }
