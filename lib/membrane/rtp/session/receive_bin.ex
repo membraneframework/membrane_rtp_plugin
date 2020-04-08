@@ -34,7 +34,8 @@ defmodule Membrane.RTP.Session.ReceiveBin do
                 description: "Mapping from a payload type to a custom depayloader module"
               ]
 
-  def_input_pad :input, demand_unit: :buffers, caps: :any, availability: :on_request
+  def_input_pad :rtp_in, demand_unit: :buffers, caps: :any, availability: :on_request
+  def_input_pad :rtcp_in, demand_unit: :buffers, caps: :any, availability: :on_request
 
   def_output_pad :output, caps: :any, demand_unit: :buffers, availability: :on_request
 
@@ -59,8 +60,8 @@ defmodule Membrane.RTP.Session.ReceiveBin do
   end
 
   @impl true
-  def handle_pad_added(Pad.ref(:input, _id) = pad, _ctx, state) do
-    parser_ref = {:parser, make_ref()}
+  def handle_pad_added(Pad.ref(:rtp_in, _id) = pad, _ctx, state) do
+    parser_ref = {:rtp_parser, make_ref()}
 
     children = [{parser_ref, RTP.Parser}]
 
@@ -73,10 +74,25 @@ defmodule Membrane.RTP.Session.ReceiveBin do
 
     new_spec = %ParentSpec{children: children, links: links}
 
-    children_by_pads = state.children_by_pads |> Map.put(pad, parser_ref)
+    state = store_parser_ref(state, pad, parser_ref)
+    {{:ok, spec: new_spec}, state}
+  end
 
-    state = %{state | children_by_pads: children_by_pads}
+  @impl true
+  def handle_pad_added(Pad.ref(:rtcp_in, _id) = pad, _ctx, state) do
+    parser_ref = {:rtcp_parser, make_ref()}
 
+    children = [{parser_ref, RTCP.Parser}]
+
+    links = [
+      link_bin_input(pad)
+      |> via_in(:input, buffer: @bin_input_buffer_params)
+      |> to(parser_ref)
+    ]
+
+    new_spec = %ParentSpec{children: children, links: links}
+
+    state = store_parser_ref(state, pad, parser_ref)
     {{:ok, spec: new_spec}, state}
   end
 
@@ -95,7 +111,10 @@ defmodule Membrane.RTP.Session.ReceiveBin do
       end
 
     rtp_stream_name = {:rtp_stream, make_ref()}
-    new_children = [{rtp_stream_name, %RTP.StreamReceiveBin{depayloader: depayloader}}]
+
+    new_children = [
+      {rtp_stream_name, %RTP.StreamReceiveBin{depayloader: depayloader, ssrc: ssrc}}
+    ]
 
     new_links = [
       link(:ssrc_router)
@@ -111,7 +130,8 @@ defmodule Membrane.RTP.Session.ReceiveBin do
   end
 
   @impl true
-  def handle_pad_removed(Pad.ref(:input, _id) = pad, _ctx, state) do
+  def handle_pad_removed(Pad.ref(pad_atom, _id) = pad, _ctx, state)
+      when pad_atom in [:rtp_in, :rtcp_in] do
     {parser_to_remove, new_children_by_pads} = state.children_by_pads |> Map.pop(pad)
 
     {{:ok, remove_child: parser_to_remove},
@@ -121,10 +141,9 @@ defmodule Membrane.RTP.Session.ReceiveBin do
   @impl true
   def handle_pad_removed(Pad.ref(:output, _ssrc) = pad, _ctx, state) do
     # TODO: parent may not know when to unlink, we need to timout SSRCs and notify about that and BYE packets over RTCP
-    {stream_to_remove, new_children_by_pads} = state.children_by_pads |> Map.pop(pad)
+    {stream_to_remove, state} = pop_parser_ref(state, pad)
 
-    {{:ok, remove_child: stream_to_remove},
-     %State{state | children_by_pads: new_children_by_pads}}
+    {{:ok, remove_child: stream_to_remove}, state}
   end
 
   @impl true
@@ -145,5 +164,20 @@ defmodule Membrane.RTP.Session.ReceiveBin do
 
     {{:ok, notify: {:new_rtp_stream, ssrc, pt_name}},
      %{state | ssrc_pt_mapping: new_ssrc_pt_mapping}}
+  end
+
+  @impl true
+  def handle_notification({:received_rtcp, _rtcp}, {:rtcp_parser, _ref}, state) do
+    {:ok, state}
+  end
+
+  defp store_parser_ref(state, pad, parser_ref) do
+    children_by_pads = state.children_by_pads |> Map.put(pad, parser_ref)
+    %State{state | children_by_pads: children_by_pads}
+  end
+
+  defp pop_parser_ref(state, pad) do
+    {parser_ref, children_by_pads} = state.children_by_pads |> Map.pop(pad)
+    {parser_ref, %State{state | children_by_pads: children_by_pads}}
   end
 end
