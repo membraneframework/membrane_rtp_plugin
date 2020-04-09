@@ -6,25 +6,28 @@ defmodule Membrane.Element.RTP.MixProject do
 
   def project do
     [
-      app: :membrane_rtp,
+      app: :membrane_rtp_plugin,
       version: @version,
-      elixir: "~> 1.7",
+      elixir: "~> 1.9",
       elixirc_paths: elixirc_paths(Mix.env()),
-      start_permanent: Mix.env() == :prod,
+      deps: deps(),
+
+      # hex
       description: "Membrane Multimedia Framework plugin for RTP",
       package: package(),
+
+      # docs
       name: "Membrane RTP plugin",
       source_url: @github_url,
-      docs: docs(),
       homepage_url: "https://membraneframework.org",
       test_coverage: [tool: ExCoveralls],
-      deps: deps(),
       preferred_cli_env: [
         coveralls: :test,
         "coveralls.detail": :test,
         "coveralls.post": :test,
         "coveralls.html": :test
-      ]
+      ],
+      docs: docs()
     ]
   end
 
@@ -58,11 +61,24 @@ defmodule Membrane.Element.RTP.MixProject do
 
   defp deps do
     [
-      {:membrane_core, "~> 0.5.0"},
+      {:membrane_core, "~> 0.5.1"},
+      {:membrane_rtp_format, "~> 0.2",
+       github: "membraneframework/membrane_rtp_format", branch: "develop"},
+      {:bunch, "~> 1.0"},
+      {:heap, "~> 2.0.2"},
+
+      # Dev
       {:ex_doc, "~> 0.21", only: :dev, runtime: false},
       {:dialyxir, "~> 1.0.0", only: :dev, runtime: false},
-      {:membrane_caps_rtp, "~> 0.1"},
-      {:excoveralls, ">= 0.8.0", only: :test}
+      {:excoveralls, ">= 0.8.0", only: :test},
+      {:membrane_rtp_h264_plugin, "~> 0.3.0",
+       github: "membraneframework/membrane-element-rtp-h264", branch: "new-naming", only: :test},
+      {:membrane_rtp_mpegaudio_plugin, "~> 0.4.0",
+       github: "membraneframework/membrane-element-rtp-mpegaudio",
+       branch: "new-naming",
+       only: :test},
+      {:membrane_element_ffmpeg_h264, "~> 0.2.0", only: :test},
+      {:membrane_element_pcap, github: "membraneframework/membrane-element-pcap", only: :test}
     ]
   end
 end

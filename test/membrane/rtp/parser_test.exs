@@ -12,7 +12,7 @@ defmodule Membrane.RTP.ParserTest do
       assert Parser.handle_process(:input, %Buffer{payload: packet}, nil, state) ==
                {{:ok,
                  [
-                   caps: {:output, %Membrane.Caps.RTP{payload_type: :mpa, raw_payload_type: 14}},
+                   caps: {:output, %Membrane.RTP{payload_type: :mpa, raw_payload_type: 14}},
                    buffer:
                      {:output,
                       %Membrane.Buffer{
