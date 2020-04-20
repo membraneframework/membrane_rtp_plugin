@@ -3,8 +3,6 @@ defmodule Membrane.RTCP.Packet do
   Functions common to all RTCP Packets
   """
 
-  # TODO: Add a behaviour for packets
-
   @doc """
   Calculates the value of length field based on body. Includes the size of a header
   in which it should be put.
@@ -42,6 +40,22 @@ defmodule Membrane.RTCP.Packet do
   #       body <> end_pad
   #   end
   # end
+  #
 
-  defdelegate ignore_padding(body, present?), to: Membrane.RTP.Packet
+  def to_binary(%packet_module{} = packet) do
+    {body, packet_type, packet_specific} = packet_module.encode(packet)
+    length = body |> byte_size() |> div(4)
+
+    # `length` is simplified from `length - 1 + 1` to include header size
+    header = <<2::2, 0::1, packet_specific::5, packet_type::8, length::16>>
+    header <> body
+  end
+
+  defdelegate strip_padding(body, present?), to: Membrane.RTP.Packet
+
+  @callback decode(binary(), packet_specific :: non_neg_integer()) ::
+              {:ok, struct()} | {:error, atom()}
+  @callback encode(struct()) ::
+              {body :: binary(), packet_type :: pos_integer(),
+               packet_specific :: non_neg_integer()}
 end

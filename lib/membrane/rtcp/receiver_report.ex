@@ -1,0 +1,41 @@
+defmodule Membrane.RTCP.ReceiverReportPacket do
+  @moduledoc """
+  Parses and constructs RTCP Receiver Report defined in
+  [RFC3550](https://tools.ietf.org/html/rfc3550#section-6.4.2)
+  """
+
+  alias Membrane.RTCP.{Packet, ReportPacketBlock}
+
+  defstruct [:ssrc, :reports]
+
+  @type t :: %__MODULE__{
+          ssrc: non_neg_integer(),
+          reports: [ReportPacketBlock.t()]
+        }
+
+  @behaviour Packet
+
+  @packet_type 201
+
+  @impl true
+  def encode(report) do
+    blocks = report.reports |> Enum.map_join(&ReportPacketBlock.encode/1)
+
+    reports_count = report.reports |> length()
+
+    body = <<report.ssrc::32>> <> blocks
+
+    {body, @packet_type, reports_count}
+  end
+
+  @impl true
+  def decode(<<ssrc::32, blocks::binary>>, reports_count) do
+    with {:ok, reports} <- ReportPacketBlock.decode(blocks),
+         true <- reports_count == length(reports) do
+      {:ok, %__MODULE__{ssrc: ssrc, reports: reports}}
+    else
+      false -> {:error, :invalid_reports_count}
+      err -> err
+    end
+  end
+end

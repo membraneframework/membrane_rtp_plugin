@@ -11,7 +11,7 @@ defmodule Membrane.RTP.StreamReceiveBin do
 
   alias Membrane.ParentSpec
 
-  def_options depayloader: [type: :module], ssrc: [spec: RTP.ssrc()]
+  def_options depayloader: [type: :module], ssrc: [spec: Membrane.RTP.ssrc()]
 
   def_input_pad :input, demand_unit: :buffers, caps: :any
 

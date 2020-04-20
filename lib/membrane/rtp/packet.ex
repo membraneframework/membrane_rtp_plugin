@@ -31,7 +31,7 @@ defmodule Membrane.RTP.Packet do
     {parsed_csrc, rest} = extract_csrcs(rest, cc)
     {extension_header, payload} = extract_extension_header(x, rest)
     padding? = extract_boolean(p)
-    payload = ignore_padding(payload, padding?)
+    payload = strip_padding(payload, padding?)
 
     packet = %Packet{
       header: %Header{
@@ -77,10 +77,10 @@ defmodule Membrane.RTP.Packet do
   defp extract_boolean(1), do: true
   defp extract_boolean(0), do: false
 
-  def ignore_padding(is_padding_present, payload)
-  def ignore_padding(payload, false), do: payload
+  def strip_padding(is_padding_present, payload)
+  def strip_padding(payload, false), do: payload
 
-  def ignore_padding(payload, true) do
+  def strip_padding(payload, true) do
     padding_size = :binary.last(payload)
     payload_size = byte_size(payload) - padding_size
     <<stripped_payload::binary-size(payload_size), _::binary-size(padding_size)>> = payload

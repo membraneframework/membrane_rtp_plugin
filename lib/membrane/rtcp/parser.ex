@@ -9,7 +9,7 @@ defmodule Membrane.RTCP.Parser do
   alias Membrane.Buffer
   alias Membrane.RTCP
 
-  @type notification_t() :: {:received_rtcp, %RTCP.CompoundPacket{}}
+  @type notification_t() :: {:received_rtcp, RTCP.CompoundPacket.t()}
 
   def_input_pad :input, caps: :any, demand_unit: :buffers
 

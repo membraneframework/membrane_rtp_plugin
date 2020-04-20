@@ -12,13 +12,27 @@ defmodule Membrane.RTCP.AppPacket do
           data: binary()
         }
 
-  def parse(<<ssrc::32, name::32, data::binary>>, counter) do
+  @packet_type 204
+  @behaviour Membrane.RTCP.Packet
+
+  @impl true
+  def decode(<<ssrc::32, name::bitstring-size(32), data::binary>>, subtype) do
     {:ok,
      %__MODULE__{
-       subtype: counter,
+       subtype: subtype,
        ssrc: ssrc,
-       name: to_string(name),
+       name: name,
        data: data
      }}
+  end
+
+  @impl true
+  def encode(%__MODULE__{
+        subtype: subtype,
+        ssrc: ssrc,
+        name: name,
+        data: data
+      }) do
+    {<<ssrc::32, name::bitstring-size(32), data::binary>>, @packet_type, subtype}
   end
 end
