@@ -6,10 +6,14 @@ defmodule Membrane.RTCP.Packet.Header do
   @enforce_keys [:packet_type, :length, :packet_specific]
   defstruct @enforce_keys ++ [padding?: false]
 
+  @type packet_type_t :: 200 | 201 | 202 | 203 | 204
+
+  @type packet_specific_t :: non_neg_integer()
+
   @type t :: %__MODULE__{
           padding?: boolean(),
-          packet_specific: non_neg_integer(),
-          packet_type: pos_integer(),
+          packet_specific: packet_specific_t(),
+          packet_type: packet_type_t(),
           length: pos_integer()
         }
 

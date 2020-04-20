@@ -8,7 +8,7 @@ defmodule Membrane.RTCP.ParsingTest do
 
   test "parses compound packets" do
     packet = SamplePacket.sample_rtcp_packet()
-    assert {:ok, packets} = RTCP.CompoundPacket.parse(packet)
+    assert {:ok, %RTCP.CompoundPacket{packets: packets}} = RTCP.CompoundPacket.parse(packet)
 
     assert %RTCP.SenderReportPacket{reports: [], sender_info: %{}, ssrc: @sample_ssrc} =
              hd(packets)

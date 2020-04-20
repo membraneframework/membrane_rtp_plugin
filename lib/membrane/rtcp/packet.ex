@@ -3,28 +3,23 @@ defmodule Membrane.RTCP.Packet do
   Functions common to all RTCP Packets
   """
 
-  @doc """
-  Calculates the value of length field based on body. Includes the size of a header
-  in which it should be put.
+  alias Membrane.RTCP.{
+    AppPacket,
+    ByePacket,
+    Pakcet.Header,
+    ReceiverReportPacket,
+    SdesPacket,
+    SenderReportPacket
+  }
 
-  To quote the RFC:
+  @type t ::
+          AppPacket.t()
+          | ByePacket.t()
+          | ReceiverReportPacket.t()
+          | SenderReportPacket.t()
+          | SdesPacket.t()
 
-  length: 16 bits
-      The length of this RTCP packet in 32-bit words minus one,
-      including the header and any padding.  (The offset of one makes
-      zero a valid length and avoids a possible infinite loop in
-      scanning a compound RTCP packet, while counting 32-bit words
-      avoids a validity check for a multiple of 4.)
-  """
-  @spec calc_length(binary()) :: pos_integer()
-  def calc_length(body) do
-    words = body |> byte_size() |> div(4)
-
-    # Simplified from `words - 1 + 1` to include header
-    words
-  end
-
-  # TODO: Remove if it won't be used
+  # TODO: Remove if it won't be used by SRTCP
   # @doc """
   # Adds a padding to align body to a 32 bit boundary
   # """
@@ -42,6 +37,10 @@ defmodule Membrane.RTCP.Packet do
   # end
   #
 
+  @doc """
+  Converts packet structure into binary
+  """
+  @spec to_binary(t()) :: binary()
   def to_binary(%packet_module{} = packet) do
     {body, packet_type, packet_specific} = packet_module.encode(packet)
     length = body |> byte_size() |> div(4)
@@ -51,11 +50,35 @@ defmodule Membrane.RTCP.Packet do
     header <> body
   end
 
+  @doc """
+  Parses packet body using data from parsed header
+  """
+  @spec parse_body(binary(), Header.t()) :: {:ok, t()} | {:error, reason :: atom()}
+  def parse_body(packet, %{packet_type: pt, packet_specific: packet_specific}) do
+    with {:ok, packet_module} <- decode_packet_type(pt) do
+      packet_module.decode(packet, packet_specific)
+    end
+  end
+
+  defp decode_packet_type(200), do: {:ok, SenderReportPacket}
+  defp decode_packet_type(201), do: {:ok, ReceiverReportPacket}
+  defp decode_packet_type(202), do: {:ok, SdesPacket}
+  defp decode_packet_type(203), do: {:ok, ByePacket}
+  defp decode_packet_type(204), do: {:ok, AppPacket}
+  defp decode_packet_type(_pt), do: {:error, :unknown_pt}
+
   defdelegate strip_padding(body, present?), to: Membrane.RTP.Packet
 
-  @callback decode(binary(), packet_specific :: non_neg_integer()) ::
+  @doc """
+  Decodes binary with packet body (without header) into packet struct. Used by `parse/1`
+  """
+  @callback decode(binary(), packet_specific :: Header.packet_specific_t()) ::
               {:ok, struct()} | {:error, atom()}
+
+  @doc """
+  Encodes packet struct into the tuple used by `to_binary/1`
+  """
   @callback encode(struct()) ::
-              {body :: binary(), packet_type :: pos_integer(),
-               packet_specific :: non_neg_integer()}
+              {body :: binary(), packet_type :: Header.packet_type_t(),
+               packet_specific :: Header.packet_specific_t()}
 end
