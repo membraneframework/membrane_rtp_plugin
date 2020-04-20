@@ -35,7 +35,7 @@ defmodule Membrane.RTCP.SdesPacket do
 
   @type t() :: %__MODULE__{
           chunks: %{
-            required(Membrane.RTCP.ssrc_t()) => Keyword.t()
+            required(Membrane.RTP.ssrc_t()) => Keyword.t()
           }
         }
 

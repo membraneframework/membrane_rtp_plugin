@@ -9,7 +9,7 @@ defmodule Membrane.RTP.Packet.PayloadType do
   Gets the name of used encoding from numerical payload according to [RFC3551](https://tools.ietf.org/html/rfc3551#page-32).
   For quick reference check [datasheet](https://www.iana.org/assignments/rtp-parameters/rtp-parameters.xhtml).
   """
-  @spec get_encoding_name(payload_type :: RTP.raw_payload_type()) :: RTP.payload_type()
+  @spec get_encoding_name(payload_type :: RTP.raw_payload_type_t()) :: RTP.payload_type_t()
   def get_encoding_name(type)
   def get_encoding_name(0), do: :pcmu
   def get_encoding_name(3), do: :gsm

@@ -20,8 +20,8 @@ defmodule Membrane.RTP.SSRCRouter do
     alias Membrane.RTP
 
     @type t() :: %__MODULE__{
-            pads: %{RTP.ssrc() => [input_pad :: Pad.ref_t()]},
-            linking_buffers: %{RTP.ssrc() => [Membrane.Buffer.t()]}
+            pads: %{RTP.ssrc_t() => [input_pad :: Pad.ref_t()]},
+            linking_buffers: %{RTP.ssrc_t() => [Membrane.Buffer.t()]}
           }
 
     defstruct pads: %{},
@@ -32,7 +32,7 @@ defmodule Membrane.RTP.SSRCRouter do
   Notification sent when an RTP packet with new SSRC arrives and new output pad should be linked
   """
   @type new_ssrc_notification() ::
-          {:new_ssrc_stream, RTP.ssrc(), RTP.raw_payload_type()}
+          {:new_ssrc_stream, RTP.ssrc_t(), RTP.raw_payload_type_t()}
 
   @impl true
   def handle_init(_), do: {:ok, %State{}}

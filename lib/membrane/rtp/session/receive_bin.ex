@@ -24,12 +24,12 @@ defmodule Membrane.RTP.Session.ReceiveBin do
   }
 
   def_options fmt_mapping: [
-                spec: %{integer => RTP.payload_type()},
+                spec: %{integer => RTP.payload_type_t()},
                 default: %{},
                 description: "Mapping of the custom payload types (for fmt > 95)"
               ],
               custom_depayloaders: [
-                spec: %{RTP.payload_type() => module()},
+                spec: %{RTP.payload_type_t() => module()},
                 default: %{},
                 description: "Mapping from a payload type to a custom depayloader module"
               ]

@@ -48,7 +48,7 @@ defmodule Membrane.RTP.Header do
           csrc_count: 0..15,
           ssrc: non_neg_integer(),
           marker: marker(),
-          payload_type: RTP.raw_payload_type(),
+          payload_type: RTP.raw_payload_type_t(),
           timestamp: non_neg_integer(),
           sequence_number: non_neg_integer(),
           csrcs: [non_neg_integer()],

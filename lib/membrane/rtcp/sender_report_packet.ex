@@ -16,7 +16,7 @@ defmodule Membrane.RTCP.SenderReportPacket do
         }
 
   @type t :: %__MODULE__{
-          ssrc: RTP.ssrc(),
+          ssrc: RTP.ssrc_t(),
           reports: [ReportPacketBlock.t()],
           sender_info: sender_info_t()
         }

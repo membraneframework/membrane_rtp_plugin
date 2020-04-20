@@ -6,7 +6,7 @@ defmodule Membrane.RTCP.Packet do
   alias Membrane.RTCP.{
     AppPacket,
     ByePacket,
-    Pakcet.Header,
+    Packet.Header,
     ReceiverReportPacket,
     SdesPacket,
     SenderReportPacket

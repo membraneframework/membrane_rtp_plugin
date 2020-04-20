@@ -25,7 +25,7 @@
   "membrane_element_pcap": {:git, "https://github.com/membraneframework/membrane-element-pcap.git", "1c0f8af886ecd2a855f8100ac25059bac9294f7b", []},
   "membrane_element_rtp_h264": {:git, "https://github.com/membraneframework/membrane-element-rtp-h264.git", "fddbeb6edaa3a450a4be5230d74c607128b3317e", [branch: "new-naming"]},
   "membrane_element_rtp_mpeguadio": {:hex, :membrane_element_rtp_mpeguadio, "0.3.0", "091560d59acda565f4219970f6275ceaffac61f2041860d176358b7089461457", [:mix], [{:membrane_caps_rtp, "~> 0.1", [hex: :membrane_caps_rtp, repo: "hexpm", optional: false]}, {:membrane_core, "~> 0.5.0", [hex: :membrane_core, repo: "hexpm", optional: false]}], "hexpm", "182cc59b08d9029c2dac9f9d5594831c852ac99dd081dc47564208b66bc5b659"},
-  "membrane_rtp_format": {:git, "https://github.com/membraneframework/membrane_rtp_format.git", "829d6073352eafcde30e48e8d3f1df3951c77d68", [branch: "develop"]},
+  "membrane_rtp_format": {:git, "https://github.com/membraneframework/membrane_rtp_format.git", "c7cd8fe5141d7e6787e3ec1b2c30ecbd86e99305", [branch: "develop"]},
   "membrane_rtp_h264_plugin": {:git, "https://github.com/membraneframework/membrane-element-rtp-h264.git", "fddbeb6edaa3a450a4be5230d74c607128b3317e", [branch: "new-naming"]},
   "membrane_rtp_mpegaudio_plugin": {:git, "https://github.com/membraneframework/membrane-element-rtp-mpegaudio.git", "87ff2f6306615efd784eb16f78bdee0c75db0b0f", [branch: "new-naming"]},
   "metrics": {:hex, :metrics, "1.0.1", "25f094dea2cda98213cecc3aeff09e940299d950904393b2a29d191c346a8486", [:rebar3], [], "hexpm", "69b09adddc4f74a40716ae54d140f93beb0fb8978d8636eaded0c31b6f099f16"},
