@@ -1,4 +1,4 @@
-defmodule Membrane.RTCP.Packet.Header do
+defmodule Membrane.RTCP.Header do
   @moduledoc """
   Struct describing 32-bit header common to all RTCP packets
   """
@@ -17,14 +17,19 @@ defmodule Membrane.RTCP.Packet.Header do
           length: pos_integer()
         }
 
-  @spec parse!(binary()) :: t()
-  def parse!(<<2::2, padding?::1, packet_specific::5, pt::8, length::16>>) do
-    %__MODULE__{
-      padding?: padding? == 1,
-      packet_specific: packet_specific,
-      packet_type: pt,
-      length: (length + 1) * 4
-    }
+  @spec parse(binary()) :: {:ok, t()} | {:error, :invalid_header}
+  def parse(<<2::2, padding?::1, packet_specific::5, pt::8, length::16>>) do
+    {:ok,
+     %__MODULE__{
+       padding?: padding? == 1,
+       packet_specific: packet_specific,
+       packet_type: pt,
+       length: (length + 1) * 4
+     }}
+  end
+
+  def parse(_) do
+    {:error, :invalid_header}
   end
 
   @spec to_binary(t()) :: binary()

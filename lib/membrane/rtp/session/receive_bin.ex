@@ -168,6 +168,7 @@ defmodule Membrane.RTP.Session.ReceiveBin do
 
   @impl true
   def handle_notification({:received_rtcp, _rtcp}, {:rtcp_parser, _ref}, state) do
+    # TODO: handle RTCP reports properly
     {:ok, state}
   end
 

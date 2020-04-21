@@ -3,7 +3,7 @@ defmodule Membrane.RTCP.CompoundPacket do
   Parses compound RTCP packets into a list of subpackets.
   """
 
-  alias Membrane.RTCP.Packet
+  alias Membrane.RTCP.{Header, Packet}
 
   defstruct [:packets]
 
@@ -26,15 +26,16 @@ defmodule Membrane.RTCP.CompoundPacket do
   defp do_parse(<<>>, acc), do: {:ok, Enum.reverse(acc)}
 
   defp do_parse(<<raw_header::binary-size(4), body_and_rest::binary>>, packets) do
-    header = Packet.Header.parse!(raw_header)
-    # length includes raw_header size
-    body_size = header.length - 4
-    <<body::binary-size(body_size), rest::binary>> = body_and_rest
-
-    body = Packet.strip_padding(body, header.padding?)
-
-    with {:ok, packet} <- Packet.parse_body(body, header) do
+    with {:ok, header} <- Header.parse(raw_header),
+         # length includes raw_header size
+         body_size = header.length - 4,
+         <<body::binary-size(body_size), rest::binary>> <- body_and_rest,
+         body = Packet.strip_padding(body, header.padding?),
+         {:ok, packet} <- Packet.parse_body(body, header) do
       do_parse(rest, [packet | packets])
+    else
+      {:error, _reason} = err -> err
+      _ -> {:error, :invalid_compound_packet}
     end
   end
 end

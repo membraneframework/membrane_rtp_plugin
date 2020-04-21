@@ -1,6 +1,6 @@
 defmodule Membrane.RTCP.Parser do
   @moduledoc """
-  Parses the incoming RTCP packets
+  Parses the incoming RTCP packets and sends to a parent using a notification (`t:notification_t/0`)
   """
 
   use Membrane.Log, tag: :membrane_rtcp_parser
