@@ -19,6 +19,13 @@ defmodule Membrane.RTCP.ParsingTest do
   test "parsed packets are equal to constructed packets" do
     packet = SamplePacket.sample_rtcp_packet()
     assert {:ok, packets} = RTCP.CompoundPacket.parse(packet)
-    assert RTCP.CompoundPacket.to_binary(packets) == packet
+    regenerated_packet = RTCP.CompoundPacket.to_binary(packets)
+
+    <<head::binary-size(12), ref_ntp_lsw::32, tail::binary>> = packet
+
+    assert <<^head::binary-size(12), ntp_lsw::32, ^tail::binary>> = regenerated_packet
+
+    # The least significant word of NTP timestamp (fractional part) might differ due to rounding errors
+    assert_in_delta ntp_lsw, ref_ntp_lsw, 10
   end
 end

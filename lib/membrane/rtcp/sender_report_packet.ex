@@ -9,7 +9,7 @@ defmodule Membrane.RTCP.SenderReportPacket do
   defstruct [:ssrc, :reports, :sender_info]
 
   @type sender_info_t :: %{
-          ntp_timestamp: non_neg_integer(),
+          wallclock_timestamp: Membrane.Time.t(),
           rtp_timestamp: non_neg_integer(),
           sender_packet_count: non_neg_integer(),
           sender_octet_count: non_neg_integer()
@@ -38,19 +38,22 @@ defmodule Membrane.RTCP.SenderReportPacket do
   end
 
   defp encode_sender_info(sender_info) do
-    # TODO NTP timestamp better encoding
-    <<sender_info.ntp_timestamp::64, sender_info.rtp_timestamp::32,
+    ntp_timestamp = Membrane.Time.to_ntp_timestamp(sender_info.wallclock_timestamp)
+
+    <<ntp_timestamp::bitstring-size(64), sender_info.rtp_timestamp::32,
       sender_info.sender_packet_count::32, sender_info.sender_octet_count::32>>
   end
 
   @impl true
   def decode(
-        <<ssrc::32, ntp_time::64, rtp_time::32, packet_count::32, octet_count::32,
-          blocks::binary>>,
+        <<ssrc::32, ntp_timestamp::bitstring-size(64), rtp_time::32, packet_count::32,
+          octet_count::32, blocks::binary>>,
         reports_count
       ) do
+    wallclock_ts = Membrane.Time.from_ntp_timestamp(ntp_timestamp)
+
     sender_info = %{
-      ntp_timestamp: ntp_time,
+      wallclock_timestamp: wallclock_ts,
       rtp_timestamp: rtp_time,
       sender_packet_count: packet_count,
       sender_octet_count: octet_count
