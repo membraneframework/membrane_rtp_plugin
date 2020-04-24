@@ -23,7 +23,7 @@ defmodule Membrane.RTP.Session.ReceiveBinTest do
           pcap: %Membrane.Element.Pcap.Source{path: pcap_file},
           rtp: %RTP.Session.ReceiveBin{fmt_mapping: fmt_mapping}
         ],
-        links: [link(:pcap) |> via_in(:rtp_in) |> to(:rtp)]
+        links: [link(:pcap) |> to(:rtp)]
       }
 
       {{:ok, spec: spec}, %{}}

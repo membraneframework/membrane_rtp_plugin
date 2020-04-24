@@ -145,15 +145,8 @@ defmodule Membrane.RTCP.SdesPacket do
           <<@sdes_type_from_atom[key]::8, byte_size(value)::8, value::binary()>>
       end)
 
-    end_marker =
-      case body |> bit_size() |> rem(32) do
-        0 ->
-          <<0::32>>
-
-        n_bits ->
-          pad_bits = 32 - n_bits
-          <<0::size(pad_bits)>>
-      end
+    pad_bits = 32 - (body |> bit_size() |> rem(32))
+    end_marker = <<0::size(pad_bits)>>
 
     body <> end_marker
   end

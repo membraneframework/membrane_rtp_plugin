@@ -1,13 +1,13 @@
-defmodule Membrane.RTCP.ParsingTest do
-  use ExUnit.Case
+defmodule Membrane.RTCP.CompoundPacketTest do
+  use ExUnit.Case, async: true
 
   alias Membrane.RTCP
-  alias Membrane.RTP.SamplePacket
+  alias Membrane.RTCP.Fixtures
 
   @sample_ssrc 1_374_823_241
 
-  test "parses compound packets" do
-    packet = SamplePacket.sample_rtcp_packet()
+  test "compound packets parsing" do
+    packet = Fixtures.sample_packet()
     assert {:ok, %RTCP.CompoundPacket{packets: packets}} = RTCP.CompoundPacket.parse(packet)
 
     assert %RTCP.SenderReportPacket{reports: [], sender_info: %{}, ssrc: @sample_ssrc} =
@@ -16,8 +16,8 @@ defmodule Membrane.RTCP.ParsingTest do
     assert %RTCP.ByePacket{ssrcs: [@sample_ssrc]} = Enum.at(packets, 1)
   end
 
-  test "parsed packets are equal to constructed packets" do
-    packet = SamplePacket.sample_rtcp_packet()
+  test "reconstructed packets are (almost) equal to original packets" do
+    packet = Fixtures.sample_packet()
     assert {:ok, packets} = RTCP.CompoundPacket.parse(packet)
     regenerated_packet = RTCP.CompoundPacket.to_binary(packets)
 
