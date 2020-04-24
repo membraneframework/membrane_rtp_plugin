@@ -34,8 +34,8 @@ defmodule Membrane.RTCP.ParsingPipelineTest do
       info = sr.sender_info
       assert info.sender_packet_count == contents.sender_packets
       assert info.sender_octet_count == contents.sender_octets
-      assert info.wallclock_timestamp != nil
-      assert info.rtp_timestamp != nil
+      assert info.rtp_timestamp == contents.rtp_timestamp
+      assert info.wallclock_timestamp == contents.wallclock_ts
 
       assert sdes.chunks[contents.ssrc] == %RTCP.SdesPacket.Chunk{
                cname: contents.cname,

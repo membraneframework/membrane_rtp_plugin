@@ -25,6 +25,8 @@ defmodule Membrane.RTCP.Fixtures do
     [
       %{
         ssrc: ssrc,
+        rtp_timestamp: 309_557_624,
+        wallclock_ts: to_membrane_time("2020-04-24T11:18:23.349522Z", 999),
         sender_packets: 66,
         sender_octets: 11215,
         cname: cname,
@@ -32,6 +34,8 @@ defmodule Membrane.RTCP.Fixtures do
       },
       %{
         ssrc: ssrc,
+        rtp_timestamp: 309_797_521,
+        wallclock_ts: to_membrane_time("2020-04-24T11:18:28.789375Z", 999),
         sender_packets: 300,
         sender_octets: 54729,
         cname: cname,
@@ -39,6 +43,8 @@ defmodule Membrane.RTCP.Fixtures do
       },
       %{
         ssrc: ssrc,
+        rtp_timestamp: 310_053_061,
+        wallclock_ts: to_membrane_time("2020-04-24T11:18:34.583922Z", 999),
         sender_packets: 550,
         sender_octets: 101_879,
         cname: cname,
@@ -46,6 +52,8 @@ defmodule Membrane.RTCP.Fixtures do
       },
       %{
         ssrc: ssrc,
+        rtp_timestamp: 310_219_178,
+        wallclock_ts: to_membrane_time("2020-04-24T11:18:38.350761Z", 999),
         sender_packets: 712,
         sender_octets: 132_620,
         cname: cname,
@@ -53,6 +61,8 @@ defmodule Membrane.RTCP.Fixtures do
       },
       %{
         ssrc: ssrc,
+        rtp_timestamp: 310_379_064,
+        wallclock_ts: to_membrane_time("2020-04-24T11:18:41.976296Z", 999),
         sender_packets: 868,
         sender_octets: 162_252,
         cname: cname,
@@ -60,6 +70,8 @@ defmodule Membrane.RTCP.Fixtures do
       },
       %{
         ssrc: ssrc,
+        rtp_timestamp: 310_497_973,
+        wallclock_ts: to_membrane_time("2020-04-24T11:18:44.672643Z", 999),
         sender_packets: 984,
         sender_octets: 184_346,
         cname: cname,
@@ -68,7 +80,12 @@ defmodule Membrane.RTCP.Fixtures do
     ]
   end
 
-  def hex_to_bin(hex) do
+  # iso8601 does not allow nanoseconds
+  def to_membrane_time(iso8601, nanoseconds) do
+    Membrane.Time.from_iso8601!(iso8601) + Membrane.Time.nanoseconds(nanoseconds)
+  end
+
+  defp hex_to_bin(hex) do
     hex
     |> String.trim_trailing()
     |> String.upcase()
