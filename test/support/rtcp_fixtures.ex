@@ -1,7 +1,7 @@
 defmodule Membrane.RTCP.Fixtures do
   @moduledoc false
 
-  @external_resource "test/fixtures/rtcp/rtcp_packet.hex"
+  @external_resource "test/fixtures/rtcp/single_packet.hex"
   @sample_rtcp_packet File.read!(@external_resource)
 
   @external_resource "test/fixtures/rtcp/packets.hex"
