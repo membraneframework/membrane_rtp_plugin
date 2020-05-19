@@ -4,7 +4,7 @@ defmodule Membrane.RTCP.Parser do
   """
 
   use Membrane.Log, tag: :membrane_rtcp_parser
-  use Membrane.Filter
+  use Membrane.Sink
 
   alias Membrane.Buffer
   alias Membrane.RTCP
@@ -19,7 +19,7 @@ defmodule Membrane.RTCP.Parser do
   end
 
   @impl true
-  def handle_process(:input, %Buffer{payload: payload}, _ctx, state) do
+  def handle_write(:input, %Buffer{payload: payload}, _ctx, state) do
     with {:ok, parsed_rtcp} <- RTCP.CompoundPacket.parse(payload) do
       {{:ok, notify: {:received_rtcp, parsed_rtcp}, demand: {:input, 1}}, state}
     else
