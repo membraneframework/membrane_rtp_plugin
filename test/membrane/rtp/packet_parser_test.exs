@@ -1,15 +1,15 @@
 defmodule Membrane.RTP.PacketParserTest do
   use ExUnit.Case
 
-  alias Membrane.RTP.{Header, Packet, SamplePacket}
+  alias Membrane.RTP.{Header, Packet, Fixtures}
 
   describe "RTP parser" do
     test "parses valid packets" do
-      assert Packet.parse(SamplePacket.sample_packet()) ==
+      assert Packet.parse(Fixtures.sample_packet()) ==
                {:ok,
                 %Packet{
-                  header: SamplePacket.sample_header(),
-                  payload: SamplePacket.sample_packet_payload()
+                  header: Fixtures.sample_header(),
+                  payload: Fixtures.sample_packet_payload()
                 }}
     end
 
@@ -22,15 +22,15 @@ defmodule Membrane.RTP.PacketParserTest do
     end
 
     test "parses csrcs correctly" do
-      <<header_1::4, _old_cc::4, header_2::88, payload::binary()>> = SamplePacket.sample_packet()
+      <<header_1::4, _old_cc::4, header_2::88, payload::binary()>> = Fixtures.sample_packet()
       test_packet = <<header_1::4, 2::4, header_2::88, 12::32, 21::32, payload::binary()>>
-      expected_header = %Header{SamplePacket.sample_header() | csrcs: [21, 12], csrc_count: 2}
+      expected_header = %Header{Fixtures.sample_header() | csrcs: [21, 12], csrc_count: 2}
 
       assert Packet.parse(test_packet) ==
                {:ok,
                 %Packet{
                   header: expected_header,
-                  payload: SamplePacket.sample_packet_payload()
+                  payload: Fixtures.sample_packet_payload()
                 }}
     end
 
@@ -38,20 +38,20 @@ defmodule Membrane.RTP.PacketParserTest do
       test_padding_size = 8
       padding_octets = test_padding_size - 1
       test_padding = <<0::size(padding_octets)-unit(8), test_padding_size::size(1)-unit(8)>>
-      <<version::2, _padding::1, header_1::5, rest::binary>> = SamplePacket.sample_packet()
+      <<version::2, _padding::1, header_1::5, rest::binary>> = Fixtures.sample_packet()
       payload_size = byte_size(rest)
 
       test_packet =
         <<version::2, 1::1, header_1::5, rest::binary-size(payload_size),
           test_padding::binary-size(test_padding_size)>>
 
-      expected_header = %Header{SamplePacket.sample_header() | padding: true}
+      expected_header = %Header{Fixtures.sample_header() | padding: true}
 
       assert Packet.parse(test_packet) ==
                {:ok,
                 %Packet{
                   header: expected_header,
-                  payload: SamplePacket.sample_packet_payload()
+                  payload: Fixtures.sample_packet_payload()
                 }}
     end
 
@@ -64,14 +64,14 @@ defmodule Membrane.RTP.PacketParserTest do
       }
 
       # Extension is stored on 4th bit of header
-      <<header_1::3, _extension::1, header_2::92, payload::binary>> = SamplePacket.sample_packet()
+      <<header_1::3, _extension::1, header_2::92, payload::binary>> = Fixtures.sample_packet()
 
       # Glueing data back together with extension header in place
       test_packet =
         <<header_1::3, 1::1, header_2::92, extension_header::binary-size(8), payload::binary>>
 
       expected_header = %Header{
-        SamplePacket.sample_header()
+        Fixtures.sample_header()
         | extension_header: true,
           extension_header_data: expected_parsed_extension_header
       }
@@ -80,7 +80,7 @@ defmodule Membrane.RTP.PacketParserTest do
                {:ok,
                 %Packet{
                   header: expected_header,
-                  payload: SamplePacket.sample_packet_payload()
+                  payload: Fixtures.sample_packet_payload()
                 }}
     end
   end

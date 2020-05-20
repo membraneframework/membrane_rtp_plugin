@@ -14,7 +14,26 @@ defmodule Membrane.RTCP.ByePacket do
 
   defstruct [:ssrcs, :reason]
 
-  def to_binary(%{ssrcs: ssrcs, reason: reason}) do
+  @packet_type 203
+
+  @behaviour Packet
+
+  @impl true
+  def decode(packet, count) do
+    ssrcs_size = count * 4
+    <<ssrcs::binary-size(ssrcs_size), reason::binary>> = packet
+
+    ssrcs =
+      ssrcs
+      |> Bunch.Binary.chunk_every(4)
+      |> Enum.map(&:binary.decode_unsigned(&1))
+
+    result = %__MODULE__{ssrcs: ssrcs, reason: make_reason(reason)}
+    {:ok, result}
+  end
+
+  @impl true
+  def encode(%{ssrcs: ssrcs, reason: reason}) do
     count = ssrcs |> length()
     ssrcs = ssrcs |> Enum.map(&<<&1::32>>) |> Enum.join()
 
@@ -28,25 +47,7 @@ defmodule Membrane.RTCP.ByePacket do
           <<length::8, other::binary>>
       end
 
-    body = ssrcs <> reason
-    length = Packet.calc_length(body)
-
-    header = <<2::2, 0::1, count::5, 203::8, length::16>>
-
-    header <> body
-  end
-
-  def parse(packet, count) do
-    ssrcs_size = count * 4
-    <<ssrcs::binary-size(ssrcs_size), reason::binary>> = packet
-
-    ssrcs =
-      ssrcs
-      |> Bunch.Binary.chunk_every(4)
-      |> Enum.map(&:binary.decode_unsigned(&1))
-
-    result = %__MODULE__{ssrcs: ssrcs, reason: make_reason(reason)}
-    {:ok, result}
+    {ssrcs <> reason, @packet_type, count}
   end
 
   defp make_reason(<<>>), do: nil

@@ -1,4 +1,4 @@
-defmodule Membrane.RTP.SamplePacket do
+defmodule Membrane.RTP.Fixtures do
   @moduledoc false
   alias Membrane.RTP.Header
 
@@ -6,13 +6,9 @@ defmodule Membrane.RTP.SamplePacket do
   @sample_packet File.read!("test/fixtures/rtp/rtp_packet.bin")
   @external_resource "test/fixtures/rtp/rtp_packet_payload.bin"
   @sample_packet_payload File.read!("test/fixtures/rtp/rtp_packet_payload.bin")
-  @sample_rtcp_packet File.read!("test/fixtures/rtcp/rtcp_packet")
 
   @spec sample_packet() :: binary()
   def sample_packet, do: @sample_packet
-
-  @spec sample_rtcp_packet() :: binary()
-  def sample_rtcp_packet, do: hex_to_bin(@sample_rtcp_packet)
 
   @spec sample_packet_payload() :: binary()
   def sample_packet_payload, do: @sample_packet_payload
@@ -50,14 +46,5 @@ defmodule Membrane.RTP.SamplePacket do
       <<2::2, 0::1, 0::1, 0::4, 0::1, 14::7, base_seqnumber + packet_number::16,
         base_timestamp + 30_000 * packet_number::32, ssrc::32, sample_packet_payload()::binary()>>
     end)
-  end
-
-  def hex_to_bin(hex) do
-    hex
-    |> String.trim_trailing()
-    |> Base.decode16()
-    |> case do
-      {:ok, packet} -> packet
-    end
   end
 end

@@ -2,12 +2,12 @@ defmodule Membrane.RTP.ParserTest do
   use ExUnit.Case
 
   alias Membrane.Buffer
-  alias Membrane.RTP.{Parser, SamplePacket}
+  alias Membrane.RTP.{Fixtures, Parser}
 
   describe "Parser" do
     test "sends caps and buffer action when parsing first packet" do
       state = %Parser.State{}
-      packet = SamplePacket.sample_packet()
+      packet = Fixtures.sample_packet()
 
       assert Parser.handle_process(:input, %Buffer{payload: packet}, nil, state) ==
                {{:ok,
@@ -24,14 +24,14 @@ defmodule Membrane.RTP.ParserTest do
                             ssrc: 3_919_876_492
                           }
                         },
-                        payload: SamplePacket.sample_packet_payload()
+                        payload: Fixtures.sample_packet_payload()
                       }}
                  ]}, %Parser.State{raw_payload_type: 14}}
     end
 
     test "sends buffer action with payload on non-first packet" do
       state = %Parser.State{raw_payload_type: 14}
-      packet = SamplePacket.sample_packet()
+      packet = Fixtures.sample_packet()
 
       assert Parser.handle_process(:input, %Buffer{payload: packet}, nil, state) ==
                {{:ok,
@@ -47,7 +47,7 @@ defmodule Membrane.RTP.ParserTest do
                             ssrc: 3_919_876_492
                           }
                         },
-                        payload: SamplePacket.sample_packet_payload()
+                        payload: Fixtures.sample_packet_payload()
                       }}
                  ]}, %Parser.State{raw_payload_type: 14}}
     end

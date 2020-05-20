@@ -25,7 +25,7 @@ defmodule Membrane.RTP.Parser do
     defstruct raw_payload_type: nil
 
     @type t :: %__MODULE__{
-            raw_payload_type: RTP.raw_payload_type() | nil
+            raw_payload_type: RTP.raw_payload_type_t() | nil
           }
   end
 
