@@ -11,6 +11,7 @@ defmodule Membrane.RTP.StreamReceiveBinTest do
   @pcap_file "test/fixtures/rtp/session/demo.pcap"
   @frames_count 1038
   @ssrc 790_688_045
+  @h264_clock_rate 90_000
 
   defmodule FrameCounter do
     use Membrane.Sink
@@ -38,7 +39,11 @@ defmodule Membrane.RTP.StreamReceiveBinTest do
       elements: [
         pcap: %Membrane.Element.Pcap.Source{path: @pcap_file},
         rtp_parser: RTP.Parser,
-        rtp: %StreamReceiveBin{depayloader: H264.Depayloader, ssrc: @ssrc},
+        rtp: %StreamReceiveBin{
+          depayloader: H264.Depayloader,
+          ssrc: @ssrc,
+          clock_rate: @h264_clock_rate
+        },
         video_parser: %Membrane.Element.FFmpeg.H264.Parser{framerate: {30, 1}},
         frame_counter: FrameCounter
       ]

@@ -22,10 +22,10 @@ defmodule Membrane.RTP.Parser do
 
   defmodule State do
     @moduledoc false
-    defstruct raw_payload_type: nil
+    defstruct payload_type: nil
 
     @type t :: %__MODULE__{
-            raw_payload_type: RTP.raw_payload_type_t() | nil
+            payload_type: RTP.payload_type_t() | nil
           }
   end
 
@@ -53,14 +53,14 @@ defmodule Membrane.RTP.Parser do
   @spec build_commands(Packet.t(), Buffer.t(), State.t()) :: {[Action.t()], State.t()}
   defp build_commands(packet, buffer, state)
 
-  defp build_commands(%Packet{} = packet, buffer, %State{raw_payload_type: nil} = state) do
+  defp build_commands(%Packet{} = packet, buffer, %State{payload_type: nil} = state) do
     %Packet{header: %Header{payload_type: pt}} = packet
-    {commands, state} = build_commands(packet, buffer, %State{state | raw_payload_type: pt})
+    {commands, state} = build_commands(packet, buffer, %State{state | payload_type: pt})
     caps = build_caps(packet)
     {[caps | commands], state}
   end
 
-  defp build_commands(packet, buffer, %State{raw_payload_type: _} = state) do
+  defp build_commands(packet, buffer, %State{payload_type: _} = state) do
     buffer = build_buffer(buffer, packet)
     commands = [buffer: {:output, buffer}]
     {commands, state}
@@ -72,11 +72,7 @@ defmodule Membrane.RTP.Parser do
       payload_type: payload_type
     } = header
 
-    caps = %RTP{
-      # TODO: Rename raw_payload_type -> payload_type, payload_type -> encoding_name + maybe use strings instead of atoms
-      raw_payload_type: payload_type,
-      payload_type: Packet.PayloadType.get_encoding_name(payload_type)
-    }
+    caps = %RTP{payload_type: payload_type}
 
     {:caps, {:output, caps}}
   end

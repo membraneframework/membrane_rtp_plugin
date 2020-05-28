@@ -88,7 +88,7 @@ defmodule Membrane.RTP.JitterBuffer.PipelineTest do
         buffer_delay_ms: buffer_delay_ms,
         max_latency: latency_ms
       },
-      buffer: %RTPJitterBuffer{latency: latency},
+      buffer: %RTPJitterBuffer{latency: latency, clock_rate: 8000},
       sink: %Testing.Sink{}
     ]
 

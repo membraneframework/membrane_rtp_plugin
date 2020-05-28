@@ -12,7 +12,7 @@ defmodule Membrane.RTP.ParserTest do
       assert Parser.handle_process(:input, %Buffer{payload: packet}, nil, state) ==
                {{:ok,
                  [
-                   caps: {:output, %Membrane.RTP{payload_type: :mpa, raw_payload_type: 14}},
+                   caps: {:output, %Membrane.RTP{payload_type: 14}},
                    buffer:
                      {:output,
                       %Membrane.Buffer{
@@ -26,11 +26,11 @@ defmodule Membrane.RTP.ParserTest do
                         },
                         payload: Fixtures.sample_packet_payload()
                       }}
-                 ]}, %Parser.State{raw_payload_type: 14}}
+                 ]}, %Parser.State{payload_type: 14}}
     end
 
     test "sends buffer action with payload on non-first packet" do
-      state = %Parser.State{raw_payload_type: 14}
+      state = %Parser.State{payload_type: 14}
       packet = Fixtures.sample_packet()
 
       assert Parser.handle_process(:input, %Buffer{payload: packet}, nil, state) ==
@@ -49,7 +49,7 @@ defmodule Membrane.RTP.ParserTest do
                         },
                         payload: Fixtures.sample_packet_payload()
                       }}
-                 ]}, %Parser.State{raw_payload_type: 14}}
+                 ]}, %Parser.State{payload_type: 14}}
     end
   end
 end

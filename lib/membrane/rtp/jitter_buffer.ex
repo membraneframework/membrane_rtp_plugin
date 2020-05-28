@@ -6,7 +6,7 @@ defmodule Membrane.RTP.JitterBuffer do
   use Membrane.Log
   use Bunch
 
-  alias Membrane.RTP
+  alias Membrane.{Buffer, RTP}
   alias __MODULE__.{BufferStore, Record}
 
   @type packet_index :: non_neg_integer()
@@ -22,7 +22,11 @@ defmodule Membrane.RTP.JitterBuffer do
 
   @default_latency 200 |> Membrane.Time.milliseconds()
 
-  def_options latency: [
+  @max_s24_val 8_388_607
+  @min_s24_val -8_388_608
+
+  def_options clock_rate: [type: :integer, spec: RTP.clock_rate_t()],
+              latency: [
                 type: :time,
                 default: @default_latency,
                 description: """
@@ -33,21 +37,30 @@ defmodule Membrane.RTP.JitterBuffer do
   defmodule State do
     @moduledoc false
     defstruct store: %BufferStore{},
+              clock_rate: nil,
               latency: nil,
               waiting?: true,
-              max_latency_timer: nil
+              max_latency_timer: nil,
+              stats: %{expected_prior: 0, received_prior: 0, last_transit: 0, jitter: 0.0}
 
     @type t :: %__MODULE__{
             store: BufferStore.t(),
+            clock_rate: RTP.clock_rate_t(),
             latency: Membrane.Time.t(),
             waiting?: boolean(),
-            max_latency_timer: reference
+            max_latency_timer: reference,
+            stats: %{
+              expected_prior: non_neg_integer(),
+              received_prior: non_neg_integer(),
+              last_transit: non_neg_integer(),
+              jitter: float()
+            }
           }
   end
 
   @impl true
-  def handle_init(%__MODULE__{latency: latency}) do
-    {:ok, %State{latency: latency}}
+  def handle_init(%__MODULE__{latency: latency, clock_rate: clock_rate}) do
+    {:ok, %State{latency: latency, clock_rate: clock_rate}}
   end
 
   @impl true
@@ -75,6 +88,8 @@ defmodule Membrane.RTP.JitterBuffer do
 
   @impl true
   def handle_process(:input, buffer, _context, %State{store: store, waiting?: true} = state) do
+    state = update_jitter(buffer, state)
+
     state =
       case BufferStore.insert_buffer(store, buffer) do
         {:ok, result} ->
@@ -90,6 +105,8 @@ defmodule Membrane.RTP.JitterBuffer do
 
   @impl true
   def handle_process(:input, buffer, _context, %State{store: store} = state) do
+    state = update_jitter(buffer, state)
+
     case BufferStore.insert_buffer(store, buffer) do
       {:ok, result} ->
         state = %State{state | store: result}
@@ -146,4 +163,62 @@ defmodule Membrane.RTP.JitterBuffer do
 
   defp record_to_action(nil), do: {:event, {:output, %Membrane.Event.Discontinuity{}}}
   defp record_to_action(%Record{buffer: buffer}), do: {:buffer, {:output, buffer}}
+
+  # TODO: stats spec could be improved
+  @spec get_and_update_stats(State.t()) :: {stats, State.t()} when stats: map()
+  def get_and_update_stats(%State{
+        store: store,
+        stats: %{expected_prior: expected_prior, received_prior: received_prior, jitter: jitter}
+      }) do
+    use Bitwise
+
+    # Variable names follow algorithm A.3 from RFC3550 (https://tools.ietf.org/html/rfc3550#appendix-A.3)
+    %{base_index: base_seq, end_index: extended_max, received: received} = store
+    expected = extended_max - base_seq + 1
+    lost = expected - received
+
+    capped_lost =
+      cond do
+        lost > @max_s24_val -> @max_s24_val
+        lost < @min_s24_val -> @min_s24_val
+        true -> lost
+      end
+
+    expected_interval = expected - expected_prior
+    received_interval = received - received_prior
+    lost_interval = expected_interval - received_interval
+
+    fraction =
+      if expected_interval == 0 || lost_interval <= 0 do
+        0
+      else
+        lost_interval <<< 8 |> div(expected_interval)
+      end
+
+    stored_stats = %{expected_prior: expected, received_prior: received, jitter: jitter}
+
+    {%{
+       fraction_lost: fraction,
+       total_lost: capped_lost,
+       highest_seq_num: extended_max,
+       interarrival_jitter: jitter
+     }, %State{stats: stored_stats}}
+  end
+
+  def update_jitter(
+        %Buffer{metadata: %{rtp: %{timestamp: buffer_ts}}},
+        %State{clock_rate: clock_rate, stats: %{jitter: jitter, last_transit: last_transit}} =
+          state
+      ) do
+    alias Membrane.Time
+    # Algorithm from https://tools.ietf.org/html/rfc3550#appendix-A.8
+    arrival = Time.vm_time() |> Time.as_seconds() |> Ratio.mult(clock_rate) |> Ratio.trunc()
+    transit = arrival - buffer_ts
+    d = abs(transit - last_transit)
+    new_jitter = jitter + 1 / 16 * (d - jitter)
+
+    state
+    |> Bunch.Struct.put_in([:stats, :jitter], new_jitter)
+    |> Bunch.Struct.put_in([:stats, :transit], transit)
+  end
 end

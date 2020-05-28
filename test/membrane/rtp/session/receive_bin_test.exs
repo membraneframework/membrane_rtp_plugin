@@ -11,7 +11,7 @@ defmodule Membrane.RTP.Session.ReceiveBinTest do
   @audio_stream %{ssrc: 439_017_412, frames_n: 20}
   @video_stream %{ssrc: 670_572_639, frames_n: 287}
 
-  @fmt_mapping %{96 => :h264, 127 => :mpa}
+  @fmt_mapping %{96 => {:H264, 90_000}, 127 => {:MPA, 90_000}}
 
   defmodule DynamicPipeline do
     use Membrane.Pipeline

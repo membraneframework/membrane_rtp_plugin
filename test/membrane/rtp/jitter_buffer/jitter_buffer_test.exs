@@ -10,7 +10,11 @@ defmodule Membrane.RTP.JitterBufferTest do
   setup_all do
     buffer = BufferFactory.sample_buffer(@base_seq_number)
     # {:ok, store} = BufferStore.insert_buffer(%BufferStore{}, buffer)
-    state = %State{store: %BufferStore{}, latency: 10 |> Membrane.Time.milliseconds()}
+    state = %State{
+      clock_rate: 8000,
+      store: %BufferStore{},
+      latency: 10 |> Membrane.Time.milliseconds()
+    }
 
     [state: state, buffer: buffer]
   end
@@ -57,8 +61,11 @@ defmodule Membrane.RTP.JitterBufferTest do
     test "refuses to add that packet when it comes too late", %{state: state} do
       late_buffer = BufferFactory.sample_buffer(@base_seq_number - 2)
 
-      assert {{:ok, redemand: :output}, ^state} =
+      assert {{:ok, redemand: :output}, new_state} =
                JitterBuffer.handle_process(:input, late_buffer, nil, state)
+
+      # assert nothing changed except for stats
+      assert %{new_state | stats: state.stats} == state
     end
 
     test "adds it and when it fills the gap, returns all buffers in order", %{state: state} do

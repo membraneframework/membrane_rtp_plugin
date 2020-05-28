@@ -19,17 +19,17 @@ defmodule Membrane.RTP.Session.ReceiveBin do
   @bin_input_buffer_params [warn_size: 250, fail_size: 500]
 
   @known_depayloaders %{
-    h264: Membrane.RTP.H264.Depayloader,
-    mpa: Membrane.RTP.MPEGAudio.Depayloader
+    H264: Membrane.RTP.H264.Depayloader,
+    MPA: Membrane.RTP.MPEGAudio.Depayloader
   }
 
   def_options fmt_mapping: [
-                spec: %{integer => RTP.payload_type_t()},
+                spec: %{RTP.payload_type_t() => {RTP.encoding_name_t(), RTP.clock_rate_t()}},
                 default: %{},
-                description: "Mapping of the custom payload types (for fmt > 95)"
+                description: "Mapping of the custom payload types ( > 95)"
               ],
               custom_depayloaders: [
-                spec: %{RTP.payload_type_t() => module()},
+                spec: %{RTP.encoding_name_t() => module()},
                 default: %{},
                 description: "Mapping from a payload type to a custom depayloader module"
               ]
@@ -99,18 +99,19 @@ defmodule Membrane.RTP.Session.ReceiveBin do
         _ctx,
         %State{ssrc_pt_mapping: ssrc_pt_mapping} = state
       ) do
-    payload_type = ssrc_pt_mapping |> Map.get(ssrc)
+    {pt_name, clock_rate} = ssrc_pt_mapping |> Map.get(ssrc)
 
     depayloader =
-      case state.depayloaders[payload_type] do
-        nil -> raise "Cannot find depayloader for payload type #{payload_type}"
+      case state.depayloaders[pt_name] do
+        nil -> raise "Cannot find depayloader for payload type #{pt_name}"
         depayloader -> depayloader
       end
 
     rtp_stream_name = {:rtp_stream_bin, ssrc}
 
     new_children = [
-      {rtp_stream_name, %RTP.StreamReceiveBin{depayloader: depayloader, ssrc: ssrc}}
+      {rtp_stream_name,
+       %RTP.StreamReceiveBin{depayloader: depayloader, ssrc: ssrc, clock_rate: clock_rate}}
     ]
 
     new_links = [
@@ -144,17 +145,22 @@ defmodule Membrane.RTP.Session.ReceiveBin do
   def handle_notification({:new_rtp_stream, ssrc, pt_num}, :ssrc_router, state) do
     %State{ssrc_pt_mapping: ssrc_pt_mapping, fmt_mapping: fmt_map} = state
 
-    pt_name =
-      case PayloadType.get_encoding_name(pt_num) do
-        :dynamic -> fmt_map[pt_num]
-        pt -> pt
+    {pt_name, clock_rate} =
+      if PayloadType.is_dynamic(pt_num) do
+        unless Map.has_key?(fmt_map, pt_num) do
+          raise "Unknown RTP payload type #{pt_num}"
+        end
+
+        fmt_map[pt_num]
+      else
+        {PayloadType.get_encoding_name(pt_num), PayloadType.get_clock_rate(pt_num)}
       end
 
     if pt_name == nil do
       raise "Unknown RTP payload type #{pt_num}"
     end
 
-    new_ssrc_pt_mapping = ssrc_pt_mapping |> Map.put(ssrc, pt_name)
+    new_ssrc_pt_mapping = ssrc_pt_mapping |> Map.put(ssrc, {pt_name, clock_rate})
 
     {{:ok, notify: {:new_rtp_stream, ssrc, pt_name}},
      %{state | ssrc_pt_mapping: new_ssrc_pt_mapping}}
