@@ -41,7 +41,7 @@ defmodule Membrane.RTP.JitterBuffer do
               latency: nil,
               waiting?: true,
               max_latency_timer: nil,
-              stats: %{expected_prior: 0, received_prior: 0, last_transit: 0, jitter: 0.0}
+              stats: %{expected_prior: 0, received_prior: 0, last_transit: nil, jitter: 0.0}
 
     @type t :: %__MODULE__{
             store: BufferStore.t(),
@@ -52,7 +52,7 @@ defmodule Membrane.RTP.JitterBuffer do
             stats: %{
               expected_prior: non_neg_integer(),
               received_prior: non_neg_integer(),
-              last_transit: non_neg_integer(),
+              last_transit: non_neg_integer() | nil,
               jitter: float()
             }
           }
@@ -214,11 +214,17 @@ defmodule Membrane.RTP.JitterBuffer do
     # Algorithm from https://tools.ietf.org/html/rfc3550#appendix-A.8
     arrival = Time.vm_time() |> Time.as_seconds() |> Ratio.mult(clock_rate) |> Ratio.trunc()
     transit = arrival - buffer_ts
-    d = abs(transit - last_transit)
-    new_jitter = jitter + 1 / 16 * (d - jitter)
 
-    state
-    |> Bunch.Struct.put_in([:stats, :jitter], new_jitter)
-    |> Bunch.Struct.put_in([:stats, :transit], transit)
+    if last_transit == nil do
+      state
+      |> Bunch.Struct.put_in([:stats, :last_transit], transit)
+    else
+      d = abs(transit - last_transit)
+      new_jitter = jitter + 1 / 16 * (d - jitter)
+
+      state
+      |> Bunch.Struct.put_in([:stats, :jitter], new_jitter)
+      |> Bunch.Struct.put_in([:stats, :last_transit], transit)
+    end
   end
 end
