@@ -1,9 +1,9 @@
 defmodule Membrane.RTP.JitterBufferTest do
   use ExUnit.Case, async: true
 
+  alias Membrane.RTP.BufferFactory
   alias Membrane.RTP.JitterBuffer
   alias Membrane.RTP.JitterBuffer.{BufferStore, Record, State}
-  alias __MODULE__.BufferFactory
 
   @base_seq_number 50
 
@@ -11,7 +11,7 @@ defmodule Membrane.RTP.JitterBufferTest do
     buffer = BufferFactory.sample_buffer(@base_seq_number)
     # {:ok, store} = BufferStore.insert_buffer(%BufferStore{}, buffer)
     state = %State{
-      clock_rate: 8000,
+      clock_rate: 10000,
       store: %BufferStore{},
       latency: 10 |> Membrane.Time.milliseconds()
     }
@@ -41,6 +41,40 @@ defmodule Membrane.RTP.JitterBufferTest do
       assert %State{store: store} = state
       assert {%Record{buffer: ^buffer}, new_store} = BufferStore.shift(store)
       assert BufferStore.dump(new_store) == []
+    end
+
+    @tag :focus
+    test "jitter stats are updated", %{state: state, buffer: buffer} do
+      ts = ~U[2020-06-19 19:06:00Z] |> DateTime.to_unix() |> Membrane.Time.seconds()
+
+      timestamped_buf = put_in(buffer.metadata.rtp[:arrival_ts], ts)
+      assert {:ok, state} = JitterBuffer.handle_process(:input, timestamped_buf, nil, state)
+      assert state.stats.jitter == 0.0
+
+      assert state.stats.last_transit ==
+               Membrane.Time.to_seconds(ts) * state.clock_rate -
+                 timestamped_buf.metadata.rtp.timestamp
+
+      buffer = BufferFactory.sample_buffer(@base_seq_number + 1)
+
+      arrival_ts_increment =
+        div(BufferFactory.timestamp_increment(), state.clock_rate) |> Membrane.Time.seconds()
+
+      packet_delay = 1 |> Membrane.Time.seconds()
+
+      timestamped_buf =
+        put_in(buffer.metadata.rtp[:arrival_ts], ts + arrival_ts_increment + packet_delay)
+
+      assert {:ok, state} = JitterBuffer.handle_process(:input, timestamped_buf, nil, state)
+
+      # 16 is defined by RFC
+      assert state.stats.jitter ==
+               div(Membrane.Time.to_seconds(packet_delay) * state.clock_rate, 16)
+
+      assert state.stats.last_transit ==
+               Membrane.Time.to_seconds(ts + arrival_ts_increment + packet_delay) *
+                 state.clock_rate -
+                 timestamped_buf.metadata.rtp.timestamp
     end
   end
 

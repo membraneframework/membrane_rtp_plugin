@@ -3,7 +3,7 @@ defmodule Membrane.RTP.JitterBuffer.BufferStoreTest do
   use Bunch
 
   alias Membrane.RTP.JitterBuffer.{BufferStore, Record}
-  alias Membrane.RTP.JitterBufferTest.BufferFactory
+  alias Membrane.RTP.BufferFactory
 
   @seq_number_limit 65_536
   @base_index 65_505

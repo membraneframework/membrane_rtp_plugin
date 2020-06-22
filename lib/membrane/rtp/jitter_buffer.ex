@@ -10,8 +10,6 @@ defmodule Membrane.RTP.JitterBuffer do
   alias __MODULE__.{BufferStore, Record}
 
   @type packet_index :: non_neg_integer()
-  @type sequence_number :: 0..65_535
-  @type timestamp :: pos_integer()
 
   def_output_pad :output,
     caps: RTP
@@ -206,13 +204,20 @@ defmodule Membrane.RTP.JitterBuffer do
   end
 
   def update_jitter(
-        %Buffer{metadata: %{rtp: %{timestamp: buffer_ts}}},
+        %Buffer{metadata: %{rtp: %{timestamp: buffer_ts} = metadata}},
         %State{clock_rate: clock_rate, stats: %{jitter: jitter, last_transit: last_transit}} =
           state
       ) do
     alias Membrane.Time
     # Algorithm from https://tools.ietf.org/html/rfc3550#appendix-A.8
-    arrival = Time.vm_time() |> Time.as_seconds() |> Ratio.mult(clock_rate) |> Ratio.trunc()
+    # TODO: consider adding arrival timestamp to a buffer in Source (e.g. UDP Source)
+    arrival_ts =
+      case metadata[:arrival_ts] do
+        nil -> Time.vm_time()
+        ts -> ts
+      end
+
+    arrival = arrival_ts |> Time.as_seconds() |> Ratio.mult(clock_rate) |> Ratio.trunc()
     transit = arrival - buffer_ts
 
     if last_transit == nil do

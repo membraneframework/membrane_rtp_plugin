@@ -41,16 +41,31 @@ defmodule Membrane.RTP.Header do
   """
   @type marker :: boolean()
 
+  @typedoc """
+  Timestamp of a packet in ticks of clock according to `t:RTP.clock_rate_t/0`.
+
+  Its initial value is random, so it should not be interpreted as an absolute time, but rather used to calculate
+  time difference from other timestamps.
+  """
+  @type timestamp_t() :: non_neg_integer()
+
+  @typedoc """
+  A 16-bit integer sequential number of a packet.
+
+  Its initial value should be random.
+  """
+  @type sequence_number_t() :: non_neg_integer()
+
   @type t :: %__MODULE__{
           version: version(),
           padding: padding(),
           extension_header: extension(),
           csrc_count: 0..15,
-          ssrc: non_neg_integer(),
+          ssrc: RTP.ssrc_t(),
           marker: marker(),
-          payload_type: RTP.raw_payload_type_t(),
-          timestamp: non_neg_integer(),
-          sequence_number: non_neg_integer(),
+          payload_type: RTP.payload_type_t(),
+          timestamp: timestamp_t(),
+          sequence_number: sequence_number_t(),
           csrcs: [non_neg_integer()],
           extension_header_data: __MODULE__.Extension.t() | nil
         }
