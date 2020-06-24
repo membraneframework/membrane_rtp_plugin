@@ -43,7 +43,6 @@ defmodule Membrane.RTP.JitterBufferTest do
       assert BufferStore.dump(new_store) == []
     end
 
-    @tag :focus
     test "jitter stats are updated", %{state: state, buffer: buffer} do
       ts = ~U[2020-06-19 19:06:00Z] |> DateTime.to_unix() |> Membrane.Time.seconds()
 
