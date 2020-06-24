@@ -203,11 +203,11 @@ defmodule Membrane.RTP.JitterBuffer do
      }, %State{stats: stored_stats}}
   end
 
-  def update_jitter(
-        %Buffer{metadata: %{rtp: %{timestamp: buffer_ts} = metadata}},
-        %State{clock_rate: clock_rate, stats: %{jitter: jitter, last_transit: last_transit}} =
-          state
-      ) do
+  defp update_jitter(
+         %Buffer{metadata: %{rtp: %{timestamp: buffer_ts}} = metadata},
+         %State{clock_rate: clock_rate, stats: %{jitter: jitter, last_transit: last_transit}} =
+           state
+       ) do
     alias Membrane.Time
     # Algorithm from https://tools.ietf.org/html/rfc3550#appendix-A.8
     # TODO: consider adding arrival timestamp to a buffer in Source (e.g. UDP Source)

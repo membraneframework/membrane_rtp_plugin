@@ -47,7 +47,7 @@ defmodule Membrane.RTP.JitterBufferTest do
     test "jitter stats are updated", %{state: state, buffer: buffer} do
       ts = ~U[2020-06-19 19:06:00Z] |> DateTime.to_unix() |> Membrane.Time.seconds()
 
-      timestamped_buf = put_in(buffer.metadata.rtp[:arrival_ts], ts)
+      timestamped_buf = put_in(buffer.metadata[:arrival_ts], ts)
       assert {:ok, state} = JitterBuffer.handle_process(:input, timestamped_buf, nil, state)
       assert state.stats.jitter == 0.0
 
@@ -63,7 +63,7 @@ defmodule Membrane.RTP.JitterBufferTest do
       packet_delay = 1 |> Membrane.Time.seconds()
 
       timestamped_buf =
-        put_in(buffer.metadata.rtp[:arrival_ts], ts + arrival_ts_increment + packet_delay)
+        put_in(buffer.metadata[:arrival_ts], ts + arrival_ts_increment + packet_delay)
 
       assert {:ok, state} = JitterBuffer.handle_process(:input, timestamped_buf, nil, state)
 
