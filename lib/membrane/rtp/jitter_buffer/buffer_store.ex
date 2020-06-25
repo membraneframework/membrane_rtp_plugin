@@ -47,15 +47,6 @@ defmodule Membrane.RTP.JitterBuffer.BufferStore do
   """
   @type get_buffer_error :: :not_present
 
-  @spec get_stats(store :: t()) :: %{
-          received: non_neg_integer(),
-          base_index: JitterBuffer.packet_index() | nil,
-          end_index: JitterBuffer.packet_index() | nil
-        }
-  def get_stats(%__MODULE__{} = store) do
-    store |> Map.take([:base_index, :end_index, :received])
-  end
-
   @doc """
   Inserts buffer into the Store.
 

@@ -34,6 +34,8 @@ defmodule Membrane.RTP.JitterBuffer do
 
   defmodule State do
     @moduledoc false
+    use Bunch.Access
+
     defstruct store: %BufferStore{},
               clock_rate: nil,
               latency: nil,
@@ -53,6 +55,23 @@ defmodule Membrane.RTP.JitterBuffer do
               last_transit: non_neg_integer() | nil,
               jitter: float()
             }
+          }
+  end
+
+  defmodule Stats do
+    @moduledoc """
+    JitterBuffer stats that can be used for Receiver report generation
+    """
+
+    @enforce_keys [:fraction_lost, :total_lost, :highest_seq_num, :interarrival_jitter]
+
+    defstruct @enforce_keys
+
+    @type t :: %__MODULE__{
+            fraction_lost: float(),
+            total_lost: non_neg_integer(),
+            highest_seq_num: Membrane.RTP.JitterBuffer.packet_index(),
+            interarrival_jitter: non_neg_integer()
           }
   end
 
@@ -162,8 +181,7 @@ defmodule Membrane.RTP.JitterBuffer do
   defp record_to_action(nil), do: {:event, {:output, %Membrane.Event.Discontinuity{}}}
   defp record_to_action(%Record{buffer: buffer}), do: {:buffer, {:output, buffer}}
 
-  # TODO: stats spec could be improved
-  @spec get_and_update_stats(State.t()) :: {stats, State.t()} when stats: map()
+  @spec get_and_update_stats(State.t()) :: {__MODULE__.Stats.t(), State.t()}
   def get_and_update_stats(%State{
         store: store,
         stats: %{expected_prior: expected_prior, received_prior: received_prior, jitter: jitter}
@@ -188,9 +206,9 @@ defmodule Membrane.RTP.JitterBuffer do
 
     fraction =
       if expected_interval == 0 || lost_interval <= 0 do
-        0
+        0.0
       else
-        lost_interval <<< 8 |> div(expected_interval)
+        lost_interval / expected_interval
       end
 
     stored_stats = %{expected_prior: expected, received_prior: received, jitter: jitter}
@@ -210,26 +228,20 @@ defmodule Membrane.RTP.JitterBuffer do
        ) do
     alias Membrane.Time
     # Algorithm from https://tools.ietf.org/html/rfc3550#appendix-A.8
-    # TODO: consider adding arrival timestamp to a buffer in Source (e.g. UDP Source)
-    arrival_ts =
-      case metadata[:arrival_ts] do
-        nil -> Time.vm_time()
-        ts -> ts
-      end
+    arrival_ts = Map.get(metadata, :arrival_ts, Time.vm_time())
 
     arrival = arrival_ts |> Time.as_seconds() |> Ratio.mult(clock_rate) |> Ratio.trunc()
     transit = arrival - buffer_ts
 
     if last_transit == nil do
-      state
-      |> Bunch.Struct.put_in([:stats, :last_transit], transit)
+      put_in(state.stats.last_transit, transit)
     else
       d = abs(transit - last_transit)
       new_jitter = jitter + 1 / 16 * (d - jitter)
 
       state
-      |> Bunch.Struct.put_in([:stats, :jitter], new_jitter)
-      |> Bunch.Struct.put_in([:stats, :last_transit], transit)
+      |> put_in([:stats, :jitter], new_jitter)
+      |> put_in([:stats, :last_transit], transit)
     end
   end
 end
