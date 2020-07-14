@@ -77,6 +77,10 @@ defmodule Membrane.RTP.JitterBuffer do
 
   @impl true
   def handle_init(%__MODULE__{latency: latency, clock_rate: clock_rate}) do
+    if latency == nil do
+      raise "Latancy cannot be nil"
+    end
+
     {:ok, %State{latency: latency, clock_rate: clock_rate}}
   end
 
@@ -97,6 +101,9 @@ defmodule Membrane.RTP.JitterBuffer do
 
   @impl true
   def handle_end_of_stream(:input, _context, %State{store: store} = state) do
+    {stats, state} = get_and_update_stats(state)
+    IO.inspect(stats)
+
     store
     |> BufferStore.dump()
     |> Enum.map(&record_to_action/1)
@@ -147,6 +154,12 @@ defmodule Membrane.RTP.JitterBuffer do
     send_buffers(state)
   end
 
+  @impl true
+  def handle_other(:send_stats, _ctx, state) do
+    {stats, state} = get_and_update_stats(state)
+    {{:ok, notify: {:jitter_buffer_stats, stats}}, state}
+  end
+
   defp send_buffers(%State{store: store} = state) do
     # Shift buffers that stayed in queue longer than latency and any gaps before them
     {too_old_records, store} = BufferStore.shift_older_than(store, state.latency)
@@ -184,7 +197,9 @@ defmodule Membrane.RTP.JitterBuffer do
   @spec get_and_update_stats(State.t()) :: {Stats.t(), State.t()}
   def get_and_update_stats(%State{
         store: store,
-        stats: %{expected_prior: expected_prior, received_prior: received_prior, jitter: jitter}
+        stats:
+          %{expected_prior: expected_prior, received_prior: received_prior, jitter: jitter} =
+            state
       }) do
     use Bitwise
 
@@ -218,7 +233,7 @@ defmodule Membrane.RTP.JitterBuffer do
        total_lost: capped_lost,
        highest_seq_num: extended_max,
        interarrival_jitter: jitter
-     }, %State{stats: stored_stats}}
+     }, %State{state | stats: stored_stats}}
   end
 
   defp update_jitter(
@@ -230,6 +245,7 @@ defmodule Membrane.RTP.JitterBuffer do
     # Algorithm from https://tools.ietf.org/html/rfc3550#appendix-A.8
     arrival_ts = Map.get(metadata, :arrival_ts, Time.vm_time())
 
+    # Algorithm from https://tools.ietf.org/html/rfc3550#appendix-A.8
     arrival = arrival_ts |> Time.as_seconds() |> Ratio.mult(clock_rate) |> Ratio.trunc()
     transit = arrival - buffer_ts
 

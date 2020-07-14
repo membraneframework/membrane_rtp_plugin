@@ -13,7 +13,7 @@ defmodule Membrane.RTP.Session.ReceiveBin do
   use Membrane.Bin
 
   alias Membrane.ParentSpec
-  alias Membrane.RTP
+  alias Membrane.{RTCP, RTP}
   alias Membrane.RTP.Packet.PayloadType
 
   @bin_input_buffer_params [warn_size: 250, fail_size: 500]
@@ -37,7 +37,8 @@ defmodule Membrane.RTP.Session.ReceiveBin do
   def_input_pad :input, demand_unit: :buffers, caps: :any, availability: :on_request
   def_input_pad :rtcp_input, demand_unit: :buffers, caps: :any, availability: :on_request
 
-  def_output_pad :output, caps: :any, demand_unit: :buffers, availability: :on_request
+  def_output_pad :output, demand_unit: :buffers, caps: :any, availability: :on_request
+  def_output_pad :rtcp_output, demand_unit: :buffers, caps: RTCP, availability: :on_request
 
   defmodule State do
     @moduledoc false
@@ -170,5 +171,23 @@ defmodule Membrane.RTP.Session.ReceiveBin do
   def handle_notification({:received_rtcp, _rtcp}, {:rtcp_parser, _ref}, state) do
     # TODO: handle RTCP reports properly
     {:ok, state}
+  end
+
+  @impl true
+  def handle_notification({:stats, ssrc, _stats} = msg, {:rtp_stream_bin, ssrc}, state) do
+    target = :rtcp_generator
+    {{:ok, forward: {target, msg}}, state}
+  end
+
+  @impl true
+  def handle_other(:send_report, state) do
+    actions =
+      state.ssrc_pt_mapping
+      |> Enum.map(fn {ssrc, _info} ->
+        child_ref = {:rtp_stream_bin, ssrc}
+        {:forward, {child_ref, :send_stats}}
+      end)
+
+    {{:ok, actions}, state}
   end
 end
