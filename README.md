@@ -22,7 +22,7 @@ end
 
 TODO
 
-The docs can be found at [https://hexdocs.pm/membrane_rtp](https://hexdocs.pm/membrane_rtp).
+The docs can be found at [https://hexdocs.pm/membrane_rtp](https://hexdocs.pm/membrane_rtp_plugin).
 
 ## Copyright and License
 
