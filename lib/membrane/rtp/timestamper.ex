@@ -30,4 +30,3 @@ defmodule Membrane.RTP.Timestamper do
     {{:ok, buffer: {:output, buffer}}, state}
   end
 end
-
