@@ -8,12 +8,12 @@ It is a part of [Membrane Multimedia Framework](https://membraneframework.org).
 
 ## Installation
 
-The package can be installed by adding `membrane_rtp` to your list of dependencies in `mix.exs`:
+The package can be installed by adding `membrane_rtp_plugin` to your list of dependencies in `mix.exs`:
 
 ```elixir
 def deps do
   [
-    {:membrane_rtp, "~> 0.4.0"}
+    {:membrane_rtp_plugin, "~> 0.4.0-alpha"}
   ]
 end
 ```
