@@ -101,9 +101,6 @@ defmodule Membrane.RTP.JitterBuffer do
 
   @impl true
   def handle_end_of_stream(:input, _context, %State{store: store} = state) do
-    {stats, state} = get_and_update_stats(state)
-    IO.inspect(stats)
-
     store
     |> BufferStore.dump()
     |> Enum.map(&record_to_action/1)
@@ -195,12 +192,12 @@ defmodule Membrane.RTP.JitterBuffer do
   defp record_to_action(%Record{buffer: buffer}), do: {:buffer, {:output, buffer}}
 
   @spec get_and_update_stats(State.t()) :: {Stats.t(), State.t()}
-  def get_and_update_stats(%State{
-        store: store,
-        stats:
-          %{expected_prior: expected_prior, received_prior: received_prior, jitter: jitter} =
-            state
-      }) do
+  def get_and_update_stats(
+        %State{
+          store: store,
+          stats: %{expected_prior: expected_prior, received_prior: received_prior, jitter: jitter}
+        } = state
+      ) do
     use Bitwise
 
     # Variable names follow algorithm A.3 from RFC3550 (https://tools.ietf.org/html/rfc3550#appendix-A.3)

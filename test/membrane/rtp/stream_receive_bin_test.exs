@@ -97,8 +97,5 @@ defmodule Membrane.RTP.StreamReceiveBinTest do
     assert_start_of_stream(pipeline, :sink)
     assert_end_of_stream(pipeline, :rtp_parser, :input, 4000)
     assert_end_of_stream(pipeline, :sink)
-    :observer.start()
-    require IEx
-    IEx.pry()
   end
 end

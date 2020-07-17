@@ -145,10 +145,9 @@ defmodule Membrane.RTP.JitterBufferTest do
 
   describe "When event arrives" do
     test "dumps store if event was end of stream", %{state: state, buffer: buffer} do
-      store = %BufferStore{state.store | prev_index: @base_seq_number - 2}
+      store = %BufferStore{state.store | prev_index: @base_seq_number - 2, base_index: 0}
       {:ok, store} = BufferStore.insert_buffer(store, buffer)
       state = %{state | store: store}
-
       assert {{:ok, actions}, r_state} = JitterBuffer.handle_end_of_stream(:input, nil, state)
 
       assert [event: event, buffer: buffer_action, end_of_stream: :output] = actions

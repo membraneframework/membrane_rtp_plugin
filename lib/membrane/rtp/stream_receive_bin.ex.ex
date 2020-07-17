@@ -47,7 +47,7 @@ defmodule Membrane.RTP.StreamReceiveBin do
   end
 
   @impl true
-  def handle_notification({:jitter_buffer_stats, stats}, state) do
+  def handle_notification({:jitter_buffer_stats, stats}, :jitter_buffer, state) do
     {{:ok, notify: {:stats, state.ssrc, stats}}, state}
   end
 end

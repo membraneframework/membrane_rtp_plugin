@@ -62,25 +62,17 @@ defmodule Membrane.Element.RTP.MixProject do
   defp deps do
     [
       {:membrane_core, "~> 0.5.1", github: "membraneframework/membrane-core", override: true},
-      {
-        :membrane_rtp_format,
-        "~> 0.2",
-        github: "membraneframework/membrane_rtp_format", branch: "develop"
-      },
-      # path: "/home/bblaszkow/swmansion/membrane/caps/rtp", override: true },
+      {:membrane_rtp_format, "~> 0.2.0-alpha"},
       {:bunch, "~> 1.0"},
       {:heap, "~> 2.0.2"},
 
       # Dev
       {:ex_doc, "~> 0.21", only: :dev, runtime: false},
       {:dialyxir, "~> 1.0.0", only: :dev, runtime: false},
-      {:excoveralls, ">= 0.8.0", only: :test},
-      {:membrane_rtp_h264_plugin, "~> 0.3.0",
-       github: "membraneframework/membrane-element-rtp-h264", branch: "new-naming", only: :test},
-      {:membrane_rtp_mpegaudio_plugin, "~> 0.4.0",
-       github: "membraneframework/membrane-element-rtp-mpegaudio",
-       branch: "new-naming",
-       only: :test},
+      {:membrane_rtp_h264_plugin, "~> 0.3.0-alpha",
+       github: "membraneframework/membrane-element-rtp-h264", only: :test},
+      {:membrane_rtp_mpegaudio_plugin, "~> 0.4.0-alpha",
+       github: "membraneframework/membrane-element-rtp-mpegaudio", only: :test},
       {:membrane_element_ffmpeg_h264, "~> 0.2.0", only: :test},
       {:membrane_element_pcap, github: "membraneframework/membrane-element-pcap", only: :test}
     ]
