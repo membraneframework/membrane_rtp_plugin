@@ -62,7 +62,6 @@ defmodule Membrane.RTP.StreamReceiveBinTest do
     assert count == @frames_count
   end
 
-  @tag :focus
   test "RTCP reports are generated properly" do
     pcap_file = "test/fixtures/rtp/session/h264_before_sr.pcap"
 

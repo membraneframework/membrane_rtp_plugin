@@ -6,7 +6,7 @@ defmodule Membrane.RTP.JitterBuffer do
   use Membrane.Log
   use Bunch
 
-  alias Membrane.{Buffer, RTP}
+  alias Membrane.{Buffer, RTP, Time}
   alias __MODULE__.{BufferStore, Record}
 
   @type packet_index :: non_neg_integer()
@@ -18,7 +18,7 @@ defmodule Membrane.RTP.JitterBuffer do
     caps: RTP,
     demand_unit: :buffers
 
-  @default_latency 200 |> Membrane.Time.milliseconds()
+  @default_latency 200 |> Time.milliseconds()
 
   @max_s24_val 8_388_607
   @min_s24_val -8_388_608
@@ -41,15 +41,15 @@ defmodule Membrane.RTP.JitterBuffer do
               latency: nil,
               waiting?: true,
               max_latency_timer: nil,
-              stats: %{expected_prior: 0, received_prior: 0, last_transit: nil, jitter: 0.0}
+              stats_acc: %{expected_prior: 0, received_prior: 0, last_transit: nil, jitter: 0.0}
 
     @type t :: %__MODULE__{
             store: BufferStore.t(),
             clock_rate: RTP.clock_rate_t(),
-            latency: Membrane.Time.t(),
+            latency: Time.t(),
             waiting?: boolean(),
             max_latency_timer: reference,
-            stats: %{
+            stats_acc: %{
               expected_prior: non_neg_integer(),
               received_prior: non_neg_integer(),
               last_transit: non_neg_integer() | nil,
@@ -89,7 +89,7 @@ defmodule Membrane.RTP.JitterBuffer do
     Process.send_after(
       self(),
       :initial_latency_passed,
-      state.latency |> Membrane.Time.to_milliseconds()
+      state.latency |> Time.to_milliseconds()
     )
 
     {:ok, %{state | waiting?: true}}
@@ -153,7 +153,7 @@ defmodule Membrane.RTP.JitterBuffer do
 
   @impl true
   def handle_other(:send_stats, _ctx, state) do
-    {stats, state} = get_and_update_stats(state)
+    {stats, state} = get_updated_stats(state)
     {{:ok, notify: {:jitter_buffer_stats, stats}}, state}
   end
 
@@ -178,8 +178,8 @@ defmodule Membrane.RTP.JitterBuffer do
           nil
 
         buffer_ts ->
-          since_insertion = Membrane.Time.monotonic_time() - buffer_ts
-          send_after_time = max(0, latency - since_insertion) |> Membrane.Time.to_milliseconds()
+          since_insertion = Time.monotonic_time() - buffer_ts
+          send_after_time = max(0, latency - since_insertion) |> Time.to_milliseconds()
           Process.send_after(self(), :send_buffers, send_after_time)
       end
 
@@ -191,18 +191,13 @@ defmodule Membrane.RTP.JitterBuffer do
   defp record_to_action(nil), do: {:event, {:output, %Membrane.Event.Discontinuity{}}}
   defp record_to_action(%Record{buffer: buffer}), do: {:buffer, {:output, buffer}}
 
-  @spec get_and_update_stats(State.t()) :: {Stats.t(), State.t()}
-  def get_and_update_stats(
-        %State{
-          store: store,
-          stats: %{expected_prior: expected_prior, received_prior: received_prior, jitter: jitter}
-        } = state
-      ) do
-    use Bitwise
+  @spec get_updated_stats(State.t()) :: {Stats.t(), State.t()}
+  defp get_updated_stats(state) do
+    %State{store: store, stats_acc: stats_acc} = state
 
     # Variable names follow algorithm A.3 from RFC3550 (https://tools.ietf.org/html/rfc3550#appendix-A.3)
-    %{base_index: base_seq, end_index: extended_max, received: received} = store
-    expected = extended_max - base_seq + 1
+    %BufferStore{base_index: base_seq, end_index: extended_max, received: received} = store
+    expected = if base_seq == nil, do: 0, else: extended_max - base_seq + 1
     lost = expected - received
 
     capped_lost =
@@ -212,8 +207,8 @@ defmodule Membrane.RTP.JitterBuffer do
         true -> lost
       end
 
-    expected_interval = expected - expected_prior
-    received_interval = received - received_prior
+    expected_interval = expected - stats_acc.expected_prior
+    received_interval = received - stats_acc.received_prior
     lost_interval = expected_interval - received_interval
 
     fraction =
@@ -223,38 +218,37 @@ defmodule Membrane.RTP.JitterBuffer do
         lost_interval / expected_interval
       end
 
-    stored_stats = %{expected_prior: expected, received_prior: received, jitter: jitter}
+    stats_acc = %{stats_acc | expected_prior: expected, received_prior: received}
 
-    {%Stats{
-       fraction_lost: fraction,
-       total_lost: capped_lost,
-       highest_seq_num: extended_max,
-       interarrival_jitter: jitter
-     }, %State{state | stats: stored_stats}}
+    stats = %Stats{
+      fraction_lost: fraction,
+      total_lost: capped_lost,
+      highest_seq_num: extended_max,
+      interarrival_jitter: stats_acc.jitter
+    }
+
+    {stats, %State{state | stats_acc: stats_acc}}
   end
 
-  defp update_jitter(
-         %Buffer{metadata: %{rtp: %{timestamp: buffer_ts}} = metadata},
-         %State{clock_rate: clock_rate, stats: %{jitter: jitter, last_transit: last_transit}} =
-           state
-       ) do
-    alias Membrane.Time
-    # Algorithm from https://tools.ietf.org/html/rfc3550#appendix-A.8
-    arrival_ts = Map.get(metadata, :arrival_ts, Time.vm_time())
+  defp update_jitter(%Buffer{metadata: metadata}, state) do
+    %State{clock_rate: clock_rate, stats_acc: %{jitter: jitter, last_transit: last_transit}} =
+      state
 
     # Algorithm from https://tools.ietf.org/html/rfc3550#appendix-A.8
+    arrival_ts = Map.get(metadata, :arrival_ts, Time.vm_time())
+    buffer_ts = metadata.rtp.timestamp
     arrival = arrival_ts |> Time.as_seconds() |> Ratio.mult(clock_rate) |> Ratio.trunc()
     transit = arrival - buffer_ts
 
     if last_transit == nil do
-      put_in(state.stats.last_transit, transit)
+      put_in(state.stats_acc.last_transit, transit)
     else
       d = abs(transit - last_transit)
       new_jitter = jitter + 1 / 16 * (d - jitter)
 
       state
-      |> put_in([:stats, :jitter], new_jitter)
-      |> put_in([:stats, :last_transit], transit)
+      |> put_in([:stats_acc, :jitter], new_jitter)
+      |> put_in([:stats_acc, :last_transit], transit)
     end
   end
 end

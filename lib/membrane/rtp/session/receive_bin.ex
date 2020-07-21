@@ -12,6 +12,8 @@ defmodule Membrane.RTP.Session.ReceiveBin do
   """
   use Membrane.Bin
 
+  require Bitwise
+
   alias Membrane.ParentSpec
   alias Membrane.{RTCP, RTP}
   alias Membrane.RTP.Packet.PayloadType
@@ -32,6 +34,15 @@ defmodule Membrane.RTP.Session.ReceiveBin do
                 spec: %{RTP.encoding_name_t() => module()},
                 default: %{},
                 description: "Mapping from a payload type to a custom depayloader module"
+              ],
+              ssrc: [
+                default: nil,
+                type: :integer,
+                spec: 0..4_294_967_295
+              ],
+              rtcp_interval: [
+                default: 5 |> Membrane.Time.seconds(),
+                type: :time
               ]
 
   def_input_pad :input, demand_unit: :buffers, caps: :any, availability: :on_request
@@ -45,18 +56,28 @@ defmodule Membrane.RTP.Session.ReceiveBin do
 
     defstruct fmt_mapping: %{},
               ssrc_pt_mapping: %{},
-              depayloaders: nil
+              depayloaders: nil,
+              ssrc: nil,
+              streams_ssrcs: MapSet.new(),
+              rtcp_interval: nil
   end
 
   @impl true
-  def handle_init(%{fmt_mapping: fmt_map, custom_depayloaders: custom_depayloaders}) do
+  def handle_init(options) do
     children = [ssrc_router: RTP.SSRCRouter]
     links = []
 
     spec = %ParentSpec{children: children, links: links}
 
-    depayloaders = Map.merge(@known_depayloaders, custom_depayloaders)
-    {{:ok, spec: spec}, %State{fmt_mapping: fmt_map, depayloaders: depayloaders}}
+    depayloaders = Map.merge(@known_depayloaders, options.custom_depayloaders)
+
+    {{:ok, spec: spec},
+     %State{
+       fmt_mapping: options.fmt_mapping,
+       depayloaders: depayloaders,
+       ssrc: options.ssrc || Enum.random(0..(Bitwise.bsl(1, 32) - 1)),
+       rtcp_interval: options.rtcp_interval
+     }}
   end
 
   @impl true
@@ -95,12 +116,8 @@ defmodule Membrane.RTP.Session.ReceiveBin do
   end
 
   @impl true
-  def handle_pad_added(
-        Pad.ref(:output, ssrc) = pad,
-        _ctx,
-        %State{ssrc_pt_mapping: ssrc_pt_mapping} = state
-      ) do
-    {pt_name, clock_rate} = ssrc_pt_mapping |> Map.get(ssrc)
+  def handle_pad_added(Pad.ref(:output, ssrc) = pad, _ctx, state) do
+    {pt_name, clock_rate} = state.ssrc_pt_mapping |> Map.get(ssrc)
 
     depayloader =
       case state.depayloaders[pt_name] do
@@ -123,7 +140,18 @@ defmodule Membrane.RTP.Session.ReceiveBin do
     ]
 
     new_spec = %ParentSpec{children: new_children, links: new_links}
+    state = %{state | streams_ssrcs: MapSet.put(state.streams_ssrcs, ssrc)}
+    {{:ok, spec: new_spec}, state}
+  end
 
+  @impl true
+  def handle_pad_added(Pad.ref(:rtcp_output, _ref) = pad, _ctx, state) do
+    new_children = [
+      receiver_reporter: %RTCP.ReceiverReporter{ssrc: state.ssrc, interval: state.rtcp_interval}
+    ]
+
+    new_links = [link(:receiver_reporter) |> to_bin_output(pad)]
+    new_spec = %ParentSpec{children: new_children, links: new_links}
     {{:ok, spec: new_spec}, state}
   end
 
@@ -132,6 +160,7 @@ defmodule Membrane.RTP.Session.ReceiveBin do
     {{:ok, remove_child: {:rtp_parser, ref}}, state}
   end
 
+  @impl true
   def handle_pad_removed(Pad.ref(:rtcp_input, ref), _ctx, state) do
     {{:ok, remove_child: {:rtcp_parser, ref}}, state}
   end
@@ -140,6 +169,11 @@ defmodule Membrane.RTP.Session.ReceiveBin do
   def handle_pad_removed(Pad.ref(:output, ssrc), _ctx, state) do
     # TODO: parent may not know when to unlink, we need to timout SSRCs and notify about that and BYE packets over RTCP
     {{:ok, remove_child: {:rtp_stream_bin, ssrc}}, state}
+  end
+
+  @impl true
+  def handle_pad_removed(Pad.ref(:rtcp_output, _ref), _ctx, state) do
+    {{:ok, remove_child: :receiver_reporter}, state}
   end
 
   @impl true
@@ -163,8 +197,8 @@ defmodule Membrane.RTP.Session.ReceiveBin do
 
     new_ssrc_pt_mapping = ssrc_pt_mapping |> Map.put(ssrc, {pt_name, clock_rate})
 
-    {{:ok, notify: {:new_rtp_stream, ssrc, pt_name}},
-     %{state | ssrc_pt_mapping: new_ssrc_pt_mapping}}
+    state = %{state | ssrc_pt_mapping: new_ssrc_pt_mapping}
+    {{:ok, notify: {:new_rtp_stream, ssrc, pt_name}}, state}
   end
 
   @impl true
@@ -174,9 +208,17 @@ defmodule Membrane.RTP.Session.ReceiveBin do
   end
 
   @impl true
-  def handle_notification({:stats, ssrc, _stats} = msg, {:rtp_stream_bin, ssrc}, state) do
-    target = :rtcp_generator
-    {{:ok, forward: {target, msg}}, state}
+  def handle_notification(:send_stats, :receiver_reporter, state) do
+    actions =
+      [forward: {:receiver_reporter, {:ssrcs, state.streams_ssrcs}}] ++
+        Enum.map(state.streams_ssrcs, &{:forward, {{:rtp_stream_bin, &1}, :send_stats}})
+
+    {{:ok, actions}, state}
+  end
+
+  @impl true
+  def handle_notification({:stats, stats}, {:rtp_stream_bin, ssrc}, state) do
+    {{:ok, forward: {:receiver_reporter, {:stats, ssrc, stats}}}, state}
   end
 
   @impl true

@@ -13,17 +13,58 @@ defmodule Membrane.RTP.Session.ReceiveBinTest do
 
   @fmt_mapping %{96 => {:H264, 90_000}, 127 => {:MPA, 90_000}}
 
+  defmodule Pauser do
+    # move to Core.Testing?
+    use Membrane.Filter
+    def_input_pad :input, demand_unit: :buffers, caps: :any
+    def_output_pad :output, caps: :any
+
+    def_options pauses: [default: []]
+
+    @impl true
+    def handle_init(opts) do
+      {:ok, Map.from_struct(opts) |> Map.merge(%{cnt: 0})}
+    end
+
+    @impl true
+    def handle_demand(:output, size, :buffers, _ctx, %{pauses: [pause | _], cnt: cnt} = state) do
+      {{:ok, demand: {:input, min(size, pause - cnt)}}, state}
+    end
+
+    @impl true
+    def handle_demand(:output, size, :buffers, _ctx, state) do
+      {{:ok, demand: {:input, size}}, state}
+    end
+
+    @impl true
+    def handle_process(:input, buffer, _ctx, state) do
+      {{:ok, buffer: {:output, buffer}}, Map.update!(state, :cnt, &(&1 + 1))}
+    end
+
+    @impl true
+    def handle_other(:continue, _ctx, state) do
+      {{:ok, redemand: :output}, Map.update!(state, :pauses, &tl/1)}
+    end
+  end
+
   defmodule DynamicPipeline do
     use Membrane.Pipeline
 
     @impl true
-    def handle_init(%{pcap_file: pcap_file, fmt_mapping: fmt_mapping}) do
+    def handle_init(options) do
       spec = %ParentSpec{
         children: [
-          pcap: %Membrane.Element.Pcap.Source{path: pcap_file},
-          rtp: %RTP.Session.ReceiveBin{fmt_mapping: fmt_mapping}
+          pcap: %Membrane.Element.Pcap.Source{path: options.pcap_file},
+          pauser: %Pauser{pauses: [15]},
+          rtp: %RTP.Session.ReceiveBin{
+            fmt_mapping: options.fmt_mapping,
+            rtcp_interval: options.rtcp_interval
+          },
+          rtcp_sink: Testing.Sink
         ],
-        links: [link(:pcap) |> to(:rtp)]
+        links: [
+          link(:pcap) |> to(:pauser) |> to(:rtp) |> via_out(:rtcp_output) |> to(:rtcp_sink)
+        ]
       }
 
       {{:ok, spec: spec}, %{}}
@@ -43,18 +84,21 @@ defmodule Membrane.RTP.Session.ReceiveBinTest do
       {{:ok, spec: spec}, state}
     end
 
+    @impl true
     def handle_notification(_, _, state) do
       {:ok, state}
     end
   end
 
+  @tag :focus
   test "RTP streams passes through RTP bin properly" do
     {:ok, pipeline} =
       %Testing.Pipeline.Options{
         module: DynamicPipeline,
         custom_args: %{
           pcap_file: @pcap_file,
-          fmt_mapping: @fmt_mapping
+          fmt_mapping: @fmt_mapping,
+          rtcp_interval: Membrane.Time.second()
         }
       }
       |> Testing.Pipeline.start_link()
@@ -67,6 +111,10 @@ defmodule Membrane.RTP.Session.ReceiveBinTest do
 
     assert_start_of_stream(pipeline, ^audio_ssrc)
     assert_start_of_stream(pipeline, ^video_ssrc)
+
+    assert_sink_buffer(pipeline, :rtcp_sink, %Membrane.Buffer{})
+    assert_sink_buffer(pipeline, :rtcp_sink, %Membrane.Buffer{})
+    Testing.Pipeline.message_child(pipeline, :pauser, :continue)
 
     1..@video_stream.frames_n
     |> Enum.each(fn _i ->
