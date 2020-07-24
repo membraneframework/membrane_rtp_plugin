@@ -133,7 +133,7 @@ defmodule Membrane.RTP.JitterBufferTest do
       assert {{:ok, commands}, state} = JitterBuffer.handle_process(:input, buffer, nil, state)
       assert commands |> Keyword.get(:buffer) == nil
       assert is_reference(state.max_latency_timer)
-      assert_receive message, (state.latency |> Membrane.Time.to_milliseconds()) + 2
+      assert_receive message, (state.latency |> Membrane.Time.to_milliseconds()) + 20
 
       assert {{:ok, actions}, state} = JitterBuffer.handle_other(message, %{}, state)
 
