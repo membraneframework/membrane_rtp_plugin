@@ -60,10 +60,12 @@ defmodule Membrane.RTP.Session.ReceiveBinTest do
             fmt_mapping: options.fmt_mapping,
             rtcp_interval: options.rtcp_interval
           },
+          rtcp_source: %Testing.Source{output: options.rtcp_input},
           rtcp_sink: Testing.Sink
         ],
         links: [
-          link(:pcap) |> to(:pauser) |> to(:rtp) |> via_out(:rtcp_output) |> to(:rtcp_sink)
+          link(:pcap) |> to(:pauser) |> to(:rtp) |> via_out(:rtcp_output) |> to(:rtcp_sink),
+          link(:rtcp_source) |> via_in(:rtcp_input) |> to(:rtp)
         ]
       }
 
@@ -92,12 +94,26 @@ defmodule Membrane.RTP.Session.ReceiveBinTest do
 
   @tag :focus
   test "RTP streams passes through RTP bin properly" do
+    sender_report =
+      %Membrane.RTCP.SenderReportPacket{
+        reports: [],
+        sender_info: %{
+          rtp_timestamp: 555_689_664,
+          sender_octet_count: 27843,
+          sender_packet_count: 158,
+          wallclock_timestamp: 1_582_306_181_225_999_999
+        },
+        ssrc: 670_572_639
+      }
+      |> Membrane.RTCP.Packet.to_binary()
+
     {:ok, pipeline} =
       %Testing.Pipeline.Options{
         module: DynamicPipeline,
         custom_args: %{
           pcap_file: @pcap_file,
           fmt_mapping: @fmt_mapping,
+          rtcp_input: [sender_report],
           rtcp_interval: Membrane.Time.second()
         }
       }
