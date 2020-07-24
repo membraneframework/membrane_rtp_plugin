@@ -38,11 +38,20 @@ defmodule Membrane.RTP.Session.ReceiveBin do
                 description: "Mapping from a payload type to a custom depayloader module"
               ],
               rtcp_interval: [
+                type: :time,
                 default: 5 |> Membrane.Time.seconds(),
-                type: :time
+                description: "Interval between sending subseqent RTCP receiver reports."
               ],
               receiver_ssrc_generator: [
-                default: &__MODULE__.generate_receiver_ssrc/2
+                type: :function,
+                spec:
+                  (local_ssrcs :: [pos_integer], remote_ssrcs :: [pos_integer] ->
+                     ssrc :: pos_integer),
+                default: &__MODULE__.generate_receiver_ssrc/2,
+                description: """
+                Function generating receiver SSRCs. Default one generates random SSRC
+                that is not in `local_ssrcs` nor `remote_ssrcs`.
+                """
               ]
 
   @doc false

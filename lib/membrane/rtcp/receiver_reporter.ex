@@ -1,12 +1,30 @@
 defmodule Membrane.RTCP.ReceiverReporter do
+  @moduledoc """
+  Periodically generates RTCP receive reports basing on jitter buffer stats and RTCP sender reports
+  and sends them via output.
+  """
   use Membrane.Source
   require Logger
   alias Membrane.{Buffer, RTCP, RTP, Time}
 
   def_output_pad :output, mode: :push, caps: :any
 
-  def_options interval: [default: 5 |> Time.seconds()],
-              sender_report_timeout: [default: 60 |> Time.seconds()]
+  def_options interval: [
+                type: :time,
+                default: 5 |> Time.seconds(),
+                description: """
+                Time interval between requesting stats for reports.
+                Reports are sent when stats are collected.
+                """
+              ],
+              sender_report_timeout: [
+                type: :time,
+                default: 60 |> Time.seconds(),
+                description: """
+                Minimal time between receiving RTCP sender report
+                and assuming it won't be needed anymore.
+                """
+              ]
 
   @impl true
   def handle_init(options) do
