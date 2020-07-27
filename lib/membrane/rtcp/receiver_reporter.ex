@@ -7,7 +7,7 @@ defmodule Membrane.RTCP.ReceiverReporter do
   require Logger
   alias Membrane.{Buffer, RTCP, RTP, Time}
 
-  def_output_pad :output, mode: :push, caps: :any
+  def_output_pad :output, mode: :push, caps: RTCP
 
   def_options interval: [
                 type: :time,
@@ -16,28 +16,20 @@ defmodule Membrane.RTCP.ReceiverReporter do
                 Time interval between requesting stats for reports.
                 Reports are sent when stats are collected.
                 """
-              ],
-              sender_report_timeout: [
-                type: :time,
-                default: 60 |> Time.seconds(),
-                description: """
-                Minimal time between receiving RTCP sender report
-                and assuming it won't be needed anymore.
-                """
               ]
 
   @impl true
   def handle_init(options) do
     state =
       Map.from_struct(options)
-      |> Map.merge(%{ssrcs: MapSet.new(), stats: [], sender_reports: %{}})
+      |> Map.merge(%{pending_ssrcs: MapSet.new(), stats: [], remote_reports: %{}})
 
     {:ok, state}
   end
 
   @impl true
   def handle_prepared_to_playing(_ctx, state) do
-    {{:ok, start_timer: {:timer, state.interval}}, state}
+    {{:ok, caps: {:output, %RTCP{}}, start_timer: {:timer, state.interval}}, state}
   end
 
   @impl true
@@ -48,44 +40,37 @@ defmodule Membrane.RTCP.ReceiverReporter do
   @impl true
   def handle_tick(:timer, _ctx, state) do
     actions =
-      if Enum.empty?(state.ssrcs) do
+      if Enum.empty?(state.pending_ssrcs) do
         []
       else
-        Logger.warn("Not received stats from ssrcs: #{Enum.join(state.ssrcs, ", ")}")
+        Logger.warn("Not received stats from ssrcs: #{Enum.join(state.pending_ssrcs, ", ")}")
         [buffer: {:output, %Buffer{payload: make_report(state)}}]
       end
-      
-      actions = actions ++ [notify: :send_stats]
 
-    time = Time.monotonic_time()
-
-    sender_reports =
-      state.sender_reports
-      |> Enum.filter(fn {_ssrc, %{time: report_time}} ->
-        time - report_time < state.sender_report_timeout
-      end)
-      |> Map.new()
-
-    state = %{state | ssrcs: MapSet.new(), stats: [], sender_reports: sender_reports}
+    actions = actions ++ [notify: :send_stats]
+    state = %{state | pending_ssrcs: MapSet.new(), stats: []}
     {{:ok, actions}, state}
   end
 
   @impl true
-  def handle_other({:ssrcs, %MapSet{} = ssrcs}, _ctx, state) do
-    {:ok, %{state | ssrcs: ssrcs}}
+  def handle_other({:ssrcs_to_report, %MapSet{} = ssrcs}, _ctx, state) do
+    remote_reports =
+      state.remote_reports |> Bunch.KVEnum.filter_by_keys(&MapSet.member?(ssrcs, &1)) |> Map.new()
+
+    {:ok, %{state | pending_ssrcs: ssrcs, remote_reports: remote_reports}}
   end
 
   @impl true
-  def handle_other({:stats, stats}, _ctx, state) do
+  def handle_other({:jitter_buffer_stats, stats}, _ctx, state) do
     {local_ssrc, remote_ssrc, %RTP.JitterBuffer.Stats{} = stats} = stats
 
     state = %{
       state
-      | ssrcs: MapSet.delete(state.ssrcs, remote_ssrc),
+      | pending_ssrcs: MapSet.delete(state.pending_ssrcs, remote_ssrc),
         stats: [{local_ssrc, remote_ssrc, stats} | state.stats]
     }
 
-    if Enum.empty?(state.ssrcs) do
+    if Enum.empty?(state.pending_ssrcs) do
       buffer = %Buffer{payload: make_report(state)}
       {{:ok, buffer: {:output, buffer}}, %{state | stats: []}}
     else
@@ -94,62 +79,62 @@ defmodule Membrane.RTCP.ReceiverReporter do
   end
 
   @impl true
-  def handle_other({:rtcp, rtcp}, _ctx, state) do
-    state = handle_rtcp(rtcp, state)
+  def handle_other({:remote_report, rtcp}, _ctx, state) do
+    state = handle_remote_report(rtcp, state)
     {:ok, state}
   end
 
   defp make_report(state) do
     %RTCP.CompoundPacket{
-      packets: Enum.flat_map(state.stats, &generate_receiver_report(&1, state.sender_reports))
+      packets: Enum.flat_map(state.stats, &generate_receiver_report(&1, state.remote_reports))
     }
     |> RTCP.CompoundPacket.to_binary()
   end
 
   defp generate_receiver_report(
          {_local_ssrc, _remote_ssrc, %RTP.JitterBuffer.Stats{highest_seq_num: nil}},
-         _sender_reports
+         _remote_reports
        ) do
     []
   end
 
   defp generate_receiver_report(
          {local_ssrc, remote_ssrc, %RTP.JitterBuffer.Stats{} = stats},
-         sender_reports
+         remote_reports
        ) do
-    time = Time.monotonic_time()
-    sender_report = Map.get(sender_reports, remote_ssrc, %{})
+    now = Time.monotonic_time()
+    remote_report = Map.get(remote_reports, remote_ssrc, %{})
 
     report_block = %RTCP.ReportPacketBlock{
       ssrc: remote_ssrc,
       fraction_lost: stats.fraction_lost,
       total_lost: stats.total_lost,
       highest_seq_num: stats.highest_seq_num,
-      interarrival_jitter: stats.interarrival_jitter,
-      last_sr_timestamp: Map.get(sender_report, :cut_wallclock_timestamp, 0),
-      delay_since_sr: Time.to_seconds(65536 * (time - Map.get(sender_report, :time, time)))
+      interarrival_jitter: trunc(stats.interarrival_jitter),
+      last_sr_timestamp: Map.get(remote_report, :cut_wallclock_timestamp, 0),
+      delay_since_sr: Time.to_seconds(65536 * (now - Map.get(remote_report, :time, now)))
     }
 
     [%RTCP.ReceiverReportPacket{ssrc: local_ssrc, reports: [report_block]}]
   end
 
-  defp handle_rtcp(%RTCP.CompoundPacket{packets: packets}, state) do
-    Enum.reduce(packets, state, &handle_rtcp/2)
+  defp handle_remote_report(%RTCP.CompoundPacket{packets: packets}, state) do
+    Enum.reduce(packets, state, &handle_remote_report/2)
   end
 
-  defp handle_rtcp(%RTCP.SenderReportPacket{} = packet, state) do
+  defp handle_remote_report(%RTCP.SenderReportPacket{} = packet, state) do
     %RTCP.SenderReportPacket{sender_info: %{wallclock_timestamp: wallclock_timestamp}, ssrc: ssrc} =
       packet
 
     <<_::16, cut_wallclock_timestamp::32, _::16>> = Time.to_ntp_timestamp(wallclock_timestamp)
 
-    put_in(state, [:sender_reports, ssrc], %{
+    put_in(state, [:remote_reports, ssrc], %{
       cut_wallclock_timestamp: cut_wallclock_timestamp,
       time: Time.monotonic_time()
     })
   end
 
-  defp handle_rtcp(_packet, state) do
+  defp handle_remote_report(_packet, state) do
     state
   end
 end

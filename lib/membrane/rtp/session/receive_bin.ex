@@ -220,7 +220,9 @@ defmodule Membrane.RTP.Session.ReceiveBin do
   def handle_notification({:received_rtcp, rtcp}, {:rtcp_parser, _ref}, state) do
     # TODO: handle RTCP reports properly
     actions =
-      if state.receiver_reporter?, do: [forward: {:receiver_reporter, {:rtcp, rtcp}}], else: []
+      if state.receiver_reporter?,
+        do: [forward: {:receiver_reporter, {:remote_report, rtcp}}],
+        else: []
 
     {{:ok, actions}, state}
   end
@@ -230,7 +232,7 @@ defmodule Membrane.RTP.Session.ReceiveBin do
     remote_ssrcs = state.ssrcs |> Map.keys() |> MapSet.new()
 
     forwards =
-      [receiver_reporter: {:ssrcs, remote_ssrcs}] ++
+      [receiver_reporter: {:ssrcs_to_report, remote_ssrcs}] ++
         Enum.map(remote_ssrcs, &{{:rtp_stream_bin, &1}, :send_stats})
 
     actions = Enum.map(forwards, &{:forward, &1})
@@ -238,28 +240,16 @@ defmodule Membrane.RTP.Session.ReceiveBin do
   end
 
   @impl true
-  def handle_notification({:stats, stats}, {:rtp_stream_bin, remote_ssrc}, state) do
+  def handle_notification({:jitter_buffer_stats, stats}, {:rtp_stream_bin, remote_ssrc}, state) do
     actions =
       case Map.fetch(state.ssrcs, remote_ssrc) do
         {:ok, local_ssrc} ->
-          stats_msg = {:stats, {local_ssrc, remote_ssrc, stats}}
+          stats_msg = {:jitter_buffer_stats, {local_ssrc, remote_ssrc, stats}}
           [forward: {:receiver_reporter, stats_msg}]
 
         :error ->
           []
       end
-
-    {{:ok, actions}, state}
-  end
-
-  @impl true
-  def handle_other(:send_report, state) do
-    actions =
-      state.ssrc_pt_mapping
-      |> Enum.map(fn {ssrc, _info} ->
-        child_ref = {:rtp_stream_bin, ssrc}
-        {:forward, {child_ref, :send_stats}}
-      end)
 
     {{:ok, actions}, state}
   end

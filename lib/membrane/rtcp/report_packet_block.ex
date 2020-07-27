@@ -40,7 +40,7 @@ defmodule Membrane.RTCP.ReportPacketBlock do
 
     fixed_point_fraction = round(fraction_lost * 256)
 
-    <<ssrc::32, fixed_point_fraction::8, total_lost::24, max_seq_num::32, trunc(jitter)::32,
+    <<ssrc::32, fixed_point_fraction::8, total_lost::24, max_seq_num::32, jitter::32,
       last_sr_timestamp::32, delay_since_sr::32>>
   end
 
