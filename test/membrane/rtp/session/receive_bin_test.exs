@@ -23,7 +23,11 @@ defmodule Membrane.RTP.Session.ReceiveBinTest do
     def_input_pad :input, demand_unit: :buffers, caps: :any
     def_output_pad :output, caps: :any
 
-    def_options pauses: [default: []]
+    def_options pause_after: [
+                  spec: [integer],
+                  default: [],
+                  description: "List of pause points."
+                ]
 
     @impl true
     def handle_init(opts) do
@@ -31,8 +35,8 @@ defmodule Membrane.RTP.Session.ReceiveBinTest do
     end
 
     @impl true
-    def handle_demand(:output, size, :buffers, _ctx, %{pauses: [pause | _], cnt: cnt} = state) do
-      {{:ok, demand: {:input, min(size, pause - cnt)}}, state}
+    def handle_demand(:output, size, :buffers, _ctx, %{pause_after: [pause | _]} = state) do
+      {{:ok, demand: {:input, min(size, pause - state.cnt)}}, state}
     end
 
     @impl true
@@ -47,7 +51,7 @@ defmodule Membrane.RTP.Session.ReceiveBinTest do
 
     @impl true
     def handle_other(:continue, _ctx, state) do
-      {{:ok, redemand: :output}, Map.update!(state, :pauses, &tl/1)}
+      {{:ok, redemand: :output}, Map.update!(state, :pause_after, &tl/1)}
     end
   end
 
@@ -59,7 +63,7 @@ defmodule Membrane.RTP.Session.ReceiveBinTest do
       spec = %ParentSpec{
         children: [
           pcap: %Membrane.Element.Pcap.Source{path: options.pcap_file},
-          pauser: %Pauser{pauses: [15]},
+          pauser: %Pauser{pause_after: [15]},
           rtp: %RTP.Session.ReceiveBin{
             fmt_mapping: options.fmt_mapping,
             rtcp_interval: options.rtcp_interval

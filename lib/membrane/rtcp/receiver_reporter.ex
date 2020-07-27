@@ -99,6 +99,7 @@ defmodule Membrane.RTCP.ReceiverReporter do
     {local_ssrc, remote_ssrc, %RTP.JitterBuffer.Stats{} = stats} = stats_entry
     now = Time.vm_time()
     remote_report = Map.get(remote_reports, remote_ssrc, %{})
+    delay_since_sr = now - Map.get(remote_report, :arrival_time, now)
 
     report_block = %RTCP.ReportPacketBlock{
       ssrc: remote_ssrc,
@@ -107,7 +108,8 @@ defmodule Membrane.RTCP.ReceiverReporter do
       highest_seq_num: stats.highest_seq_num,
       interarrival_jitter: trunc(stats.interarrival_jitter),
       last_sr_timestamp: Map.get(remote_report, :cut_wallclock_timestamp, 0),
-      delay_since_sr: Time.to_seconds(65536 * (now - Map.get(remote_report, :arrival_time, now)))
+      # delay_since_sr is expressed in 1/65536 seconds, see https://tools.ietf.org/html/rfc3550#section-6.4.1
+      delay_since_sr: Time.to_seconds(65536 * delay_since_sr)
     }
 
     [%RTCP.ReceiverReportPacket{ssrc: local_ssrc, reports: [report_block]}]
