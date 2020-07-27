@@ -53,8 +53,9 @@ defmodule Membrane.RTCP.ReceiverReporter do
       else
         Logger.warn("Not received stats from ssrcs: #{Enum.join(state.ssrcs, ", ")}")
         [buffer: {:output, %Buffer{payload: make_report(state)}}]
-      end ++
-        [notify: :send_stats]
+      end
+      
+      actions = actions ++ [notify: :send_stats]
 
     time = Time.monotonic_time()
 
