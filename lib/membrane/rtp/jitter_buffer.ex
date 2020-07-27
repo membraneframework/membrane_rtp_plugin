@@ -67,12 +67,14 @@ defmodule Membrane.RTP.JitterBuffer do
 
     defstruct @enforce_keys
 
-    @type t :: %__MODULE__{
-            fraction_lost: float(),
-            total_lost: non_neg_integer(),
-            highest_seq_num: Membrane.RTP.JitterBuffer.packet_index(),
-            interarrival_jitter: non_neg_integer()
-          }
+    @type t ::
+            %__MODULE__{
+              fraction_lost: float(),
+              total_lost: non_neg_integer(),
+              highest_seq_num: Membrane.RTP.JitterBuffer.packet_index(),
+              interarrival_jitter: non_neg_integer()
+            }
+            | :no_stats
   end
 
   @impl true
@@ -192,12 +194,16 @@ defmodule Membrane.RTP.JitterBuffer do
   defp record_to_action(%Record{buffer: buffer}), do: {:buffer, {:output, buffer}}
 
   @spec get_updated_stats(State.t()) :: {Stats.t(), State.t()}
+  defp get_updated_stats(%State{store: %BufferStore{base_index: nil}} = state) do
+    {:no_stats, state}
+  end
+
   defp get_updated_stats(state) do
     %State{store: store, stats_acc: stats_acc} = state
 
     # Variable names follow algorithm A.3 from RFC3550 (https://tools.ietf.org/html/rfc3550#appendix-A.3)
     %BufferStore{base_index: base_seq, end_index: extended_max, received: received} = store
-    expected = if base_seq == nil, do: 0, else: extended_max - base_seq + 1
+    expected = extended_max - base_seq + 1
     lost = expected - received
 
     capped_lost =

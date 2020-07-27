@@ -91,17 +91,12 @@ defmodule Membrane.RTCP.ReceiverReporter do
     |> RTCP.CompoundPacket.to_binary()
   end
 
-  defp generate_receiver_report(
-         {_local_ssrc, _remote_ssrc, %RTP.JitterBuffer.Stats{highest_seq_num: nil}},
-         _remote_reports
-       ) do
+  defp generate_receiver_report({_local_ssrc, _remote_ssrc, :no_stats}, _remote_reports) do
     []
   end
 
-  defp generate_receiver_report(
-         {local_ssrc, remote_ssrc, %RTP.JitterBuffer.Stats{} = stats},
-         remote_reports
-       ) do
+  defp generate_receiver_report(stats_entry, remote_reports) do
+    {local_ssrc, remote_ssrc, %RTP.JitterBuffer.Stats{} = stats} = stats_entry
     now = Time.monotonic_time()
     remote_report = Map.get(remote_reports, remote_ssrc, %{})
 
