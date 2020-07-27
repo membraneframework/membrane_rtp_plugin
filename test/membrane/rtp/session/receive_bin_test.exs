@@ -144,5 +144,7 @@ defmodule Membrane.RTP.Session.ReceiveBinTest do
 
     assert_end_of_stream(pipeline, ^audio_ssrc)
     assert_end_of_stream(pipeline, ^video_ssrc)
+    Testing.Pipeline.stop(pipeline)
+    assert_pipeline_playback_changed(pipeline, _, :stopped)
   end
 end

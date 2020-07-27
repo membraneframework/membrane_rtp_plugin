@@ -42,7 +42,7 @@ defmodule Membrane.RTCP.ReceiverReporter do
 
   @impl true
   def handle_playing_to_prepared(_ctx, state) do
-    {{:ok, stop_timer: {:timer, state.interval}}, state}
+    {{:ok, stop_timer: :timer}, state}
   end
 
   @impl true
