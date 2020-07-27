@@ -217,11 +217,11 @@ defmodule Membrane.RTP.Session.ReceiveBin do
   end
 
   @impl true
-  def handle_notification({:received_rtcp, rtcp}, {:rtcp_parser, _ref}, state) do
+  def handle_notification({:received_rtcp, rtcp, timestamp}, {:rtcp_parser, _ref}, state) do
     # TODO: handle RTCP reports properly
     actions =
       if state.receiver_reporter?,
-        do: [forward: {:receiver_reporter, {:remote_report, rtcp}}],
+        do: [forward: {:receiver_reporter, {:remote_report, rtcp, timestamp}}],
         else: []
 
     {{:ok, actions}, state}

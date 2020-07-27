@@ -79,8 +79,8 @@ defmodule Membrane.RTCP.ReceiverReporter do
   end
 
   @impl true
-  def handle_other({:remote_report, rtcp}, _ctx, state) do
-    state = handle_remote_report(rtcp, state)
+  def handle_other({:remote_report, rtcp, timestamp}, _ctx, state) do
+    state = handle_remote_report(rtcp, timestamp, state)
     {:ok, state}
   end
 
@@ -97,7 +97,7 @@ defmodule Membrane.RTCP.ReceiverReporter do
 
   defp generate_receiver_report(stats_entry, remote_reports) do
     {local_ssrc, remote_ssrc, %RTP.JitterBuffer.Stats{} = stats} = stats_entry
-    now = Time.monotonic_time()
+    now = Time.vm_time()
     remote_report = Map.get(remote_reports, remote_ssrc, %{})
 
     report_block = %RTCP.ReportPacketBlock{
@@ -107,17 +107,17 @@ defmodule Membrane.RTCP.ReceiverReporter do
       highest_seq_num: stats.highest_seq_num,
       interarrival_jitter: trunc(stats.interarrival_jitter),
       last_sr_timestamp: Map.get(remote_report, :cut_wallclock_timestamp, 0),
-      delay_since_sr: Time.to_seconds(65536 * (now - Map.get(remote_report, :time, now)))
+      delay_since_sr: Time.to_seconds(65536 * (now - Map.get(remote_report, :arrival_time, now)))
     }
 
     [%RTCP.ReceiverReportPacket{ssrc: local_ssrc, reports: [report_block]}]
   end
 
-  defp handle_remote_report(%RTCP.CompoundPacket{packets: packets}, state) do
-    Enum.reduce(packets, state, &handle_remote_report/2)
+  defp handle_remote_report(%RTCP.CompoundPacket{packets: packets}, timestamp, state) do
+    Enum.reduce(packets, state, &handle_remote_report(&1, timestamp, &2))
   end
 
-  defp handle_remote_report(%RTCP.SenderReportPacket{} = packet, state) do
+  defp handle_remote_report(%RTCP.SenderReportPacket{} = packet, timestamp, state) do
     %RTCP.SenderReportPacket{sender_info: %{wallclock_timestamp: wallclock_timestamp}, ssrc: ssrc} =
       packet
 
@@ -125,11 +125,11 @@ defmodule Membrane.RTCP.ReceiverReporter do
 
     put_in(state, [:remote_reports, ssrc], %{
       cut_wallclock_timestamp: cut_wallclock_timestamp,
-      time: Time.monotonic_time()
+      arrival_time: timestamp
     })
   end
 
-  defp handle_remote_report(_packet, state) do
+  defp handle_remote_report(_packet, _timestamp, state) do
     state
   end
 end
