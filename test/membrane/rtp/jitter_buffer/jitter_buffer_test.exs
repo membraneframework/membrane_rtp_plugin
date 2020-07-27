@@ -48,9 +48,9 @@ defmodule Membrane.RTP.JitterBufferTest do
 
       timestamped_buf = put_in(buffer.metadata[:arrival_ts], ts)
       assert {:ok, state} = JitterBuffer.handle_process(:input, timestamped_buf, nil, state)
-      assert state.stats.jitter == 0.0
+      assert state.stats_acc.jitter == 0.0
 
-      assert state.stats.last_transit ==
+      assert state.stats_acc.last_transit ==
                Membrane.Time.to_seconds(ts) * state.clock_rate -
                  timestamped_buf.metadata.rtp.timestamp
 
@@ -67,10 +67,10 @@ defmodule Membrane.RTP.JitterBufferTest do
       assert {:ok, state} = JitterBuffer.handle_process(:input, timestamped_buf, nil, state)
 
       # 16 is defined by RFC
-      assert state.stats.jitter ==
+      assert state.stats_acc.jitter ==
                div(Membrane.Time.to_seconds(packet_delay) * state.clock_rate, 16)
 
-      assert state.stats.last_transit ==
+      assert state.stats_acc.last_transit ==
                Membrane.Time.to_seconds(ts + arrival_ts_increment + packet_delay) *
                  state.clock_rate -
                  timestamped_buf.metadata.rtp.timestamp
@@ -98,7 +98,7 @@ defmodule Membrane.RTP.JitterBufferTest do
                JitterBuffer.handle_process(:input, late_buffer, nil, state)
 
       # assert nothing changed except for stats
-      assert %{new_state | stats: state.stats} == state
+      assert %{new_state | stats_acc: state.stats_acc} == state
     end
 
     test "adds it and when it fills the gap, returns all buffers in order", %{state: state} do
@@ -133,7 +133,7 @@ defmodule Membrane.RTP.JitterBufferTest do
       assert {{:ok, commands}, state} = JitterBuffer.handle_process(:input, buffer, nil, state)
       assert commands |> Keyword.get(:buffer) == nil
       assert is_reference(state.max_latency_timer)
-      assert_receive message, (state.latency |> Membrane.Time.to_milliseconds()) + 2
+      assert_receive message, (state.latency |> Membrane.Time.to_milliseconds()) + 20
 
       assert {{:ok, actions}, state} = JitterBuffer.handle_other(message, %{}, state)
 
@@ -145,10 +145,9 @@ defmodule Membrane.RTP.JitterBufferTest do
 
   describe "When event arrives" do
     test "dumps store if event was end of stream", %{state: state, buffer: buffer} do
-      store = %BufferStore{state.store | prev_index: @base_seq_number - 2}
+      store = %BufferStore{state.store | prev_index: @base_seq_number - 2, base_index: 0}
       {:ok, store} = BufferStore.insert_buffer(store, buffer)
       state = %{state | store: store}
-
       assert {{:ok, actions}, r_state} = JitterBuffer.handle_end_of_stream(:input, nil, state)
 
       assert [event: event, buffer: buffer_action, end_of_stream: :output] = actions

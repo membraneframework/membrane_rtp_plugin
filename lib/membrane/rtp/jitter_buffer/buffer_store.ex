@@ -12,7 +12,7 @@ defmodule Membrane.RTP.JitterBuffer.BufferStore do
   #                   RTP packet placed in JitterBuffer
 
   use Bunch
-  alias Membrane.Buffer
+  alias Membrane.{Buffer, RTP}
   alias Membrane.RTP.JitterBuffer
   alias Membrane.RTP.JitterBuffer.Record
 
@@ -58,7 +58,7 @@ defmodule Membrane.RTP.JitterBuffer.BufferStore do
     do_insert_buffer(%__MODULE__{store | received: store.received + 1}, buffer, seq_num)
   end
 
-  @spec do_insert_buffer(t(), Buffer.t(), JitterBuffer.sequence_number()) ::
+  @spec do_insert_buffer(t(), Buffer.t(), RTP.Header.sequence_number_t()) ::
           {:ok, t()} | {:error, insert_error()}
   defp do_insert_buffer(%__MODULE__{prev_index: nil} = store, buffer, 0) do
     store = add_record(store, Record.new(buffer, @seq_number_limit))
@@ -191,7 +191,7 @@ defmodule Membrane.RTP.JitterBuffer.BufferStore do
 
   defp is_fresh_packet?(prev_index, index), do: index > prev_index
 
-  @spec from_which_cycle(JitterBuffer.packet_index(), JitterBuffer.sequence_number()) ::
+  @spec from_which_cycle(JitterBuffer.packet_index(), RTP.Header.sequence_number_t()) ::
           :current | :next | :prev
   def from_which_cycle(prev_index, seq_num) do
     prev_seq_num = rem(prev_index, @seq_number_limit)
