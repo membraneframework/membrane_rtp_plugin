@@ -16,7 +16,7 @@ defmodule Membrane.RTP.Session.ReceiveBinTest do
   defmodule Pauser do
     # move to Core.Testing?
     @moduledoc """
-    Forwards buffers till receiving certain amount of them.
+    Forwards buffers until reaching a pause point, i.e. after receiving a configured number of them.
     Continues forwarding upon receiving `:continue` message.
     """
     use Membrane.Filter
