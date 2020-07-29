@@ -12,11 +12,11 @@ defmodule Membrane.RTP.Session.ReceiveBin do
   """
   use Membrane.Bin
 
-  require Bitwise
-
   alias Membrane.ParentSpec
   alias Membrane.{RTCP, RTP}
   alias Membrane.RTP.Packet.PayloadType
+
+  require Bitwise
 
   @ssrc_boundaries 2..(Bitwise.bsl(1, 32) - 1)
 
