@@ -1,7 +1,7 @@
 defmodule Membrane.RTP.StreamReceiveBinTest do
   use ExUnit.Case
 
-  import Testing.Assertions
+  import Membrane.Testing.Assertions
 
   alias Membrane.Testing
 
