@@ -12,19 +12,23 @@ defmodule Membrane.RTP.JitterBuffer.BufferStore do
   #                   RTP packet placed in JitterBuffer
 
   use Bunch
-  alias Membrane.Buffer
+  alias Membrane.{Buffer, RTP}
   alias Membrane.RTP.JitterBuffer
   alias Membrane.RTP.JitterBuffer.Record
 
   @seq_number_limit 65_536
 
-  defstruct prev_index: nil,
+  defstruct received: 0,
+            base_index: nil,
+            prev_index: nil,
             end_index: nil,
             heap: Heap.new(&Record.rtp_comparator/2),
             set: MapSet.new(),
             rollover_count: 0
 
   @type t :: %__MODULE__{
+          received: non_neg_integer(),
+          base_index: JitterBuffer.packet_index() | nil,
           prev_index: JitterBuffer.packet_index() | nil,
           end_index: JitterBuffer.packet_index() | nil,
           heap: Heap.t(),
@@ -50,19 +54,20 @@ defmodule Membrane.RTP.JitterBuffer.BufferStore do
   one or be part of rollover.
   """
   @spec insert_buffer(t(), Buffer.t()) :: {:ok, t()} | {:error, insert_error()}
-  def insert_buffer(store, %Buffer{metadata: %{rtp: %{sequence_number: seq_num}}} = buffer),
-    do: do_insert_buffer(store, buffer, seq_num)
+  def insert_buffer(store, %Buffer{metadata: %{rtp: %{sequence_number: seq_num}}} = buffer) do
+    do_insert_buffer(%__MODULE__{store | received: store.received + 1}, buffer, seq_num)
+  end
 
-  @spec do_insert_buffer(t(), Buffer.t(), JitterBuffer.sequence_number()) ::
+  @spec do_insert_buffer(t(), Buffer.t(), RTP.Header.sequence_number_t()) ::
           {:ok, t()} | {:error, insert_error()}
   defp do_insert_buffer(%__MODULE__{prev_index: nil} = store, buffer, 0) do
     store = add_record(store, Record.new(buffer, @seq_number_limit))
-    {:ok, %__MODULE__{store | prev_index: @seq_number_limit - 1}}
+    {:ok, %__MODULE__{store | prev_index: @seq_number_limit - 1, base_index: 0}}
   end
 
   defp do_insert_buffer(%__MODULE__{prev_index: nil} = store, buffer, seq_num) do
     store = add_record(store, Record.new(buffer, seq_num))
-    {:ok, %__MODULE__{store | prev_index: seq_num - 1}}
+    {:ok, %__MODULE__{store | prev_index: seq_num - 1, base_index: seq_num}}
   end
 
   defp do_insert_buffer(
@@ -186,7 +191,7 @@ defmodule Membrane.RTP.JitterBuffer.BufferStore do
 
   defp is_fresh_packet?(prev_index, index), do: index > prev_index
 
-  @spec from_which_cycle(JitterBuffer.packet_index(), JitterBuffer.sequence_number()) ::
+  @spec from_which_cycle(JitterBuffer.packet_index(), RTP.Header.sequence_number_t()) ::
           :current | :next | :prev
   def from_which_cycle(prev_index, seq_num) do
     prev_seq_num = rem(prev_index, @seq_number_limit)

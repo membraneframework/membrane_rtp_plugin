@@ -6,8 +6,7 @@ defmodule Membrane.RTCP.Parser do
   use Membrane.Log, tag: :membrane_rtcp_parser
   use Membrane.Sink
 
-  alias Membrane.Buffer
-  alias Membrane.RTCP
+  alias Membrane.{Buffer, RTCP, Time}
 
   @type notification_t() :: {:received_rtcp, RTCP.CompoundPacket.t()}
 
@@ -19,9 +18,11 @@ defmodule Membrane.RTCP.Parser do
   end
 
   @impl true
-  def handle_write(:input, %Buffer{payload: payload}, _ctx, state) do
+  def handle_write(:input, %Buffer{payload: payload, metadata: metadata}, _ctx, state) do
+    arrival_ts = Map.get(metadata, :arrival_ts, Time.vm_time())
+
     with {:ok, parsed_rtcp} <- RTCP.CompoundPacket.parse(payload) do
-      {{:ok, notify: {:received_rtcp, parsed_rtcp}, demand: {:input, 1}}, state}
+      {{:ok, notify: {:received_rtcp, parsed_rtcp, arrival_ts}, demand: {:input, 1}}, state}
     else
       {:error, reason} ->
         warn("Received invalid RTCP packet: #{inspect(reason)}")

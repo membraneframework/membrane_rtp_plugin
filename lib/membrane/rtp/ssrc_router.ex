@@ -32,7 +32,7 @@ defmodule Membrane.RTP.SSRCRouter do
   Notification sent when an RTP packet with new SSRC arrives and new output pad should be linked
   """
   @type new_ssrc_notification() ::
-          {:new_ssrc_stream, RTP.ssrc_t(), RTP.raw_payload_type_t()}
+          {:new_ssrc_stream, RTP.ssrc_t(), RTP.payload_type_t()}
 
   @impl true
   def handle_init(_), do: {:ok, %State{}}

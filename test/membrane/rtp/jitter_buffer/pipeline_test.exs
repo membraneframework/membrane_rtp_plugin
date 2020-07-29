@@ -4,14 +4,14 @@ defmodule Membrane.RTP.JitterBuffer.PipelineTest do
   import Membrane.Testing.Assertions
 
   alias Membrane.RTP.JitterBuffer, as: RTPJitterBuffer
-  alias Membrane.RTP.JitterBufferTest.BufferFactory
+  alias Membrane.RTP.BufferFactory
   alias Membrane.Testing
 
   @seq_number_limit 65_536
 
   defmodule PushTestingSrc do
     use Membrane.Source
-    alias Membrane.RTP.JitterBufferTest.BufferFactory
+    alias Membrane.RTP.BufferFactory
 
     @seq_number_limit 65_536
 
@@ -88,7 +88,7 @@ defmodule Membrane.RTP.JitterBuffer.PipelineTest do
         buffer_delay_ms: buffer_delay_ms,
         max_latency: latency_ms
       },
-      buffer: %RTPJitterBuffer{latency: latency},
+      buffer: %RTPJitterBuffer{latency: latency, clock_rate: 8000},
       sink: %Testing.Sink{}
     ]
 

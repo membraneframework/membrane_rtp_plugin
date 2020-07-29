@@ -72,9 +72,7 @@ defmodule Membrane.RTP.Parser do
       payload_type: payload_type
     } = header
 
-    caps = %RTP{
-      payload_type: payload_type
-    }
+    caps = %RTP{payload_type: payload_type}
 
     {:caps, {:output, caps}}
   end
