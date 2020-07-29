@@ -13,5 +13,7 @@ jobs:
       - run: mix deps.get
       - run: mix format --check-formatted
       - run: mix compile --force --warnings-as-errors
+      - run: mix credo
+      - run: mix credo -C specs-only
       - run: mix test
 
