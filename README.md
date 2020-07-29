@@ -8,12 +8,12 @@ It is a part of [Membrane Multimedia Framework](https://membraneframework.org).
 
 ## Installation
 
-The package can be installed by adding `membrane_rtp` to your list of dependencies in `mix.exs`:
+The package can be installed by adding `membrane_rtp_plugin` to your list of dependencies in `mix.exs`:
 
 ```elixir
 def deps do
   [
-    {:membrane_rtp, "~> 0.4.0"}
+    {:membrane_rtp_plugin, "~> 0.4.0-alpha"}
   ]
 end
 ```
@@ -22,12 +22,12 @@ end
 
 TODO
 
-The docs can be found at [https://hexdocs.pm/membrane_rtp](https://hexdocs.pm/membrane_rtp).
+The docs can be found at [https://hexdocs.pm/membrane_rtp](https://hexdocs.pm/membrane_rtp_plugin).
 
 ## Copyright and License
 
 Copyright 2020, [Software Mansion](https://swmansion.com/?utm_source=git&utm_medium=readme&utm_campaign=membrane_rtp)
 
-[![Software Mansion](https://membraneframework.github.io/static/logo/swm_logo_readme.png)](https://swmansion.com/?utm_source=git&utm_medium=readme&utm_campaign=membrane_rtp)
+[![Software Mansion](https://logo.swmansion.com/logo?color=white&variant=desktop&width=200&tag=membrane-github)](https://swmansion.com/?utm_source=git&utm_medium=readme&utm_campaign=membrane_rtp)
 
 Licensed under the [Apache License, Version 2.0](LICENSE)
