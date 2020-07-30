@@ -2,7 +2,7 @@
 
 [![CircleCI](https://circleci.com/gh/membraneframework/membrane_rtp.svg?style=svg)](https://circleci.com/gh/membraneframework/membrane_rtp)
 
-This package provides bins and elements that can be for RTP transmission.
+This package provides bins and elements for handling RTP streams.
 
 It is a part of [Membrane Multimedia Framework](https://membraneframework.org).
 
