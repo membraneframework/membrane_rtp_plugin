@@ -105,10 +105,10 @@ defmodule Membrane.RTP.JitterBufferTest do
       first_buffer = BufferFactory.sample_buffer(@base_seq_number)
       second_buffer = BufferFactory.sample_buffer(@base_seq_number + 1)
       third_buffer = BufferFactory.sample_buffer(@base_seq_number + 2)
+      store = %BufferStore{state.store | prev_index: @base_seq_number - 1}
 
       store =
-        with store = %BufferStore{state.store | prev_index: @base_seq_number - 1},
-             {:ok, store} <- BufferStore.insert_buffer(store, second_buffer),
+        with {:ok, store} <- BufferStore.insert_buffer(store, second_buffer),
              {:ok, store} <- BufferStore.insert_buffer(store, third_buffer) do
           store
         end
