@@ -1,6 +1,6 @@
 # Membrane Multimedia Framework: RTP plugin
 
-[![CircleCI](https://circleci.com/gh/membraneframework/membrane_rtp.svg?style=svg)](https://circleci.com/gh/membraneframework/membrane_rtp)
+[![CircleCI](https://circleci.com/gh/membraneframework/membrane_rtp_plugin.svg?style=svg)](https://circleci.com/gh/membraneframework/membrane_rtp_plugin)
 
 This package provides bins and elements for handling RTP streams.
 
@@ -26,8 +26,8 @@ The docs can be found at [https://hexdocs.pm/membrane_rtp](https://hexdocs.pm/me
 
 ## Copyright and License
 
-Copyright 2020, [Software Mansion](https://swmansion.com/?utm_source=git&utm_medium=readme&utm_campaign=membrane_rtp)
+Copyright 2020, [Software Mansion](https://swmansion.com/?utm_source=git&utm_medium=readme&utm_campaign=membrane_rtp_plugin)
 
-[![Software Mansion](https://logo.swmansion.com/logo?color=white&variant=desktop&width=200&tag=membrane-github)](https://swmansion.com/?utm_source=git&utm_medium=readme&utm_campaign=membrane_rtp)
+[![Software Mansion](https://logo.swmansion.com/logo?color=white&variant=desktop&width=200&tag=membrane-github)](https://swmansion.com/?utm_source=git&utm_medium=readme&utm_campaign=membrane_rtp_plugin)
 
 Licensed under the [Apache License, Version 2.0](LICENSE)
