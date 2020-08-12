@@ -192,7 +192,7 @@ defmodule Membrane.RTP.Session.ReceiveBin do
   end
 
   @impl true
-  def handle_notification({:new_rtp_stream, ssrc, pt_num}, :ssrc_router, state) do
+  def handle_notification({:new_rtp_stream, ssrc, pt_num}, :ssrc_router, _ctx, state) do
     %State{ssrc_pt_mapping: ssrc_pt_mapping, fmt_mapping: fmt_map} = state
 
     {pt_name, clock_rate} =
@@ -217,7 +217,7 @@ defmodule Membrane.RTP.Session.ReceiveBin do
   end
 
   @impl true
-  def handle_notification({:received_rtcp, rtcp, timestamp}, {:rtcp_parser, _ref}, state) do
+  def handle_notification({:received_rtcp, rtcp, timestamp}, {:rtcp_parser, _ref}, _ctx, state) do
     # TODO: handle RTCP reports properly
     actions =
       if state.receiver_reporter?,
@@ -228,7 +228,7 @@ defmodule Membrane.RTP.Session.ReceiveBin do
   end
 
   @impl true
-  def handle_notification(:send_stats, :receiver_reporter, state) do
+  def handle_notification(:send_stats, :receiver_reporter, _ctx, state) do
     remote_ssrcs = state.ssrcs |> Map.keys() |> MapSet.new()
 
     forwards =
@@ -240,7 +240,12 @@ defmodule Membrane.RTP.Session.ReceiveBin do
   end
 
   @impl true
-  def handle_notification({:jitter_buffer_stats, stats}, {:rtp_stream_bin, remote_ssrc}, state) do
+  def handle_notification(
+        {:jitter_buffer_stats, stats},
+        {:rtp_stream_bin, remote_ssrc},
+        _ctx,
+        state
+      ) do
     actions =
       case Map.fetch(state.ssrcs, remote_ssrc) do
         {:ok, local_ssrc} ->
