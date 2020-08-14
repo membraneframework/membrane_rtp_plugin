@@ -62,7 +62,8 @@ defmodule Membrane.Element.RTP.MixProject do
   defp deps do
     [
       # {:membrane_core, "~> 0.5.1"},
-      {:membrane_core, github: "membraneframework/membrane_core", override: true},
+      # {:membrane_core, github: "membraneframework/membrane_core", override: true},
+      {:membrane_core, path: "../membrane_core", override: true},
       {:membrane_rtp_format, "~> 0.2.0-alpha"},
       {:bunch, "~> 1.0"},
       {:heap, "~> 2.0.2"},
