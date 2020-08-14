@@ -16,8 +16,9 @@ defmodule Membrane.RTP.Session.ReceiveBin do
   require Membrane.Logger
 
   alias Membrane.ParentSpec
-  alias Membrane.{RTCP, RTP, Time}
+  alias Membrane.{RTCP, RTP}
   alias Membrane.RTP.Packet.PayloadType
+  alias Membrane.RTP.Session
 
   @ssrc_boundaries 2..(Bitwise.bsl(1, 32) - 1)
 
@@ -77,11 +78,7 @@ defmodule Membrane.RTP.Session.ReceiveBin do
               ssrcs: %{},
               rtcp_interval: nil,
               receiver_ssrc_generator: nil,
-              rtcp_report_data: %{
-                ssrcs: MapSet.new(),
-                remote_reports: %{},
-                stats: []
-              }
+              rtcp_report_data: %Session.Report.Data{}
   end
 
   @impl true
@@ -168,8 +165,8 @@ defmodule Membrane.RTP.Session.ReceiveBin do
 
   @impl true
   def handle_pad_added(Pad.ref(:rtcp_output, _ref) = pad, _ctx, state) do
-    new_children = [receiver_reporter: RTCP.ReceiverReporter]
-    new_links = [link(:receiver_reporter) |> to_bin_output(pad)]
+    new_children = [rtcp_forwarder: RTCP.Forwarder]
+    new_links = [link(:rtcp_forwarder) |> to_bin_output(pad)]
     new_spec = %ParentSpec{children: new_children, links: new_links}
     {{:ok, spec: new_spec, start_timer: {:rtcp_report_timer, state.rtcp_interval}}, state}
   end
@@ -193,33 +190,23 @@ defmodule Membrane.RTP.Session.ReceiveBin do
 
   @impl true
   def handle_pad_removed(Pad.ref(:rtcp_output, _ref), _ctx, state) do
-    {{:ok, stop_timer: :rtcp_report_timer, remove_child: :receiver_reporter}, state}
+    {{:ok, stop_timer: :rtcp_report_timer, remove_child: :rtcp_forwarder}, state}
   end
 
   @impl true
   def handle_tick(:rtcp_report_timer, _ctx, state) do
-    %{rtcp_report_data: report_data} = state
-    remote_ssrcs = state.ssrcs |> Map.keys() |> MapSet.new()
-    forwards = Enum.map(remote_ssrcs, &{{:rtp_stream_bin, &1}, :send_stats})
-    actions = Enum.map(forwards, &{:forward, &1})
+    {maybe_report, remote_ssrcs, report_data} =
+      Session.Report.init_report(state.ssrcs, state.rtcp_report_data)
 
-    actions =
-      if Enum.empty?(report_data.ssrcs) do
-        actions
-      else
-        Membrane.Logger.warn(
-          "Not received stats from ssrcs: #{Enum.join(report_data.ssrcs, ", ")}"
-        )
+    stats_requests = Enum.map(remote_ssrcs, &{{:rtp_stream_bin, &1}, :send_stats})
 
-        [forward: {:receiver_reporter, {:report, generate_report(report_data)}}] ++ actions
+    report_messages =
+      case maybe_report do
+        {:report, report} -> [rtcp_forwarder: {:report, report}]
+        :no_report -> []
       end
 
-    remote_reports =
-      report_data.remote_reports
-      |> Bunch.KVEnum.filter_by_keys(&MapSet.member?(remote_ssrcs, &1))
-      |> Map.new()
-
-    report_data = %{report_data | ssrcs: remote_ssrcs, remote_reports: remote_reports, stats: []}
+    actions = Enum.map(report_messages ++ stats_requests, &{:forward, &1})
     {{:ok, actions}, %{state | rtcp_report_data: report_data}}
   end
 
@@ -251,7 +238,7 @@ defmodule Membrane.RTP.Session.ReceiveBin do
   @impl true
   def handle_notification({:received_rtcp, rtcp, timestamp}, {:rtcp_parser, _ref}, _ctx, state) do
     # TODO: handle RTCP reports properly
-    report_data = handle_remote_report(rtcp, timestamp, state.rtcp_report_data)
+    report_data = Session.Report.handle_remote_report(rtcp, timestamp, state.rtcp_report_data)
     {:ok, %{state | rtcp_report_data: report_data}}
   end
 
@@ -262,84 +249,18 @@ defmodule Membrane.RTP.Session.ReceiveBin do
         ctx,
         state
       ) do
-    {result, report_data} = handle_stats(stats, remote_ssrc, state.ssrcs, state.rtcp_report_data)
+    {result, report_data} =
+      Session.Report.handle_stats(stats, remote_ssrc, state.ssrcs, state.rtcp_report_data)
+
     state = %{state | rtcp_report_data: report_data}
 
     case {result, ctx.children} do
-      {{:report, report}, %{receiver_reporter: _reporter}} ->
-        {{:ok, forward: {:receiver_reporter, {:report, report}}}, state}
+      {{:report, report}, %{rtcp_forwarder: _reporter}} ->
+        {{:ok, forward: {:rtcp_forwarder, {:report, report}}}, state}
 
       {_result, _children} ->
         {:ok, state}
     end
-  end
-
-  defp handle_stats(stats, remote_ssrc, ssrcs, report_data) do
-    report_ssrcs = MapSet.delete(report_data.ssrcs, remote_ssrc)
-
-    stats =
-      case Map.fetch(ssrcs, remote_ssrc) do
-        {:ok, local_ssrc} -> [{local_ssrc, remote_ssrc, stats}]
-        :error -> []
-      end
-
-    report_data = %{report_data | stats: stats ++ report_data.stats, ssrcs: report_ssrcs}
-
-    if Enum.empty?(report_ssrcs) do
-      {{:report, generate_report(report_data)}, report_data}
-    else
-      {:no_report, report_data}
-    end
-  end
-
-  defp generate_report(%{stats: stats, remote_reports: remote_reports}) do
-    %RTCP.CompoundPacket{
-      packets: Enum.flat_map(stats, &generate_receiver_report(&1, remote_reports))
-    }
-  end
-
-  defp generate_receiver_report({_local_ssrc, _remote_ssrc, :no_stats}, _remote_reports) do
-    []
-  end
-
-  defp generate_receiver_report(stats_entry, remote_reports) do
-    {local_ssrc, remote_ssrc, %RTP.JitterBuffer.Stats{} = stats} = stats_entry
-    now = Time.vm_time()
-    remote_report = Map.get(remote_reports, remote_ssrc, %{})
-    delay_since_sr = now - Map.get(remote_report, :arrival_time, now)
-
-    report_block = %RTCP.ReportPacketBlock{
-      ssrc: remote_ssrc,
-      fraction_lost: stats.fraction_lost,
-      total_lost: stats.total_lost,
-      highest_seq_num: stats.highest_seq_num,
-      interarrival_jitter: trunc(stats.interarrival_jitter),
-      last_sr_timestamp: Map.get(remote_report, :cut_wallclock_timestamp, 0),
-      # delay_since_sr is expressed in 1/65536 seconds, see https://tools.ietf.org/html/rfc3550#section-6.4.1
-      delay_since_sr: Time.to_seconds(65536 * delay_since_sr)
-    }
-
-    [%RTCP.ReceiverReportPacket{ssrc: local_ssrc, reports: [report_block]}]
-  end
-
-  defp handle_remote_report(%RTCP.CompoundPacket{packets: packets}, timestamp, report_data) do
-    Enum.reduce(packets, report_data, &handle_remote_report(&1, timestamp, &2))
-  end
-
-  defp handle_remote_report(%RTCP.SenderReportPacket{} = packet, timestamp, report_data) do
-    %RTCP.SenderReportPacket{sender_info: %{wallclock_timestamp: wallclock_timestamp}, ssrc: ssrc} =
-      packet
-
-    <<_::16, cut_wallclock_timestamp::32, _::16>> = Time.to_ntp_timestamp(wallclock_timestamp)
-
-    put_in(report_data, [:remote_reports, ssrc], %{
-      cut_wallclock_timestamp: cut_wallclock_timestamp,
-      arrival_time: timestamp
-    })
-  end
-
-  defp handle_remote_report(_packet, _timestamp, state) do
-    state
   end
 
   defp add_ssrc(remote_ssrc, ssrcs, generator) do

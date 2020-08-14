@@ -1,7 +1,6 @@
-defmodule Membrane.RTCP.ReceiverReporter do
+defmodule Membrane.RTCP.Forwarder do
   @moduledoc """
-  Periodically generates RTCP receive reports basing on jitter buffer stats and RTCP sender reports
-  and sends them via output.
+  Serializes and forwards `Membrane.RTCP.CompoundPacket`s via output pad.
   """
   use Membrane.Source
   alias Membrane.{Buffer, RTCP}
