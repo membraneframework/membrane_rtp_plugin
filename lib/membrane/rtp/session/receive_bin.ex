@@ -183,7 +183,6 @@ defmodule Membrane.RTP.Session.ReceiveBin do
 
   @impl true
   def handle_pad_removed(Pad.ref(:output, ssrc), _ctx, state) do
-    # TODO: parent may not know when to unlink, we need to timout SSRCs and notify about that and BYE packets over RTCP
     state = %{state | ssrcs: Map.delete(state.ssrcs, ssrc)}
     {{:ok, remove_child: {:rtp_stream_bin, ssrc}}, state}
   end
@@ -237,7 +236,6 @@ defmodule Membrane.RTP.Session.ReceiveBin do
 
   @impl true
   def handle_notification({:received_rtcp, rtcp, timestamp}, {:rtcp_parser, _ref}, _ctx, state) do
-    # TODO: handle RTCP reports properly
     report_data = Session.Report.handle_remote_report(rtcp, timestamp, state.rtcp_report_data)
     {:ok, %{state | rtcp_report_data: report_data}}
   end
@@ -254,12 +252,11 @@ defmodule Membrane.RTP.Session.ReceiveBin do
 
     state = %{state | rtcp_report_data: report_data}
 
-    case {result, ctx.children} do
-      {{:report, report}, %{rtcp_forwarder: _reporter}} ->
-        {{:ok, forward: {:rtcp_forwarder, {:report, report}}}, state}
-
-      {_result, _children} ->
-        {:ok, state}
+    with {:report, report} <- result,
+         true <- Map.has_key?(ctx.children, :rtcp_forwarder) do
+      {{:ok, forward: {:rtcp_forwarder, {:report, report}}}, state}
+    else
+      _result -> {:ok, state}
     end
   end
 
