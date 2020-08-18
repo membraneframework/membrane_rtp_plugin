@@ -25,20 +25,10 @@ defmodule Membrane.RTP.Session.Report do
   @type maybe_report_t :: {:report, RTCP.CompoundPacket.t()} | :no_report
 
   @spec init_report(ssrcs :: %{RTP.ssrc_t() => RTP.ssrc_t()}, Data.t()) ::
-          {maybe_report_t, MapSet.t(RTP.ssrc_t()), Data.t()}
-  def init_report(ssrcs, report_data) do
+          {MapSet.t(RTP.ssrc_t()), Data.t()}
+  def init_report(ssrcs, %{remote_ssrcs: report_ssrcs} = report_data)
+      when report_ssrcs == %MapSet{} do
     remote_ssrcs = ssrcs |> Map.keys() |> MapSet.new()
-
-    maybe_report =
-      if Enum.empty?(report_data.remote_ssrcs) do
-        :no_report
-      else
-        Membrane.Logger.warn(
-          "Not received stats from ssrcs: #{Enum.join(report_data.ssrcs, ", ")}"
-        )
-
-        {:report, generate_report(report_data)}
-      end
 
     remote_reports =
       report_data.remote_reports
@@ -48,11 +38,22 @@ defmodule Membrane.RTP.Session.Report do
     report_data = %{
       report_data
       | remote_ssrcs: remote_ssrcs,
-        remote_reports: remote_reports,
-        stats: []
+        remote_reports: remote_reports
     }
 
-    {maybe_report, remote_ssrcs, report_data}
+    {remote_ssrcs, report_data}
+  end
+
+  @spec ensure_nothing_to_report(Data.t()) :: {maybe_report_t, Data.t()}
+  def ensure_nothing_to_report(report_data) do
+    if Enum.empty?(report_data.remote_ssrcs) do
+      {:no_report, report_data}
+    else
+      Membrane.Logger.warn("Not received stats from ssrcs: #{Enum.join(report_data.ssrcs, ", ")}")
+
+      {{:report, generate_report(report_data)},
+       %{report_data | remote_ssrcs: MapSet.new(), stats: []}}
+    end
   end
 
   @spec handle_stats(
