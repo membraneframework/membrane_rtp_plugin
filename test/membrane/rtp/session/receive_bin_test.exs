@@ -81,7 +81,7 @@ defmodule Membrane.RTP.Session.ReceiveBinTest do
     end
 
     @impl true
-    def handle_notification({:new_rtp_stream, ssrc, _pt}, :rtp, state) do
+    def handle_notification({:new_rtp_stream, ssrc, _pt}, :rtp, _ctx, state) do
       spec = %ParentSpec{
         children: [
           {ssrc, Testing.Sink}
@@ -95,7 +95,7 @@ defmodule Membrane.RTP.Session.ReceiveBinTest do
     end
 
     @impl true
-    def handle_notification(_, _, state) do
+    def handle_notification(_notification, _child, _ctx, state) do
       {:ok, state}
     end
   end

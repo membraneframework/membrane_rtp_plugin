@@ -13,10 +13,12 @@ defmodule Membrane.RTP.Session.ReceiveBin do
   use Membrane.Bin
 
   require Bitwise
+  require Membrane.Logger
 
   alias Membrane.ParentSpec
   alias Membrane.{RTCP, RTP}
   alias Membrane.RTP.Packet.PayloadType
+  alias Membrane.RTP.Session
 
   @ssrc_boundaries 2..(Bitwise.bsl(1, 32) - 1)
 
@@ -75,8 +77,8 @@ defmodule Membrane.RTP.Session.ReceiveBin do
               depayloaders: nil,
               ssrcs: %{},
               rtcp_interval: nil,
-              receiver_reporter?: false,
-              receiver_ssrc_generator: nil
+              receiver_ssrc_generator: nil,
+              rtcp_report_data: %Session.Report.Data{}
   end
 
   @impl true
@@ -163,10 +165,10 @@ defmodule Membrane.RTP.Session.ReceiveBin do
 
   @impl true
   def handle_pad_added(Pad.ref(:rtcp_output, _ref) = pad, _ctx, state) do
-    new_children = [receiver_reporter: %RTCP.ReceiverReporter{interval: state.rtcp_interval}]
-    new_links = [link(:receiver_reporter) |> to_bin_output(pad)]
+    new_children = [rtcp_forwarder: RTCP.Forwarder]
+    new_links = [link(:rtcp_forwarder) |> to_bin_output(pad)]
     new_spec = %ParentSpec{children: new_children, links: new_links}
-    {{:ok, spec: new_spec}, %{state | receiver_reporter?: true}}
+    {{:ok, spec: new_spec, start_timer: {:rtcp_report_timer, state.rtcp_interval}}, state}
   end
 
   @impl true
@@ -188,11 +190,27 @@ defmodule Membrane.RTP.Session.ReceiveBin do
 
   @impl true
   def handle_pad_removed(Pad.ref(:rtcp_output, _ref), _ctx, state) do
-    {{:ok, remove_child: :receiver_reporter}, %{state | receiver_reporter?: false}}
+    {{:ok, stop_timer: :rtcp_report_timer, remove_child: :rtcp_forwarder}, state}
   end
 
   @impl true
-  def handle_notification({:new_rtp_stream, ssrc, pt_num}, :ssrc_router, state) do
+  def handle_tick(:rtcp_report_timer, _ctx, state) do
+    {maybe_report, report_data} = Session.Report.flush_report(state.rtcp_report_data)
+    {remote_ssrcs, report_data} = Session.Report.init_report(state.ssrcs, report_data)
+    stats_requests = Enum.map(remote_ssrcs, &{{:rtp_stream_bin, &1}, :send_stats})
+
+    report_messages =
+      case maybe_report do
+        {:report, report} -> [rtcp_forwarder: {:report, report}]
+        :no_report -> []
+      end
+
+    actions = Enum.map(report_messages ++ stats_requests, &{:forward, &1})
+    {{:ok, actions}, %{state | rtcp_report_data: report_data}}
+  end
+
+  @impl true
+  def handle_notification({:new_rtp_stream, ssrc, pt_num}, :ssrc_router, _ctx, state) do
     %State{ssrc_pt_mapping: ssrc_pt_mapping, fmt_mapping: fmt_map} = state
 
     {pt_name, clock_rate} =
@@ -217,41 +235,29 @@ defmodule Membrane.RTP.Session.ReceiveBin do
   end
 
   @impl true
-  def handle_notification({:received_rtcp, rtcp, timestamp}, {:rtcp_parser, _ref}, state) do
-    # TODO: handle RTCP reports properly
-    actions =
-      if state.receiver_reporter?,
-        do: [forward: {:receiver_reporter, {:remote_report, rtcp, timestamp}}],
-        else: []
-
-    {{:ok, actions}, state}
+  def handle_notification({:received_rtcp, rtcp, timestamp}, {:rtcp_parser, _ref}, _ctx, state) do
+    report_data = Session.Report.handle_remote_report(rtcp, timestamp, state.rtcp_report_data)
+    {:ok, %{state | rtcp_report_data: report_data}}
   end
 
   @impl true
-  def handle_notification(:send_stats, :receiver_reporter, state) do
-    remote_ssrcs = state.ssrcs |> Map.keys() |> MapSet.new()
+  def handle_notification(
+        {:jitter_buffer_stats, stats},
+        {:rtp_stream_bin, remote_ssrc},
+        ctx,
+        state
+      ) do
+    {result, report_data} =
+      Session.Report.handle_stats(stats, remote_ssrc, state.ssrcs, state.rtcp_report_data)
 
-    forwards =
-      [receiver_reporter: {:ssrcs_to_report, remote_ssrcs}] ++
-        Enum.map(remote_ssrcs, &{{:rtp_stream_bin, &1}, :send_stats})
+    state = %{state | rtcp_report_data: report_data}
 
-    actions = Enum.map(forwards, &{:forward, &1})
-    {{:ok, actions}, state}
-  end
-
-  @impl true
-  def handle_notification({:jitter_buffer_stats, stats}, {:rtp_stream_bin, remote_ssrc}, state) do
-    actions =
-      case Map.fetch(state.ssrcs, remote_ssrc) do
-        {:ok, local_ssrc} ->
-          stats_msg = {:jitter_buffer_stats, {local_ssrc, remote_ssrc, stats}}
-          [forward: {:receiver_reporter, stats_msg}]
-
-        :error ->
-          []
-      end
-
-    {{:ok, actions}, state}
+    with {:report, report} <- result,
+         true <- Map.has_key?(ctx.children, :rtcp_forwarder) do
+      {{:ok, forward: {:rtcp_forwarder, {:report, report}}}, state}
+    else
+      _result -> {:ok, state}
+    end
   end
 
   defp add_ssrc(remote_ssrc, ssrcs, generator) do
