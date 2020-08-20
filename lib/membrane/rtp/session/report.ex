@@ -44,8 +44,8 @@ defmodule Membrane.RTP.Session.Report do
     {remote_ssrcs, report_data}
   end
 
-  @spec ensure_nothing_to_report(Data.t()) :: {maybe_report_t, Data.t()}
-  def ensure_nothing_to_report(report_data) do
+  @spec flush_report(Data.t()) :: {maybe_report_t, Data.t()}
+  def flush_report(report_data) do
     if Enum.empty?(report_data.remote_ssrcs) do
       {:no_report, report_data}
     else

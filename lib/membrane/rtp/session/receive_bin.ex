@@ -195,7 +195,7 @@ defmodule Membrane.RTP.Session.ReceiveBin do
 
   @impl true
   def handle_tick(:rtcp_report_timer, _ctx, state) do
-    {maybe_report, report_data} = Session.Report.ensure_nothing_to_report(state.rtcp_report_data)
+    {maybe_report, report_data} = Session.Report.flush_report(state.rtcp_report_data)
     {remote_ssrcs, report_data} = Session.Report.init_report(state.ssrcs, report_data)
     stats_requests = Enum.map(remote_ssrcs, &{{:rtp_stream_bin, &1}, :send_stats})
 
