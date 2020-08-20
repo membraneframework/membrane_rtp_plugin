@@ -6,10 +6,22 @@ defmodule Membrane.RTP.Session.ReceiveBinTest do
   alias Membrane.RTP
   alias Membrane.Testing
 
-  @pcap_file "test/fixtures/rtp/session/demo_rtp.pcap"
-
-  @audio_stream %{ssrc: 439_017_412, frames_n: 20}
-  @video_stream %{ssrc: 670_572_639, frames_n: 287}
+  @rtp_stream %{
+    pcap: "test/fixtures/rtp/session/demo_rtp.pcap",
+    audio: %{ssrc: 439_017_412, frames_n: 20},
+    video: %{ssrc: 670_572_639, frames_n: 287}
+  }
+  @srtp_stream %{
+    pcap: "test/fixtures/rtp/session/srtp.pcap",
+    audio: %{ssrc: 1_445_851_800, frames_n: 160},
+    video: %{ssrc: 3_546_707_599, frames_n: 798},
+    srtp_policies: [
+      %SRTP.Policy{
+        ssrc: :any_inbound,
+        key: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    ]
+  }
 
   @fmt_mapping %{96 => {:H264, 90_000}, 127 => {:MPA, 90_000}}
 
@@ -66,7 +78,9 @@ defmodule Membrane.RTP.Session.ReceiveBinTest do
           pauser: %Pauser{pause_after: [15]},
           rtp: %RTP.Session.ReceiveBin{
             fmt_mapping: options.fmt_mapping,
-            rtcp_interval: options.rtcp_interval
+            rtcp_interval: options.rtcp_interval,
+            secure?: options.srtp_policies != [],
+            srtp_policies: options.srtp_policies
           },
           rtcp_source: %Testing.Source{output: options.rtcp_input},
           rtcp_sink: Testing.Sink
@@ -84,10 +98,10 @@ defmodule Membrane.RTP.Session.ReceiveBinTest do
     def handle_notification({:new_rtp_stream, ssrc, _pt}, :rtp, _ctx, state) do
       spec = %ParentSpec{
         children: [
-          {ssrc, Testing.Sink}
+          {{:sink, ssrc}, Testing.Sink}
         ],
         links: [
-          link(:rtp) |> via_out(Pad.ref(:output, ssrc)) |> to(ssrc)
+          link(:rtp) |> via_out(Pad.ref(:output, ssrc)) |> to({:sink, ssrc})
         ]
       }
 
@@ -100,8 +114,15 @@ defmodule Membrane.RTP.Session.ReceiveBinTest do
     end
   end
 
-  @tag :focus
   test "RTP streams passes through RTP bin properly" do
+    test_stream(@rtp_stream)
+  end
+
+  test "SRTP streams passes through RTP bin properly" do
+    test_stream(@srtp_stream)
+  end
+
+  defp test_stream(stream) do
     sender_report =
       %Membrane.RTCP.SenderReportPacket{
         reports: [],
@@ -111,7 +132,7 @@ defmodule Membrane.RTP.Session.ReceiveBinTest do
           sender_packet_count: 158,
           wallclock_timestamp: 1_582_306_181_225_999_999
         },
-        ssrc: 670_572_639
+        ssrc: stream.video.ssrc
       }
       |> Membrane.RTCP.Packet.to_binary()
 
@@ -119,10 +140,11 @@ defmodule Membrane.RTP.Session.ReceiveBinTest do
       %Testing.Pipeline.Options{
         module: DynamicPipeline,
         custom_args: %{
-          pcap_file: @pcap_file,
+          pcap_file: stream.pcap,
           fmt_mapping: @fmt_mapping,
           rtcp_input: [sender_report],
-          rtcp_interval: Membrane.Time.second()
+          rtcp_interval: Membrane.Time.second(),
+          srtp_policies: Map.get(stream, :srtp_policies, [])
         }
       }
       |> Testing.Pipeline.start_link()
@@ -130,28 +152,26 @@ defmodule Membrane.RTP.Session.ReceiveBinTest do
     Testing.Pipeline.play(pipeline)
     assert_pipeline_playback_changed(pipeline, _, :playing)
 
-    audio_ssrc = @audio_stream.ssrc
-    video_ssrc = @video_stream.ssrc
-
-    assert_start_of_stream(pipeline, ^audio_ssrc)
-    assert_start_of_stream(pipeline, ^video_ssrc)
+    %{audio: %{ssrc: audio_ssrc}, video: %{ssrc: video_ssrc}} = stream
+    assert_start_of_stream(pipeline, {:sink, ^video_ssrc})
+    assert_start_of_stream(pipeline, {:sink, ^audio_ssrc})
 
     assert_sink_buffer(pipeline, :rtcp_sink, %Membrane.Buffer{})
     assert_sink_buffer(pipeline, :rtcp_sink, %Membrane.Buffer{})
     Testing.Pipeline.message_child(pipeline, :pauser, :continue)
 
-    1..@video_stream.frames_n
+    1..stream.video.frames_n
     |> Enum.each(fn _i ->
-      assert_sink_buffer(pipeline, video_ssrc, %Membrane.Buffer{})
+      assert_sink_buffer(pipeline, {:sink, video_ssrc}, %Membrane.Buffer{})
     end)
 
-    1..@audio_stream.frames_n
+    1..stream.audio.frames_n
     |> Enum.each(fn _i ->
-      assert_sink_buffer(pipeline, audio_ssrc, %Membrane.Buffer{})
+      assert_sink_buffer(pipeline, {:sink, audio_ssrc}, %Membrane.Buffer{})
     end)
 
-    assert_end_of_stream(pipeline, ^audio_ssrc)
-    assert_end_of_stream(pipeline, ^video_ssrc)
+    assert_end_of_stream(pipeline, {:sink, ^audio_ssrc})
+    assert_end_of_stream(pipeline, {:sink, ^video_ssrc})
     Testing.Pipeline.stop(pipeline)
     assert_pipeline_playback_changed(pipeline, _, :stopped)
   end

@@ -16,7 +16,7 @@ defmodule Membrane.RTP.Session.ReceiveBin do
   require Membrane.Logger
 
   alias Membrane.ParentSpec
-  alias Membrane.{RTCP, RTP}
+  alias Membrane.{RTCP, RTP, SRTP}
   alias Membrane.RTP.Packet.PayloadType
   alias Membrane.RTP.Session
 
@@ -54,7 +54,9 @@ defmodule Membrane.RTP.Session.ReceiveBin do
                 Function generating receiver SSRCs. Default one generates random SSRC
                 that is not in `local_ssrcs` nor `remote_ssrcs`.
                 """
-              ]
+              ],
+              secure?: [default: false],
+              srtp_policies: [default: []]
 
   @doc false
   def generate_receiver_ssrc(local_ssrcs, remote_ssrcs) do
@@ -78,7 +80,9 @@ defmodule Membrane.RTP.Session.ReceiveBin do
               ssrcs: %{},
               rtcp_interval: nil,
               receiver_ssrc_generator: nil,
-              rtcp_report_data: %Session.Report.Data{}
+              rtcp_report_data: %Session.Report.Data{},
+              secure?: nil,
+              srtp_policies: nil
   end
 
   @impl true
@@ -95,8 +99,33 @@ defmodule Membrane.RTP.Session.ReceiveBin do
        fmt_mapping: options.fmt_mapping,
        depayloaders: depayloaders,
        rtcp_interval: options.rtcp_interval,
-       receiver_ssrc_generator: options.receiver_ssrc_generator
+       receiver_ssrc_generator: options.receiver_ssrc_generator,
+       secure?: options.secure?,
+       srtp_policies: options.srtp_policies
      }}
+  end
+
+  @impl true
+  def handle_pad_added(Pad.ref(:input, ref) = pad, _ctx, %{secure?: true} = state) do
+    parser_ref = {:rtp_parser, ref}
+    decryptor_ref = {:srtp_decryptor, ref}
+
+    children = [
+      {parser_ref, RTP.Parser},
+      {decryptor_ref, %SRTP.Decryptor{policies: state.srtp_policies}}
+    ]
+
+    links = [
+      link_bin_input(pad)
+      |> via_in(:input, buffer: @bin_input_buffer_params)
+      |> to(decryptor_ref)
+      |> to(parser_ref)
+      |> to(:ssrc_router)
+    ]
+
+    new_spec = %ParentSpec{children: children, links: links}
+
+    {{:ok, spec: new_spec}, state}
   end
 
   @impl true
