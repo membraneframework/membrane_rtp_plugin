@@ -55,8 +55,22 @@ defmodule Membrane.RTP.Session.ReceiveBin do
                 that is not in `local_ssrcs` nor `remote_ssrcs`.
                 """
               ],
-              secure?: [default: false],
-              srtp_policies: [default: []]
+              secure?: [
+                type: :boolean,
+                default: false,
+                description: """
+                Specifies whether to use SRTP.
+                Requires adding [srtp](https://github.com/membraneframework/elixir_srtp) dependency to work.
+                """
+              ],
+              srtp_policies: [
+                spec: [SRTP.Policy.t()],
+                default: [],
+                description: """
+                List of SRTP policies to use for decrypting packets. Used only when `secure?` is set to `true`.
+                See `t:SRTP.Policy.t/0` for details.
+                """
+              ]
 
   @doc false
   def generate_receiver_ssrc(local_ssrcs, remote_ssrcs) do

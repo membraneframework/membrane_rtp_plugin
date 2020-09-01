@@ -1,4 +1,9 @@
 defmodule Membrane.SRTP.Decryptor do
+  @moduledoc """
+  Converts SRTP packets to plain RTP.
+
+  Requires adding [srtp](https://github.com/membraneframework/elixir_srtp) dependency to work.
+  """
   use Membrane.Filter
 
   alias Membrane.{Buffer, RTP}
@@ -6,7 +11,13 @@ defmodule Membrane.SRTP.Decryptor do
   def_input_pad :input, caps: :any, demand_unit: :buffers
   def_output_pad :output, caps: RTP
 
-  def_options policies: []
+  def_options policies: [
+                spec: [SRTP.Policy.t()],
+                description: """
+                List of SRTP policies to use for decrypting packets.
+                See `t:SRTP.Policy.t/0` for details.
+                """
+              ]
 
   @impl true
   def handle_init(options) do
