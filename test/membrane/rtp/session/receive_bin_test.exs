@@ -115,14 +115,6 @@ defmodule Membrane.RTP.Session.ReceiveBinTest do
   end
 
   test "RTP streams passes through RTP bin properly" do
-    test_stream(@rtp_stream)
-  end
-
-  test "SRTP streams passes through RTP bin properly" do
-    test_stream(@srtp_stream)
-  end
-
-  defp test_stream(stream) do
     sender_report =
       %Membrane.RTCP.SenderReportPacket{
         reports: [],
@@ -132,10 +124,23 @@ defmodule Membrane.RTP.Session.ReceiveBinTest do
           sender_packet_count: 158,
           wallclock_timestamp: 1_582_306_181_225_999_999
         },
-        ssrc: stream.video.ssrc
+        ssrc: @rtp_stream.video.ssrc
       }
       |> Membrane.RTCP.Packet.to_binary()
 
+    test_stream(@rtp_stream, sender_report)
+  end
+
+  test "SRTP streams passes through RTP bin properly" do
+    encrypted_sender_report =
+      <<128, 200, 0, 6, 222, 173, 190, 239, 42, 166, 210, 47, 206, 167, 216, 36, 40, 33, 84, 200,
+        33, 116, 108, 233, 19, 36, 26, 247, 128, 0, 0, 1, 255, 96, 51, 225, 176, 61, 171, 239, 14,
+        63>>
+
+    test_stream(@srtp_stream, encrypted_sender_report)
+  end
+
+  defp test_stream(stream, sender_report) do
     {:ok, pipeline} =
       %Testing.Pipeline.Options{
         module: DynamicPipeline,

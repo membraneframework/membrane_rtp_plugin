@@ -61,8 +61,7 @@ defmodule Membrane.Element.RTP.MixProject do
 
   defp deps do
     [
-      # {:membrane_core, "~> 0.5.1"},
-      {:membrane_core, github: "membraneframework/membrane_core", override: true},
+      {:membrane_core, "~> 0.6.0", override: true},
       {:membrane_rtp_format, "~> 0.2.0-alpha"},
       {:srtp, github: "membraneframework/elixir_srtp", branch: "develop"},
       {:bunch, "~> 1.0"},

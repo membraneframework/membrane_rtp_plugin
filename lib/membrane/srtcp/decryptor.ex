@@ -1,15 +1,15 @@
-defmodule Membrane.SRTCP.Decryptor do
+defmodule Membrane.SRTP.Decryptor do
   @moduledoc """
-  Converts SRTCP packets to plain RTCP.
+  Converts SRTP packets to plain RTP.
 
-  Requires adding [`:srtp`](https://github.com/membraneframework/elixir_srtp) dependency to work.
+  Requires adding [srtp](https://github.com/membraneframework/elixir_srtp) dependency to work.
   """
   use Membrane.Filter
 
-  alias Membrane.{Buffer, RTCP}
+  alias Membrane.{Buffer, RTP}
 
   def_input_pad :input, caps: :any, demand_unit: :buffers
-  def_output_pad :output, caps: RTCP
+  def_output_pad :output, caps: RTP
 
   def_options policies: [
                 spec: [SRTP.Policy.t()],
@@ -47,7 +47,7 @@ defmodule Membrane.SRTCP.Decryptor do
 
   @impl true
   def handle_process(:input, buffer, _ctx, state) do
-    {:ok, payload} = SRTP.unprotect_rtcp(state.srtp, buffer.payload)
+    {:ok, payload} = SRTP.unprotect(state.srtp, buffer.payload)
     {{:ok, buffer: {:output, %Buffer{buffer | payload: payload}}}, state}
   end
 end

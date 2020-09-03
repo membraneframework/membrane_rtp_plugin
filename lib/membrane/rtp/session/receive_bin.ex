@@ -16,7 +16,7 @@ defmodule Membrane.RTP.Session.ReceiveBin do
   require Membrane.Logger
 
   alias Membrane.ParentSpec
-  alias Membrane.{RTCP, RTP, SRTP}
+  alias Membrane.{RTCP, RTP, SRTCP, SRTP}
   alias Membrane.RTP.Packet.PayloadType
   alias Membrane.RTP.Session
 
@@ -153,6 +153,28 @@ defmodule Membrane.RTP.Session.ReceiveBin do
       |> via_in(:input, buffer: @bin_input_buffer_params)
       |> to(parser_ref)
       |> to(:ssrc_router)
+    ]
+
+    new_spec = %ParentSpec{children: children, links: links}
+
+    {{:ok, spec: new_spec}, state}
+  end
+
+  @impl true
+  def handle_pad_added(Pad.ref(:rtcp_input, ref) = pad, _ctx, %{secure?: true} = state) do
+    parser_ref = {:rtcp_parser, ref}
+    decryptor_ref = {:srtp_decryptor, ref}
+
+    children = [
+      {parser_ref, RTCP.Parser},
+      {decryptor_ref, %SRTCP.Decryptor{policies: state.srtp_policies}}
+    ]
+
+    links = [
+      link_bin_input(pad)
+      |> via_in(:input, buffer: @bin_input_buffer_params)
+      |> to(decryptor_ref)
+      |> to(parser_ref)
     ]
 
     new_spec = %ParentSpec{children: children, links: links}
