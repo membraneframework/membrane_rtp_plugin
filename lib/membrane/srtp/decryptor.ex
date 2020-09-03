@@ -2,7 +2,7 @@ defmodule Membrane.SRTP.Decryptor do
   @moduledoc """
   Converts SRTP packets to plain RTP.
 
-  Requires adding [srtp](https://github.com/membraneframework/elixir_srtp) dependency to work.
+  Requires adding [`:srtp`](https://github.com/membraneframework/elixir_srtp) dependency to work.
   """
   use Membrane.Filter
 
