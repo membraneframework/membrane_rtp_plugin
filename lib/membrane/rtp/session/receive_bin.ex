@@ -60,15 +60,15 @@ defmodule Membrane.RTP.Session.ReceiveBin do
                 default: false,
                 description: """
                 Specifies whether to use SRTP.
-                Requires adding [srtp](https://github.com/membraneframework/elixir_srtp) dependency to work.
+                Requires adding [srtp](https://github.com/membraneframework/elixir_libsrtp) dependency to work.
                 """
               ],
               srtp_policies: [
-                spec: [SRTP.Policy.t()],
+                spec: [LibSRTP.Policy.t()],
                 default: [],
                 description: """
                 List of SRTP policies to use for decrypting packets. Used only when `secure?` is set to `true`.
-                See `t:SRTP.Policy.t/0` for details.
+                See `t:LibSRTP.Policy.t/0` for details.
                 """
               ]
 
@@ -103,20 +103,23 @@ defmodule Membrane.RTP.Session.ReceiveBin do
   def handle_init(options) do
     children = [ssrc_router: RTP.SSRCRouter]
     links = []
-
     spec = %ParentSpec{children: children, links: links}
 
     depayloaders = Map.merge(@known_depayloaders, options.custom_depayloaders)
 
-    {{:ok, spec: spec},
-     %State{
-       fmt_mapping: options.fmt_mapping,
-       depayloaders: depayloaders,
-       rtcp_interval: options.rtcp_interval,
-       receiver_ssrc_generator: options.receiver_ssrc_generator,
-       secure?: options.secure?,
-       srtp_policies: options.srtp_policies
-     }}
+    state =
+      %State{depayloaders: depayloaders}
+      |> Map.merge(
+        Map.take(options, [
+          :fmt_mapping,
+          :rtcp_interval,
+          :receiver_ssrc_generator,
+          :secure?,
+          :srtp_policies
+        ])
+      )
+
+    {{:ok, spec: spec}, state}
   end
 
   @impl true

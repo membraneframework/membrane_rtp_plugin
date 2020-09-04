@@ -16,7 +16,7 @@ defmodule Membrane.RTP.Session.ReceiveBinTest do
     audio: %{ssrc: 1_445_851_800, frames_n: 160},
     video: %{ssrc: 3_546_707_599, frames_n: 798},
     srtp_policies: [
-      %SRTP.Policy{
+      %LibSRTP.Policy{
         ssrc: :any_inbound,
         key: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
       }
