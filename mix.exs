@@ -66,6 +66,7 @@ defmodule Membrane.Element.RTP.MixProject do
       {:libsrtp, github: "membraneframework/elixir_libsrtp", branch: "develop", optional: true},
       {:bunch, "~> 1.0"},
       {:heap, "~> 2.0.2"},
+      {:bundlex, github: "membraneframework/bundlex", override: true},
 
       # Dev
       {:ex_doc, "~> 0.21", only: :dev, runtime: false},
