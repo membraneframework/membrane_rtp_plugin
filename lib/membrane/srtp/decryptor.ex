@@ -6,10 +6,10 @@ defmodule Membrane.SRTCP.Decryptor do
   """
   use Membrane.Filter
 
-  alias Membrane.{Buffer, RTCP}
+  alias Membrane.Buffer
 
   def_input_pad :input, caps: :any, demand_unit: :buffers
-  def_output_pad :output, caps: RTCP
+  def_output_pad :output, caps: :any
 
   def_options policies: [
                 spec: [LibSRTP.Policy.t()],

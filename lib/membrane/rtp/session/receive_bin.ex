@@ -70,6 +70,16 @@ defmodule Membrane.RTP.Session.ReceiveBin do
                 List of SRTP policies to use for decrypting packets. Used only when `secure?` is set to `true`.
                 See `t:LibSRTP.Policy.t/0` for details.
                 """
+              ],
+              receiver_srtp_policies: [
+                spec: [LibSRTP.Policy.t()] | nil,
+                default: nil,
+                description: """
+                List of SRTP policies to use for encrypting receiver reports and other receiver RTCP packets.
+                Used only when `secure?` is set to `true`.
+                Defaults to the value of `srtp_policies`.
+                See `t:LibSRTP.Policy.t/0` for details.
+                """
               ]
 
   @doc false
@@ -96,7 +106,8 @@ defmodule Membrane.RTP.Session.ReceiveBin do
               receiver_ssrc_generator: nil,
               rtcp_report_data: %Session.Report.Data{},
               secure?: nil,
-              srtp_policies: nil
+              srtp_policies: nil,
+              receiver_srtp_policies: nil
   end
 
   @impl true
@@ -104,20 +115,16 @@ defmodule Membrane.RTP.Session.ReceiveBin do
     children = [ssrc_router: RTP.SSRCRouter]
     links = []
     spec = %ParentSpec{children: children, links: links}
-
-    depayloaders = Map.merge(@known_depayloaders, options.custom_depayloaders)
+    {custom_depayloaders, options} = Map.pop(options, :custom_depayloaders)
+    {receiver_srtp_policies, options} = Map.pop(options, :receiver_srtp_policies)
+    depayloaders = Map.merge(@known_depayloaders, custom_depayloaders)
 
     state =
-      %State{depayloaders: depayloaders}
-      |> Map.merge(
-        Map.take(options, [
-          :fmt_mapping,
-          :rtcp_interval,
-          :receiver_ssrc_generator,
-          :secure?,
-          :srtp_policies
-        ])
-      )
+      %State{
+        depayloaders: depayloaders,
+        receiver_srtp_policies: receiver_srtp_policies || options.srtp_policies
+      }
+      |> Map.merge(Map.from_struct(options))
 
     {{:ok, spec: spec}, state}
   end
@@ -229,6 +236,18 @@ defmodule Membrane.RTP.Session.ReceiveBin do
     new_spec = %ParentSpec{children: new_children, links: new_links}
     state = %{state | ssrcs: add_ssrc(ssrc, state.ssrcs, state.receiver_ssrc_generator)}
     {{:ok, spec: new_spec}, state}
+  end
+
+  @impl true
+  def handle_pad_added(Pad.ref(:rtcp_output, _ref) = pad, _ctx, %{secure?: true} = state) do
+    new_children = [
+      srtcp_encryptor: %SRTCP.Encryptor{policies: state.receiver_srtp_policies},
+      rtcp_forwarder: RTCP.Forwarder
+    ]
+
+    new_links = [link(:rtcp_forwarder) |> to(:srtcp_encryptor) |> to_bin_output(pad)]
+    new_spec = %ParentSpec{children: new_children, links: new_links}
+    {{:ok, spec: new_spec, start_timer: {:rtcp_report_timer, state.rtcp_interval}}, state}
   end
 
   @impl true

@@ -63,7 +63,7 @@ defmodule Membrane.Element.RTP.MixProject do
     [
       {:membrane_core, "~> 0.6.0", override: true},
       {:membrane_rtp_format, "~> 0.2.0-alpha"},
-      {:libsrtp, github: "membraneframework/elixir_libsrtp", branch: "develop"},
+      {:libsrtp, github: "membraneframework/elixir_libsrtp", branch: "develop", optional: true},
       {:bunch, "~> 1.0"},
       {:heap, "~> 2.0.2"},
 
