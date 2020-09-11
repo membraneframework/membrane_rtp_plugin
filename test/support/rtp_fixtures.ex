@@ -1,6 +1,6 @@
 defmodule Membrane.RTP.Fixtures do
   @moduledoc false
-  alias Membrane.RTP.Header
+  alias Membrane.RTP.{Header, Packet}
 
   @external_resource "test/fixtures/rtp/rtp_packet.bin"
   @sample_packet File.read!("test/fixtures/rtp/rtp_packet.bin")
@@ -8,7 +8,10 @@ defmodule Membrane.RTP.Fixtures do
   @sample_packet_payload File.read!("test/fixtures/rtp/rtp_packet_payload.bin")
 
   @spec sample_packet() :: binary()
-  def sample_packet, do: @sample_packet
+  def sample_packet_binary, do: @sample_packet
+
+  @spec sample_packet() :: Packet.t()
+  def sample_packet, do: %Packet{header: sample_header(), payload: sample_packet_payload()}
 
   @spec sample_packet_payload() :: binary()
   def sample_packet_payload, do: @sample_packet_payload
@@ -24,16 +27,10 @@ defmodule Membrane.RTP.Fixtures do
 
   def sample_header,
     do: %Header{
-      csrc_count: 0,
-      csrcs: [],
-      extension_header: false,
-      marker: false,
-      padding: false,
       payload_type: 14,
       sequence_number: 3983,
       ssrc: 3_919_876_492,
-      timestamp: 1_653_702_647,
-      version: 2
+      timestamp: 1_653_702_647
     }
 
   @spec fake_packet_list(Range.t()) :: [binary()]

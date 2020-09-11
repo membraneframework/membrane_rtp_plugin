@@ -7,7 +7,7 @@ defmodule Membrane.RTP.ParserTest do
   describe "Parser" do
     test "sends caps and buffer action when parsing first packet" do
       state = %Parser.State{}
-      packet = Fixtures.sample_packet()
+      packet = Fixtures.sample_packet_binary()
 
       assert Parser.handle_process(:input, %Buffer{payload: packet}, nil, state) ==
                {{:ok,
@@ -31,7 +31,7 @@ defmodule Membrane.RTP.ParserTest do
 
     test "sends buffer action with payload on non-first packet" do
       state = %Parser.State{payload_type: 14}
-      packet = Fixtures.sample_packet()
+      packet = Fixtures.sample_packet_binary()
 
       assert Parser.handle_process(:input, %Buffer{payload: packet}, nil, state) ==
                {{:ok,

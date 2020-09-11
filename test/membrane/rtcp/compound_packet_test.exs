@@ -7,7 +7,7 @@ defmodule Membrane.RTCP.CompoundPacketTest do
   @sample_ssrc 1_374_823_241
 
   test "compound packets parsing" do
-    packet = Fixtures.sample_packet()
+    packet = Fixtures.sample_packet_binary()
     assert {:ok, %RTCP.CompoundPacket{packets: packets}} = RTCP.CompoundPacket.parse(packet)
 
     assert %RTCP.SenderReportPacket{reports: [], sender_info: %{}, ssrc: @sample_ssrc} =
@@ -17,7 +17,7 @@ defmodule Membrane.RTCP.CompoundPacketTest do
   end
 
   test "reconstructed packets are (almost) equal to original packets" do
-    packet = Fixtures.sample_packet()
+    packet = Fixtures.sample_packet_binary()
     assert {:ok, packets} = RTCP.CompoundPacket.parse(packet)
     regenerated_packet = RTCP.CompoundPacket.to_binary(packets)
 
