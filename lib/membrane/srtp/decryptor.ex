@@ -1,8 +1,8 @@
-defmodule Membrane.SRTCP.Decryptor do
+defmodule Membrane.SRTP.Decryptor do
   @moduledoc """
-  Converts SRTCP packets to plain RTCP.
+  Converts SRTP packets to plain RTP.
 
-  Requires adding [libsrtp](https://github.com/membraneframework/elixir_libsrtp) dependency to work.
+  Requires adding [srtp](https://github.com/membraneframework/elixir_libsrtp) dependency to work.
   """
   use Membrane.Filter
 
@@ -47,7 +47,7 @@ defmodule Membrane.SRTCP.Decryptor do
 
   @impl true
   def handle_process(:input, buffer, _ctx, state) do
-    {:ok, payload} = LibSRTP.unprotect_rtcp(state.srtp, buffer.payload)
+    {:ok, payload} = LibSRTP.unprotect(state.srtp, buffer.payload)
     {{:ok, buffer: {:output, %Buffer{buffer | payload: payload}}}, state}
   end
 end
