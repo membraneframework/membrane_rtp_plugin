@@ -68,7 +68,6 @@ defmodule Membrane.Element.RTP.MixProject do
       {:libsrtp, github: "membraneframework/elixir_libsrtp", branch: "develop", optional: true},
       {:bunch, "~> 1.0"},
       {:heap, "~> 2.0.2"},
-      {:bundlex, github: "membraneframework/bundlex", override: true},
 
       # Dev
       {:ex_doc, "~> 0.21", only: :dev, runtime: false},
@@ -81,9 +80,7 @@ defmodule Membrane.Element.RTP.MixProject do
       {:membrane_element_ffmpeg_h264, "~> 0.4.0", only: :test},
       {:membrane_element_pcap, github: "membraneframework/membrane-element-pcap", only: :test},
       {:membrane_element_udp, "~> 0.3.0", only: :test},
-      {:membrane_element_hackney, "~> 0.3.0", only: :test},
-      {:membrane_realtimer_plugin,
-       github: "membraneframework/membrane_realtimer_plugin", branch: :develop, only: :test}
+      {:membrane_element_hackney, "~> 0.3.0", only: :test}
     ]
   end
 end

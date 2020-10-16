@@ -153,10 +153,10 @@ defmodule Membrane.RTP.SessionBin do
     parser_ref = {:rtp_parser, ref}
     decryptor_ref = {:srtp_decryptor, ref}
 
-    children = [
-      {parser_ref, RTP.Parser},
-      {decryptor_ref, %SRTP.Decryptor{policies: state.srtp_policies}}
-    ]
+    children = %{
+      parser_ref => RTP.Parser,
+      decryptor_ref => %SRTP.Decryptor{policies: state.srtp_policies}
+    }
 
     links = [
       link_bin_input(pad)
@@ -175,7 +175,7 @@ defmodule Membrane.RTP.SessionBin do
   def handle_pad_added(Pad.ref(:rtp_input, ref) = pad, _ctx, state) do
     parser_ref = {:rtp_parser, ref}
 
-    children = [{parser_ref, RTP.Parser}]
+    children = %{parser_ref => RTP.Parser}
 
     links = [
       link_bin_input(pad)
@@ -192,12 +192,12 @@ defmodule Membrane.RTP.SessionBin do
   @impl true
   def handle_pad_added(Pad.ref(:rtcp_input, ref) = pad, _ctx, %{secure?: true} = state) do
     parser_ref = {:rtcp_parser, ref}
-    decryptor_ref = {:srtp_decryptor, ref}
+    decryptor_ref = {:srtcp_decryptor, ref}
 
-    children = [
-      {parser_ref, RTCP.Parser},
-      {decryptor_ref, %SRTCP.Decryptor{policies: state.srtp_policies}}
-    ]
+    children = %{
+      parser_ref => RTCP.Parser,
+      decryptor_ref => %SRTCP.Decryptor{policies: state.srtp_policies}
+    }
 
     links = [link_bin_input(pad) |> to(decryptor_ref) |> to(parser_ref)]
     new_spec = %ParentSpec{children: children, links: links}
@@ -225,10 +225,13 @@ defmodule Membrane.RTP.SessionBin do
 
     rtp_stream_name = {:stream_receive_bin, ssrc}
 
-    new_children = [
-      {rtp_stream_name,
-       %RTP.StreamReceiveBin{depayloader: depayloader, ssrc: ssrc, clock_rate: clock_rate}}
-    ]
+    new_children = %{
+      rtp_stream_name => %RTP.StreamReceiveBin{
+        depayloader: depayloader,
+        ssrc: ssrc,
+        clock_rate: clock_rate
+      }
+    }
 
     new_links = [
       link(:ssrc_router)
@@ -280,28 +283,51 @@ defmodule Membrane.RTP.SessionBin do
           raise "Cannot find payloader for payload type #{pt_name}"
         end)
 
-      children = [
-        {{:stream_send_bin, ssrc}, %RTP.StreamSendBin{ssrc: ssrc, payloader: payloader}}
-      ]
-
-      links = [
-        link_bin_input(Pad.ref(:input, ssrc))
-        |> to({:stream_send_bin, ssrc})
-        |> to_bin_output(Pad.ref(:rtp_output, ssrc))
-      ]
-
-      {{:ok, spec: %ParentSpec{children: children, links: links}}, state}
+      spec = send_stream_spec(ssrc, payloader, state)
+      {{:ok, spec: spec}, state}
     end
+  end
+
+  defp send_stream_spec(ssrc, payloader, %{secure?: true, srtp_policies: policies}) do
+    children = %{
+      {:stream_send_bin, ssrc} => %RTP.StreamSendBin{ssrc: ssrc, payloader: payloader},
+      {:srtp_encryptor, ssrc} => %SRTP.Encryptor{policies: policies}
+    }
+
+    links = [
+      link_bin_input(Pad.ref(:input, ssrc))
+      |> to({:stream_send_bin, ssrc})
+      |> to({:srtp_encryptor, ssrc})
+      |> to_bin_output(Pad.ref(:rtp_output, ssrc))
+    ]
+
+    %ParentSpec{children: children, links: links}
+  end
+
+  defp send_stream_spec(ssrc, payloader, %{secure?: false}) do
+    children = %{
+      {:stream_send_bin, ssrc} => %RTP.StreamSendBin{ssrc: ssrc, payloader: payloader}
+    }
+
+    links = [
+      link_bin_input(Pad.ref(:input, ssrc))
+      |> to({:stream_send_bin, ssrc})
+      |> to_bin_output(Pad.ref(:rtp_output, ssrc))
+    ]
+
+    %ParentSpec{children: children, links: links}
   end
 
   @impl true
   def handle_pad_removed(Pad.ref(:rtp_input, ref), _ctx, state) do
-    {{:ok, remove_child: {:rtp_parser, ref}}, state}
+    children = [rtp_parser: ref] ++ if state.secure?, do: [srtp_decryptor: ref], else: []
+    {{:ok, remove_child: children}, state}
   end
 
   @impl true
   def handle_pad_removed(Pad.ref(:rtcp_input, ref), _ctx, state) do
-    {{:ok, remove_child: {:rtcp_parser, ref}}, state}
+    children = [rtcp_parser: ref] ++ if state.secure?, do: [srtcp_decryptor: ref], else: []
+    {{:ok, remove_child: children}, state}
   end
 
   @impl true
