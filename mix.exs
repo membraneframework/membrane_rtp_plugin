@@ -43,7 +43,7 @@ defmodule Membrane.Element.RTP.MixProject do
   defp docs do
     [
       main: "readme",
-      extras: ["README.md"],
+      extras: ["README.md", "LICENSE"],
       source_ref: "v#{@version}"
     ]
   end
@@ -61,11 +61,12 @@ defmodule Membrane.Element.RTP.MixProject do
 
   defp deps do
     [
-      # {:membrane_core, "~> 0.5.1"},
-      {:membrane_core, github: "membraneframework/membrane_core", override: true},
+      {:membrane_core, "~> 0.6.0", override: true},
       {:membrane_rtp_format, "~> 0.2.0-alpha"},
+      {:libsrtp, github: "membraneframework/elixir_libsrtp", branch: "develop", optional: true},
       {:bunch, "~> 1.0"},
       {:heap, "~> 2.0.2"},
+      {:bundlex, github: "membraneframework/bundlex", override: true},
 
       # Dev
       {:ex_doc, "~> 0.21", only: :dev, runtime: false},
@@ -73,7 +74,7 @@ defmodule Membrane.Element.RTP.MixProject do
       {:excoveralls, ">= 0.8.0", only: :test},
       {:membrane_rtp_h264_plugin, "~> 0.3.0-alpha", only: :test},
       {:membrane_rtp_mpegaudio_plugin, "~> 0.4.0-alpha", only: :test},
-      {:membrane_element_ffmpeg_h264, "~> 0.2.0", only: :test},
+      {:membrane_element_ffmpeg_h264, "~> 0.4.0", only: :test},
       {:membrane_element_pcap, github: "membraneframework/membrane-element-pcap", only: :test}
     ]
   end
