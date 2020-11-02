@@ -276,21 +276,29 @@ defmodule Membrane.RTP.SessionBin do
       {:ok, state}
     else
       payload_type = ctx.pads[Pad.ref(:rtp_output, ssrc)].options.payload_type
-      {pt_name, _clock_rate} = Map.fetch!(state.fmt_mapping, payload_type)
+      {pt_name, clock_rate} = Map.fetch!(state.fmt_mapping, payload_type)
 
       payloader =
         Map.get_lazy(state.payloaders, pt_name, fn ->
           raise "Cannot find payloader for payload type #{pt_name}"
         end)
 
-      spec = send_stream_spec(ssrc, payloader, state)
+      spec = send_stream_spec(ssrc, payload_type, payloader, clock_rate, state)
       {{:ok, spec: spec}, state}
     end
   end
 
-  defp send_stream_spec(ssrc, payloader, %{secure?: true, srtp_policies: policies}) do
+  defp send_stream_spec(ssrc, payload_type, payloader, clock_rate, %{
+         secure?: true,
+         srtp_policies: policies
+       }) do
     children = %{
-      {:stream_send_bin, ssrc} => %RTP.StreamSendBin{ssrc: ssrc, payloader: payloader},
+      {:stream_send_bin, ssrc} => %RTP.StreamSendBin{
+        ssrc: ssrc,
+        payload_type: payload_type,
+        payloader: payloader,
+        clock_rate: clock_rate
+      },
       {:srtp_encryptor, ssrc} => %SRTP.Encryptor{policies: policies}
     }
 
@@ -304,9 +312,14 @@ defmodule Membrane.RTP.SessionBin do
     %ParentSpec{children: children, links: links}
   end
 
-  defp send_stream_spec(ssrc, payloader, %{secure?: false}) do
+  defp send_stream_spec(ssrc, payload_type, payloader, clock_rate, %{secure?: false}) do
     children = %{
-      {:stream_send_bin, ssrc} => %RTP.StreamSendBin{ssrc: ssrc, payloader: payloader}
+      {:stream_send_bin, ssrc} => %RTP.StreamSendBin{
+        ssrc: ssrc,
+        payload_type: payload_type,
+        payloader: payloader,
+        clock_rate: clock_rate
+      }
     }
 
     links = [

@@ -8,7 +8,7 @@ defmodule Membrane.RTP.Serializer do
   def_input_pad :input, caps: RTP, demand_unit: :buffers
   def_output_pad :output, caps: :any
 
-  def_options ssrc: [], alignment: [default: 1]
+  def_options ssrc: [], payload_type: [], clock_rate: [], alignment: [default: 1]
 
   @impl true
   def handle_init(options) do
@@ -22,14 +22,16 @@ defmodule Membrane.RTP.Serializer do
   end
 
   @impl true
-  def handle_process(:input, %Buffer{payload: payload, metadata: metadata}, ctx, state) do
+  def handle_process(:input, %Buffer{payload: payload, metadata: metadata}, _ctx, state) do
     {rtp_metadata, metadata} = Map.pop(metadata, :rtp, %{})
+    %{timestamp: timestamp} = metadata
+    rtp_timestamp = timestamp |> Ratio.mult(state.clock_rate) |> Membrane.Time.to_seconds()
 
     header = %RTP.Header{
       ssrc: state.ssrc,
       marker: Map.get(rtp_metadata, :marker, false),
-      payload_type: ctx.pads.input.caps.payload_type,
-      timestamp: rtp_metadata.timestamp,
+      payload_type: state.payload_type,
+      timestamp: rtp_timestamp,
       sequence_number: state.sequence_number,
       csrcs: Map.get(rtp_metadata, :csrcs, [])
     }
