@@ -11,6 +11,8 @@ defmodule Membrane.RTP.JitterBuffer do
 
   @type packet_index :: non_neg_integer()
 
+  @max_timestamp 0xFFFFFFFF
+
   def_output_pad :output,
     caps: RTP
 
@@ -41,6 +43,8 @@ defmodule Membrane.RTP.JitterBuffer do
               latency: nil,
               waiting?: true,
               max_latency_timer: nil,
+              timestamp_base: nil,
+              previous_timestamp: -1,
               stats_acc: %{expected_prior: 0, received_prior: 0, last_transit: nil, jitter: 0.0}
 
     @type t :: %__MODULE__{
@@ -84,10 +88,12 @@ defmodule Membrane.RTP.JitterBuffer do
 
   @impl true
   def handle_end_of_stream(:input, _context, %State{store: store} = state) do
-    store
-    |> BufferStore.dump()
-    |> Enum.map(&record_to_action/1)
-    ~> {{:ok, &1 ++ [end_of_stream: :output]}, %State{state | store: %BufferStore{}}}
+    {actions, state} =
+      store
+      |> BufferStore.dump()
+      |> Enum.map_reduce(state, &record_to_action/2)
+
+    {{:ok, actions ++ [end_of_stream: :output]}, %State{state | store: %BufferStore{}}}
   end
 
   @impl true
@@ -146,7 +152,7 @@ defmodule Membrane.RTP.JitterBuffer do
     # Additionally, shift buffers as long as there are no gaps
     {buffers, store} = BufferStore.shift_ordered(store)
 
-    actions = (too_old_records ++ buffers) |> Enum.map(&record_to_action/1)
+    {actions, state} = (too_old_records ++ buffers) |> Enum.map_reduce(state, &record_to_action/2)
 
     state = %{state | store: store} |> set_timer()
 
@@ -171,8 +177,26 @@ defmodule Membrane.RTP.JitterBuffer do
 
   defp set_timer(%State{max_latency_timer: timer} = state) when timer != nil, do: state
 
-  defp record_to_action(nil), do: {:event, {:output, %Membrane.Event.Discontinuity{}}}
-  defp record_to_action(%Record{buffer: buffer}), do: {:buffer, {:output, buffer}}
+  defp record_to_action(nil, state) do
+    action = {:event, {:output, %Membrane.Event.Discontinuity{}}}
+    {action, state}
+  end
+
+  defp record_to_action(%Record{buffer: buffer}, state) do
+    %{timestamp: rtp_timestamp} = buffer.metadata.rtp
+    timestamp_base = state.timestamp_base || rtp_timestamp
+
+    timestamp_base =
+      if rtp_timestamp < state.previous_timestamp,
+        do: timestamp_base - @max_timestamp - 1,
+        else: timestamp_base
+
+    timestamp = Ratio.div((rtp_timestamp - timestamp_base) * Time.second(), state.clock_rate)
+    buffer = Bunch.Struct.put_in(buffer, [:metadata, :timestamp], timestamp)
+    action = {:buffer, {:output, buffer}}
+    state = %{state | timestamp_base: timestamp_base, previous_timestamp: rtp_timestamp}
+    {action, state}
+  end
 
   @spec get_updated_stats(State.t()) :: {Stats.t(), State.t()}
   defp get_updated_stats(%State{store: %BufferStore{base_index: nil}} = state) do
