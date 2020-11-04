@@ -102,7 +102,7 @@ defmodule Membrane.RTP.Session.ReceiveBinTest do
           |> to(:parser)
           |> via_in(Pad.ref(:input, options.output.video.ssrc))
           |> to(:rtp)
-          |> via_out(Pad.ref(:rtp_output, options.output.video.ssrc), options: [payload_type: 96])
+          |> via_out(Pad.ref(:rtp_output, options.output.video.ssrc), options: [encoding: :H264])
           |> to(:rtp_sink),
           link(:rtcp_source)
           |> via_in(:rtcp_input)

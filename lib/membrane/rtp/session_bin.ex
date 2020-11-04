@@ -1,5 +1,4 @@
 defmodule Membrane.RTP.SessionBin do
-  # TODO: Either rename and add sending support or wrap in a bin handling both receiving and sending
   @moduledoc """
   A bin handling the receive part of RTP session.
 
@@ -17,21 +16,11 @@ defmodule Membrane.RTP.SessionBin do
 
   alias Membrane.ParentSpec
   alias Membrane.{RTCP, RTP, SRTCP, SRTP}
-  alias Membrane.RTP.Packet.PayloadType
-  alias Membrane.RTP.Session
+  alias Membrane.RTP.{PayloadFormat, Session}
 
   @ssrc_boundaries 2..(Bitwise.bsl(1, 32) - 1)
 
   @bin_input_buffer_params [warn_size: 250, fail_size: 500]
-
-  @known_depayloaders %{
-    H264: Membrane.RTP.H264.Depayloader,
-    MPA: Membrane.RTP.MPEGAudio.Depayloader
-  }
-
-  @known_payloaders %{
-    H264: Membrane.RTP.H264.Payloader
-  }
 
   def_options fmt_mapping: [
                 spec: %{RTP.payload_type_t() => {RTP.encoding_name_t(), RTP.clock_rate_t()}},
@@ -108,12 +97,13 @@ defmodule Membrane.RTP.SessionBin do
     demand_unit: :buffers,
     caps: RTP,
     availability: :on_request,
-    options: [payload_type: []]
+    options: [payload_type: [default: nil], encoding: [default: nil]]
 
   def_output_pad :rtcp_output, demand_unit: :buffers, caps: RTCP, availability: :on_request
 
   defmodule State do
     @moduledoc false
+    use Bunch.Access
 
     defstruct fmt_mapping: %{},
               ssrc_pt_mapping: %{},
@@ -133,15 +123,18 @@ defmodule Membrane.RTP.SessionBin do
     children = [ssrc_router: RTP.SSRCRouter]
     links = []
     spec = %ParentSpec{children: children, links: links}
-    {custom_payloaders, options} = Map.pop(options, :custom_payloaders)
-    {custom_depayloaders, options} = Map.pop(options, :custom_depayloaders)
     {receiver_srtp_policies, options} = Map.pop(options, :receiver_srtp_policies)
+    {fmt_mapping, options} = Map.pop(options, :fmt_mapping)
+
+    fmt_mapping =
+      Bunch.Map.map_values(fmt_mapping, fn {encoding_name, clock_rate} ->
+        %{encoding_name: encoding_name, clock_rate: clock_rate}
+      end)
 
     state =
       %State{
-        payloaders: Map.merge(@known_payloaders, custom_payloaders),
-        depayloaders: Map.merge(@known_depayloaders, custom_depayloaders),
-        receiver_srtp_policies: receiver_srtp_policies || options.srtp_policies
+        receiver_srtp_policies: receiver_srtp_policies || options.srtp_policies,
+        fmt_mapping: fmt_mapping
       }
       |> Map.merge(Map.from_struct(options))
 
@@ -215,21 +208,15 @@ defmodule Membrane.RTP.SessionBin do
 
   @impl true
   def handle_pad_added(Pad.ref(:output, ssrc) = pad, _ctx, state) do
-    {pt_name, clock_rate} = state.ssrc_pt_mapping |> Map.get(ssrc)
-
-    depayloader =
-      case state.depayloaders[pt_name] do
-        nil -> raise "Cannot find depayloader for payload type #{pt_name}"
-        depayloader -> depayloader
-      end
-
+    pt_mapping = Map.fetch!(state.ssrc_pt_mapping, ssrc) |> get_payload_type_mapping!(state)
+    depayloader = get_depayloader!(pt_mapping.encoding_name, state)
     rtp_stream_name = {:stream_receive_bin, ssrc}
 
     new_children = %{
       rtp_stream_name => %RTP.StreamReceiveBin{
         depayloader: depayloader,
         ssrc: ssrc,
-        clock_rate: clock_rate
+        clock_rate: pt_mapping.clock_rate
       }
     }
 
@@ -275,15 +262,10 @@ defmodule Membrane.RTP.SessionBin do
     if not pads_present? or Map.has_key?(ctx.children, {:stream_send_bin, ssrc}) do
       {:ok, state}
     else
-      payload_type = ctx.pads[Pad.ref(:rtp_output, ssrc)].options.payload_type
-      {pt_name, clock_rate} = Map.fetch!(state.fmt_mapping, payload_type)
-
-      payloader =
-        Map.get_lazy(state.payloaders, pt_name, fn ->
-          raise "Cannot find payloader for payload type #{pt_name}"
-        end)
-
-      spec = send_stream_spec(ssrc, payload_type, payloader, clock_rate, state)
+      payload_type = get_output_payload_type(ctx, ssrc)
+      pt_mapping = get_payload_type_mapping!(payload_type, state)
+      payloader = get_payloader!(pt_mapping.encoding_name, state)
+      spec = send_stream_spec(ssrc, payload_type, payloader, pt_mapping.clock_rate, state)
       {{:ok, spec: spec}, state}
     end
   end
@@ -384,28 +366,10 @@ defmodule Membrane.RTP.SessionBin do
   end
 
   @impl true
-  def handle_notification({:new_rtp_stream, ssrc, pt_num}, :ssrc_router, _ctx, state) do
-    %State{ssrc_pt_mapping: ssrc_pt_mapping, fmt_mapping: fmt_map} = state
-
-    {pt_name, clock_rate} =
-      if PayloadType.is_dynamic(pt_num) do
-        unless Map.has_key?(fmt_map, pt_num) do
-          raise "Unknown RTP payload type #{pt_num}"
-        end
-
-        fmt_map[pt_num]
-      else
-        {PayloadType.get_encoding_name(pt_num), PayloadType.get_clock_rate(pt_num)}
-      end
-
-    if pt_name == nil do
-      raise "Unknown RTP payload type #{pt_num}"
-    end
-
-    new_ssrc_pt_mapping = ssrc_pt_mapping |> Map.put(ssrc, {pt_name, clock_rate})
-
-    state = %{state | ssrc_pt_mapping: new_ssrc_pt_mapping}
-    {{:ok, notify: {:new_rtp_stream, ssrc, pt_name}}, state}
+  def handle_notification({:new_rtp_stream, ssrc, payload_type}, :ssrc_router, _ctx, state) do
+    state = put_in(state.ssrc_pt_mapping[ssrc], payload_type)
+    %{encoding_name: encoding_name} = get_payload_type_mapping!(payload_type, state)
+    {{:ok, notify: {:new_rtp_stream, ssrc, encoding_name}}, state}
   end
 
   @impl true
@@ -437,5 +401,43 @@ defmodule Membrane.RTP.SessionBin do
   defp add_ssrc(remote_ssrc, ssrcs, generator) do
     local_ssrc = generator.([remote_ssrc | Map.keys(ssrcs)], Map.values(ssrcs))
     Map.put(ssrcs, remote_ssrc, local_ssrc)
+  end
+
+  defp get_payload_type_mapping!(payload_type, state) do
+    pt_mapping =
+      PayloadFormat.get_payload_type_mapping(payload_type)
+      |> Map.merge(state.fmt_mapping[payload_type] || %{})
+
+    if Map.has_key?(pt_mapping, :encoding_name) and Map.has_key?(pt_mapping, :clock_rate) do
+      pt_mapping
+    else
+      raise "Unknown RTP payload type #{payload_type}"
+    end
+  end
+
+  defp get_payloader!(encoding_name, state) do
+    case PayloadFormat.get(encoding_name).payloader || state.custom_payloaders[encoding_name] do
+      nil -> raise "Cannot find payloader for encoding #{encoding_name}"
+      payloader -> payloader
+    end
+  end
+
+  defp get_depayloader!(encoding_name, state) do
+    case PayloadFormat.get(encoding_name).depayloader || state.custom_depayloaders[encoding_name] do
+      nil -> raise "Cannot find depayloader for encoding #{encoding_name}"
+      depayloader -> depayloader
+    end
+  end
+
+  defp get_output_payload_type(ctx, ssrc) do
+    pad = Pad.ref(:rtp_output, ssrc)
+    %{payload_type: pt, encoding: encoding} = ctx.pads[pad].options
+
+    unless pt || encoding do
+      raise "Neither payload_type nor encoding specified for #{inspect(pad)})"
+    end
+
+    pt || PayloadFormat.get(encoding).payload_type ||
+      raise "Cannot find default RTP payload type for encoding #{encoding}"
   end
 end
