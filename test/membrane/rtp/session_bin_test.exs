@@ -88,7 +88,7 @@ defmodule Membrane.RTP.Session.ReceiveBinTest do
           hackney: %Membrane.Element.Hackney.Source{
             location: "https://membraneframework.github.io/static/video-samples/test-video.h264"
           },
-          parser: %Membrane.Element.FFmpeg.H264.Parser{framerate: {30, 1}},
+          parser: %Membrane.H264.FFmpeg.Parser{framerate: {30, 1}},
           rtp_sink: Testing.Sink,
           rtcp_source: %Testing.Source{output: options.rtcp_input},
           rtcp_sink: Testing.Sink
