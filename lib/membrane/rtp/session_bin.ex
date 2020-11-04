@@ -1,13 +1,28 @@
 defmodule Membrane.RTP.SessionBin do
   @moduledoc """
-  A bin handling the receive part of RTP session.
+  Bin handling one RTP session, that may consist of multiple incoming and outgoing RTP streams.
 
-  Consumes one or more RTP streams on each input and outputs a stream from one SSRC on each output.
+  ## Incoming streams
+  Incoming RTP streams can be connected via `:rtp_input` pads. As each pad can provide multiple RTP streams,
+  they are distinguished basing on SSRC. Once a new stream is received, bin sends `t:new_stream_notification_t/0`
+  notification, meaning the parent should link `Pad.ref(:output, ssrc)` pad to consuming components. The stream is
+  then depayloaded and forwarded via said pad.
 
-  Every stream is parsed and then (based on SSRC field) RTP streams are separated, depacketized and sent further.
-  It notifies its parent about each new stream with a notification of the format `{:new_rtp_stream, ssrc, payload_type}`.
-  Parent should then connect to this bin's dynamic output pad instance that will
-  have an id == `ssrc`.
+  ## Outgoing streams
+  To create an RTP stream, the source stream needs to be connected via `Pad.ref(:input, ssrc)` pad and the sink -
+  via `Pad.ref(:rtp_output, ssrc)`. At least one of `:encoding` or `:payload_type` options of `:rtp_output` pad
+  must be provided too.
+
+  ## Payloaders and depayloaders
+  Payloaders are Membrane elements that transform stream so that it can be put into RTP packets, while depayloaders
+  work the other way round. Different codecs require different payloaders and depayloaders. Thus, to send or receive
+  given codec via this bin, proper payloader/depayloader is needed. Payloaders and depayloaders can be found in
+  `membrane_rtp_X_plugin` packages, where X stands for codec name. It's enough when such plugin is added to
+  dependencies.
+
+  ## RTCP
+  RTCP packets are received via `:rtcp_input` and sent via `:rtcp_output` pad. Only one instance of each of them
+  can be linked. RTCP packets should be delivered to each involved peer that supports RTCP.
   """
   use Membrane.Bin
 
@@ -17,6 +32,8 @@ defmodule Membrane.RTP.SessionBin do
   alias Membrane.ParentSpec
   alias Membrane.{RTCP, RTP, SRTCP, SRTP}
   alias Membrane.RTP.{PayloadFormat, Session}
+
+  @type new_stream_notification_t :: {:new_rtp_stream, RTP.ssrc_t(), RTP.encoding_name_t()}
 
   @ssrc_boundaries 2..(Bitwise.bsl(1, 32) - 1)
 
@@ -30,12 +47,12 @@ defmodule Membrane.RTP.SessionBin do
               custom_payloaders: [
                 spec: %{RTP.encoding_name_t() => module()},
                 default: %{},
-                description: "Mapping from a payload type to a custom payloader module"
+                description: "Mapping from encoding names to custom payloader modules"
               ],
               custom_depayloaders: [
                 spec: %{RTP.encoding_name_t() => module()},
                 default: %{},
-                description: "Mapping from a payload type to a custom depayloader module"
+                description: "Mapping from encoding names to custom depayloader modules"
               ],
               rtcp_interval: [
                 type: :time,
@@ -97,7 +114,22 @@ defmodule Membrane.RTP.SessionBin do
     demand_unit: :buffers,
     caps: RTP,
     availability: :on_request,
-    options: [payload_type: [default: nil], encoding: [default: nil]]
+    options: [
+      payload_type: [
+        spec: RTP.payload_type_t() | nil,
+        default: nil,
+        description: """
+        Payload type of output stream. If not provided, determined from `:encoding`.
+        """
+      ],
+      encoding: [
+        spec: RTP.encoding_name_t() | nil,
+        default: nil,
+        description: """
+        Encoding name of output stream. If not provided, determined from `:payload_type`.
+        """
+      ]
+    ]
 
   def_output_pad :rtcp_output, demand_unit: :buffers, caps: RTCP, availability: :on_request
 

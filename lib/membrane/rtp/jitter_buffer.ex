@@ -1,13 +1,13 @@
 defmodule Membrane.RTP.JitterBuffer do
-  @doc """
-  Element that buffers and reorders RTP packets based on sequence_number.
+  @moduledoc """
+  Element that buffers and reorders RTP packets based on `sequence_number`.
   """
   use Membrane.Filter
   use Membrane.Log
   use Bunch
 
   alias Membrane.{Buffer, RTP, Time}
-  alias __MODULE__.{BufferStore, Record}
+  alias __MODULE__.{BufferStore, Record, Stats}
 
   @type packet_index :: non_neg_integer()
 
@@ -56,25 +56,6 @@ defmodule Membrane.RTP.JitterBuffer do
               jitter: float()
             }
           }
-  end
-
-  defmodule Stats do
-    @moduledoc """
-    JitterBuffer stats that can be used for Receiver report generation
-    """
-
-    @enforce_keys [:fraction_lost, :total_lost, :highest_seq_num, :interarrival_jitter]
-
-    defstruct @enforce_keys
-
-    @type t ::
-            %__MODULE__{
-              fraction_lost: float(),
-              total_lost: non_neg_integer(),
-              highest_seq_num: Membrane.RTP.JitterBuffer.packet_index(),
-              interarrival_jitter: non_neg_integer()
-            }
-            | :no_stats
   end
 
   @impl true

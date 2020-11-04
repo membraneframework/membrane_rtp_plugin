@@ -1,15 +1,28 @@
 defmodule Membrane.RTP.Serializer do
+  @moduledoc """
+  Serializes RTP payload to RTP packets.
+  """
   use Membrane.Filter
 
-  alias Membrane.{Buffer, RTP}
+  alias Membrane.{Buffer, RTP, Stream}
 
   @max_seq_num 65535
   @max_timestamp 0xFFFFFFFF
 
   def_input_pad :input, caps: RTP, demand_unit: :buffers
-  def_output_pad :output, caps: :any
+  def_output_pad :output, caps: {Stream, type: :packet_stream, content: RTP}
 
-  def_options ssrc: [], payload_type: [], clock_rate: [], alignment: [default: 1]
+  def_options ssrc: [spec: RTP.ssrc_t()],
+              payload_type: [spec: RTP.payload_type_t()],
+              clock_rate: [spec: RTP.clock_rate_t()],
+              alignment: [
+                default: 1,
+                spec: pos_integer(),
+                description: """
+                Number of bytes that each packet should be aligned to.
+                Alignment is achieved by adding RTP padding.
+                """
+              ]
 
   @impl true
   def handle_init(options) do
@@ -19,6 +32,12 @@ defmodule Membrane.RTP.Serializer do
     }
 
     {:ok, Map.merge(Map.from_struct(options), state)}
+  end
+
+  @impl true
+  def handle_caps(:input, _caps, _ctx, state) do
+    caps = %Stream{type: :packet_stream, content: RTP}
+    {{:ok, caps: {:output, caps}}, state}
   end
 
   @impl true

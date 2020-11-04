@@ -44,7 +44,20 @@ defmodule Membrane.Element.RTP.MixProject do
     [
       main: "readme",
       extras: ["README.md", "LICENSE"],
-      source_ref: "v#{@version}"
+      source_ref: "v#{@version}",
+      nest_modules_by_prefix: [
+        Membrane.RTP,
+        Membrane.RTCP,
+        Membrane.SRTP,
+        Membrane.SRTCP
+      ],
+      groups_for_modules: [
+        "RTP session": [~r/^Membrane\.RTP\.Session/],
+        RTP: [~r/^Membrane\.RTP($|\.)/],
+        RTCP: [~r/^Membrane\.RTCP($|\.)/],
+        SRTP: [~r/^Membrane\.SRTP($|\.)/],
+        SRTCP: [~r/^Membrane\.SRTCP($|\.)/]
+      ]
     ]
   end
 
