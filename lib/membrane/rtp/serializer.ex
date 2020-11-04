@@ -4,6 +4,7 @@ defmodule Membrane.RTP.Serializer do
   alias Membrane.{Buffer, RTP}
 
   @max_seq_num 65535
+  @max_timestamp 0xFFFFFFFF
 
   def_input_pad :input, caps: RTP, demand_unit: :buffers
   def_output_pad :output, caps: :any
@@ -12,7 +13,11 @@ defmodule Membrane.RTP.Serializer do
 
   @impl true
   def handle_init(options) do
-    state = %{sequence_number: Enum.random(0..@max_seq_num)}
+    state = %{
+      sequence_number: Enum.random(0..@max_seq_num),
+      init_timestamp: Enum.random(0..@max_timestamp)
+    }
+
     {:ok, Map.merge(Map.from_struct(options), state)}
   end
 
@@ -25,7 +30,8 @@ defmodule Membrane.RTP.Serializer do
   def handle_process(:input, %Buffer{payload: payload, metadata: metadata}, _ctx, state) do
     {rtp_metadata, metadata} = Map.pop(metadata, :rtp, %{})
     %{timestamp: timestamp} = metadata
-    rtp_timestamp = timestamp |> Ratio.mult(state.clock_rate) |> Membrane.Time.to_seconds()
+    rtp_offset = timestamp |> Ratio.mult(state.clock_rate) |> Membrane.Time.to_seconds()
+    rtp_timestamp = rem(state.init_timestamp + rtp_offset, @max_timestamp + 1)
 
     header = %RTP.Header{
       ssrc: state.ssrc,
