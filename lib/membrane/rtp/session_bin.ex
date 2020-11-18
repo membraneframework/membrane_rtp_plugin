@@ -412,6 +412,16 @@ defmodule Membrane.RTP.SessionBin do
 
   @impl true
   def handle_notification(
+    {:serializer_stats, stats},
+    {:stream_send_bin, sender_ssrc},
+    ctx,
+    state
+  ) do
+    
+  end
+
+  @impl true
+  def handle_notification(
         {:jitter_buffer_stats, stats},
         {:stream_receive_bin, remote_ssrc},
         ctx,

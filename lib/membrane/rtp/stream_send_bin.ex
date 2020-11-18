@@ -29,4 +29,15 @@ defmodule Membrane.RTP.StreamSendBin do
     spec = %ParentSpec{children: children, links: links}
     {{:ok, spec: spec}, %{}}
   end
+
+  @impl true
+  def handle_other(:send_stats, _ctx, state) do
+    {{:ok, forward: {:serializer, :send_stats}}, state}
+  end
+
+  @impl true
+  def handle_notification({:serializer_stats, stats}, :serializer, _ctx, state) do
+    {{:ok, notify: {:serializer_stats, stats}}, state}
+  end
+
 end
