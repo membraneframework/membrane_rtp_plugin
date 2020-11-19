@@ -1,5 +1,6 @@
 defmodule Membrane.RTP.Session.SenderReport do
   alias Membrane.{RTP, RTCP, Time}
+  require Membrane.Logger
 
   defmodule Data do
     @type t :: %__MODULE__{
@@ -36,6 +37,8 @@ defmodule Membrane.RTP.Session.SenderReport do
     if Enum.empty?(data.senders_ssrcs) do
       {:no_report, data}
     else
+      Membrane.Logger.warn("Not received sender stats from ssrcs: #{Enum.join(data.senders_ssrcs, ", ")}")
+
       {{:report, generate_report(data.stats)}, %{data | senders_ssrcs: MapSet.new(), stats: %{}}}
     end
   end
@@ -43,7 +46,14 @@ defmodule Membrane.RTP.Session.SenderReport do
 
   def handle_stats(stats, sender_ssrc, data) do
     senders_ssrcs = MapSet.delete(data.senders_ssrcs, sender_ssrc)
-    
+
+    data = %{data | stats: Map.put(data.stats, sender_ssrc, stats), senders_ssrcs: senders_ssrcs}
+
+    if Enum.empty?(senders_ssrcs) do
+      {{:report, generate_report(data.stats)}, data}
+    else
+      {:noreport, data}
+    end
   end
 
   defp generate_report(stats) do
@@ -58,8 +68,8 @@ defmodule Membrane.RTP.Session.SenderReport do
   defp generate_sender_report(sender_ssrc, sender_stats) do
     timestamp = Time.os_time()
     sender_info = %{
-      wallclock_timestamp: Time.to_ntp_timestamp(timestamp),
-      rtp_timestamp: timestamp,
+      wallclock_timestamp: 0,
+      rtp_timestamp: 0,
       sender_packet_count: sender_stats.sender_packet_count,
       sender_octet_count: sender_stats.sender_octet_count
     }

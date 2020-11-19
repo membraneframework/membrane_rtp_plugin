@@ -1,9 +1,10 @@
 defmodule Membrane.RTP.Serializer.Stats do
   @moduledoc """
-  JitterBuffer stats that can be used for Receiver report generation
+  Serializer stats that can be used for Sender Report(SR) generation
   """
+  use Bunch.Access
 
-  @enforce_keys [:wallclock_timestamp, :rtp_timestamp, :sender_packet_count, :sender_octet_count]
+  @enforce_keys [:sender_packet_count, :sender_octet_count]
 
   defstruct @enforce_keys
 

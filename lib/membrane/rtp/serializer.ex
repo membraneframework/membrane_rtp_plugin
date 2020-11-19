@@ -5,6 +5,7 @@ defmodule Membrane.RTP.Serializer do
   use Membrane.Filter
 
   alias Membrane.{Buffer, RTP, Stream, Payload}
+  alias __MODULE__.{Stats}
 
   @max_seq_num 65535
   @max_timestamp 0xFFFFFFFF
@@ -26,12 +27,14 @@ defmodule Membrane.RTP.Serializer do
               ]
 
   defmodule State do
+    use Bunch.Access
+
     defstruct sequence_number: 0,
               init_timestamp: 0,
               any_buffer_sent?: false,
-              stats_acc: %{
-                senders_packet_count: 0,
-                senders_octet_count: 0
+              stats_acc: %Stats{
+                sender_packet_count: 0,
+                sender_octet_count: 0
               }
 
     @type t :: %__MODULE__{
@@ -67,7 +70,9 @@ defmodule Membrane.RTP.Serializer do
   end
 
   @impl true
-  def handle_process(:input, %Buffer{payload: payload, metadata: metadata}, _ctx, state) do
+  def handle_process(:input, %Buffer{payload: payload, metadata: metadata} = buffer, _ctx, state) do
+    state = update_counters(buffer, state)
+
     {rtp_metadata, metadata} = Map.pop(metadata, :rtp, %{})
     %{timestamp: timestamp} = metadata
     rtp_offset = timestamp |> Ratio.mult(state.clock_rate) |> Membrane.Time.to_seconds()
@@ -105,18 +110,11 @@ defmodule Membrane.RTP.Serializer do
   end
 
   defp update_counters(%Buffer{payload: payload}, state) do
-    if rem(state.stats_acc.sender_octet_count + Payload.size(payload), @max_sender_octet_count) <
-         state.stats_acc.sender_octet_count do
-      state
-      |> put_in([:stats_acc, :sender_octet_count], 0)
-      |> put_in([:stats_acc, :sender_packet_count], 0)
-    else
-      state
-      |> put_in(
-        [:stats_acc, :sender_octet_count],
-        state.stats_acc.sender_octet_count + Payload.size(payload)
-      )
-      |> put_in([:stats_acc, :sender_packet_count], state.stats_acc.sender_packet_count + 1)
-    end
+    state
+    |> put_in(
+      [:stats_acc, :sender_octet_count],
+      state.stats_acc.sender_octet_count + Payload.size(payload)
+    )
+    |> put_in([:stats_acc, :sender_packet_count], state.stats_acc.sender_packet_count + 1)
   end
 end
