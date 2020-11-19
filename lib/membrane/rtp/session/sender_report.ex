@@ -37,12 +37,22 @@ defmodule Membrane.RTP.Session.SenderReport do
     if Enum.empty?(data.senders_ssrcs) do
       {:no_report, data}
     else
-      Membrane.Logger.warn("Not received sender stats from ssrcs: #{Enum.join(data.senders_ssrcs, ", ")}")
+      Membrane.Logger.warn(
+        "Not received sender stats from ssrcs: #{Enum.join(data.senders_ssrcs, ", ")}"
+      )
 
-      {{:report, generate_report(data.stats)}, %{data | senders_ssrcs: MapSet.new(), stats: %{}}}
+      sender_reports = generate_report(data.stats)
+
+      case sender_reports.packets do
+        [] ->
+          {:no_report, data}
+
+        _ ->
+          {{:report, sender_reports},
+           %{data | senders_ssrcs: MapSet.new(), stats: %{}}}
+      end
     end
   end
-
 
   def handle_stats(stats, sender_ssrc, data) do
     senders_ssrcs = MapSet.delete(data.senders_ssrcs, sender_ssrc)
@@ -50,26 +60,38 @@ defmodule Membrane.RTP.Session.SenderReport do
     data = %{data | stats: Map.put(data.stats, sender_ssrc, stats), senders_ssrcs: senders_ssrcs}
 
     if Enum.empty?(senders_ssrcs) do
-      {{:report, generate_report(data.stats)}, data}
+      sender_reports = generate_report(data.stats)
+
+      case sender_reports.packets do
+        [] -> {:no_report, data}
+        _ -> {{:report, sender_reports}, data}
+      end
     else
-      {:noreport, data}
+      {:no_report, data}
     end
   end
 
   defp generate_report(stats) do
     %RTCP.CompoundPacket{
       packets:
-        Enum.flat_map(stats, fn {sender_ssrc, sender_stats} ->
+        stats
+        |> Enum.filter(fn {_k, v} -> v != :no_stats end)
+        |> Enum.flat_map(fn {sender_ssrc, sender_stats} ->
           generate_sender_report(sender_ssrc, sender_stats)
         end)
     }
   end
 
+  # defp generate_sender_report(_, :no_stats) do
+  #   []
+  # end
+
   defp generate_sender_report(sender_ssrc, sender_stats) do
-    timestamp = Time.os_time()
+    timestamp = Time.vm_time()
+
     sender_info = %{
-      wallclock_timestamp: 0,
-      rtp_timestamp: 0,
+      wallclock_timestamp: timestamp,
+      rtp_timestamp: timestamp,
       sender_packet_count: sender_stats.sender_packet_count,
       sender_octet_count: sender_stats.sender_octet_count
     }

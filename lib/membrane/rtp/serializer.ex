@@ -9,7 +9,6 @@ defmodule Membrane.RTP.Serializer do
 
   @max_seq_num 65535
   @max_timestamp 0xFFFFFFFF
-  @max_sender_octet_count 0xFFFFFFFF
 
   def_input_pad :input, caps: RTP, demand_unit: :buffers
   def_output_pad :output, caps: {Stream, type: :packet_stream, content: RTP}
@@ -91,13 +90,15 @@ defmodule Membrane.RTP.Serializer do
     payload = RTP.Packet.serialize(packet, align_to: state.alignment)
     buffer = %Buffer{payload: payload, metadata: metadata}
     state = Map.update!(state, :sequence_number, &rem(&1 + 1, @max_seq_num + 1))
-    state = Map.update!(state, :any_buffer_sent?, &(&1 or true))
+    state = %{state | any_buffer_sent?: true}
+
     {{:ok, buffer: {:output, buffer}}, state}
   end
 
   @impl true
   def handle_other(:send_stats, _ctx, state) do
     {stats, state} = get_updated_stats(state)
+    state = %{state | any_buffer_sent?: false}
     {{:ok, notify: {:serializer_stats, stats}}, state}
   end
 
