@@ -1,8 +1,10 @@
 defmodule Membrane.RTP.Session.SenderReport do
+  @moduledoc false
   alias Membrane.{RTP, RTCP, Time}
   require Membrane.Logger
 
   defmodule Data do
+    @moduledoc false
     @type t :: %__MODULE__{
             senders_ssrcs: MapSet.t(RTP.ssrc_t()),
             stats: %{
@@ -16,44 +18,45 @@ defmodule Membrane.RTP.Session.SenderReport do
 
   @type maybe_report_t :: {:report, RTCP.CompoundPacket.t()} | :no_report
 
-  @spec init_report(senders :: MapSet.t(RTP.ssrc_t()), data :: Data.t()) ::
+  @spec init_report(ssrcs :: MapSet.t(RTP.ssrc_t()), report_data :: Data.t()) ::
           {MapSet.t(RTP.ssrc_t()), Data.t()}
-  def init_report(senders, %Data{senders_ssrcs: senders_ssrcs} = data)
+  def init_report(ssrcs, %Data{senders_ssrcs: senders_ssrcs} = report_data)
       when senders_ssrcs == %MapSet{} do
     senders_stats =
-      data.stats |> Bunch.KVEnum.filter_by_keys(&MapSet.member?(senders, &1)) |> Map.new()
+      report_data.stats |> Bunch.KVEnum.filter_by_keys(&MapSet.member?(ssrcs, &1)) |> Map.new()
 
-    data = %{
-      data
-      | senders_ssrcs: senders,
+    report_data = %{
+      report_data
+      | senders_ssrcs: ssrcs,
         stats: senders_stats
     }
 
-    {senders, data}
+    {ssrcs, report_data}
   end
 
-  @spec flush_report(data :: Data.t()) :: maybe_report_t()
-  def flush_report(data) do
-    if Enum.empty?(data.senders_ssrcs) do
-      {:no_report, data}
+  @spec flush_report(Data.t()) :: {maybe_report_t(), Data.t()}
+  def flush_report(report_data) do
+    if Enum.empty?(report_data.senders_ssrcs) do
+      {:no_report, report_data}
     else
       Membrane.Logger.warn(
-        "Not received sender stats from ssrcs: #{Enum.join(data.senders_ssrcs, ", ")}"
+        "Not received sender stats from ssrcs: #{Enum.join(report_data.senders_ssrcs, ", ")}"
       )
 
-      sender_reports = generate_report(data.stats)
+      sender_reports = generate_report(report_data.stats)
 
       case sender_reports.packets do
         [] ->
-          {:no_report, data}
+          {:no_report, report_data}
 
         _ ->
-          {{:report, sender_reports},
-           %{data | senders_ssrcs: MapSet.new(), stats: %{}}}
+          {{:report, sender_reports}, %{report_data | senders_ssrcs: MapSet.new(), stats: %{}}}
       end
     end
   end
 
+  @spec handle_stats(RTP.Serializer.Stats.t(), RTP.ssrc_t(), Data.t()) ::
+          {maybe_report_t(), Data.t()}
   def handle_stats(stats, sender_ssrc, data) do
     senders_ssrcs = MapSet.delete(data.senders_ssrcs, sender_ssrc)
 
@@ -81,10 +84,6 @@ defmodule Membrane.RTP.Session.SenderReport do
         end)
     }
   end
-
-  # defp generate_sender_report(_, :no_stats) do
-  #   []
-  # end
 
   defp generate_sender_report(sender_ssrc, sender_stats) do
     timestamp = Time.vm_time()

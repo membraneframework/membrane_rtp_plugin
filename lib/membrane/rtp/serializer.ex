@@ -26,6 +26,7 @@ defmodule Membrane.RTP.Serializer do
               ]
 
   defmodule State do
+    @moduledoc false
     use Bunch.Access
 
     defstruct sequence_number: 0,
@@ -102,6 +103,7 @@ defmodule Membrane.RTP.Serializer do
     {{:ok, notify: {:serializer_stats, stats}}, state}
   end
 
+  @spec get_updated_stats(State.t()) :: {Stats.t(), State.t()}
   defp get_updated_stats(%State{any_buffer_sent?: false} = state) do
     {:no_stats, state}
   end
