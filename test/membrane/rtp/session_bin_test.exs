@@ -3,6 +3,7 @@ defmodule Membrane.RTP.Session.ReceiveBinTest do
 
   import Membrane.Testing.Assertions
 
+  alias Membrane.RTCP.{Header, Packet}
   alias Membrane.RTP
   alias Membrane.Testing
 
@@ -30,6 +31,82 @@ defmodule Membrane.RTP.Session.ReceiveBinTest do
   }
 
   @fmt_mapping %{96 => {:H264, 90_000}, 127 => {:MPA, 90_000}}
+  defmodule RTCPUniqueFilter do
+    use Membrane.Filter
+
+    @moduledoc """
+    Inspects received RTCP buffers and send notification when all specified RTCP packets were
+    seen at least once.
+    """
+
+    def_input_pad :input, demand_unit: :buffers, caps: :any
+    def_output_pad :output, caps: :any
+
+    def_options expected_sr: [
+                  spec: [list(integer)],
+                  default: [],
+                  description: "List of SSRCs of expected sender reports"
+                ],
+                expected_rr: [
+                  spec: [list(integer)],
+                  defualt: [],
+                  description: "List of SSRCs of expected receiver reports"
+                ]
+
+    @impl true
+    def handle_init(opts) do
+      {:ok, Map.from_struct(opts)}
+    end
+
+    @impl true
+    def handle_demand(:output, size, :buffers, _ctx, state) do
+      {{:ok, demand: {:input, size}}, state}
+    end
+
+    @impl true
+    def handle_process(:input, buffer, _ctx, state) do
+      %Membrane.Buffer{payload: <<head::binary-size(4), body_and_rest::binary>>} = buffer
+      {:ok, %{header: header, length: len}} = Header.parse(head)
+
+      body_size = len - 4
+      <<body::binary-size(body_size), rest::binary>> = body_and_rest
+      {:ok, body} = Packet.parse_body(body, header)
+
+      state =
+        case header.packet_type do
+          201 ->
+            %{state | expected_rr: List.delete(state.expected_rr, body.ssrc)}
+
+          200 ->
+            %{state | expected_sr: List.delete(state.expected_sr, body.ssrc)}
+
+          _ ->
+            state
+        end
+
+      actions = [buffer: {:output, buffer}]
+
+      actions =
+        case Enum.empty?(state.expected_rr) do
+          true ->
+            actions ++ [{:notify, :all_rr_received}]
+
+          _ ->
+            actions
+        end
+
+      actions =
+        case Enum.empty?(state.expected_sr) do
+          true ->
+            actions ++ [{:notify, :all_sr_received}]
+
+          _ ->
+            actions
+        end
+
+      {{:ok, actions}, state}
+    end
+  end
 
   defmodule Pauser do
     # move to Core.Testing?
@@ -95,7 +172,11 @@ defmodule Membrane.RTP.Session.ReceiveBinTest do
           parser: %Membrane.H264.FFmpeg.Parser{framerate: {30, 1}},
           rtp_sink: Testing.Sink,
           rtcp_source: %Testing.Source{output: options.rtcp_input},
-          rtcp_sink: Testing.Sink
+          rtcp_sink: Testing.Sink,
+          rtcp_packet_inspector: %RTCPUniqueFilter{
+            expected_rr: options.expected_rr,
+            expected_sr: options.expected_sr
+          }
         ],
         links: [
           link(:pcap)
@@ -112,6 +193,7 @@ defmodule Membrane.RTP.Session.ReceiveBinTest do
           |> via_in(:rtcp_input)
           |> to(:rtp)
           |> via_out(:rtcp_output)
+          |> to(:rtcp_packet_inspector)
           |> to(:rtcp_sink)
         ]
       }
@@ -186,7 +268,9 @@ defmodule Membrane.RTP.Session.ReceiveBinTest do
           output: output,
           fmt_mapping: @fmt_mapping,
           rtcp_input: [sender_report],
-          rtcp_interval: Membrane.Time.second()
+          rtcp_interval: Membrane.Time.second(),
+          expected_rr: rr_senders_ssrcs,
+          expected_sr: sr_senders_ssrcs
         }
       }
       |> Testing.Pipeline.start_link()
@@ -200,19 +284,8 @@ defmodule Membrane.RTP.Session.ReceiveBinTest do
     assert_start_of_stream(pipeline, :rtp_sink)
     assert_start_of_stream(pipeline, :rtcp_sink)
 
-    # sr_senders_ssrcs |>
-    # Enum.each(fn ssrc ->
-    #   assert_sink_buffer(pipeline, :rtcp_sink, %Membrane.Buffer{
-    #     payload: <<_::8, 201::8, _::16, ^ssrc::32, _::binary>>
-    #   })
-    # end)
-
-    rr_senders_ssrcs |>
-    Enum.each(fn ssrc ->
-      assert_sink_buffer(pipeline, :rtcp_sink, %Membrane.Buffer{
-        payload: <<_::8, @rtcp_packet_type_receiver::8, _::16, ^ssrc::32, _::binary>>
-      })
-    end)
+    assert_pipeline_notified(pipeline, :rtcp_packet_inspector, :all_rr_received, 10000)
+    assert_pipeline_notified(pipeline, :rtcp_packet_inspector, :all_sr_received, 10000)
 
     Testing.Pipeline.message_child(pipeline, :pauser, :continue)
 
