@@ -31,7 +31,7 @@ defmodule Membrane.RTP.Session.ReceiveBinTest do
   }
 
   @fmt_mapping %{96 => {:H264, 90_000}, 127 => {:MPA, 90_000}}
-  defmodule RTCPUniqueFilter do
+  defmodule RTCPPacketInspector do
     use Membrane.Filter
 
     @moduledoc """
@@ -43,12 +43,12 @@ defmodule Membrane.RTP.Session.ReceiveBinTest do
     def_output_pad :output, caps: :any
 
     def_options expected_sr: [
-                  spec: [list(integer)],
+                  spec: [list(%{})],
                   default: [],
                   description: "List of SSRCs of expected sender reports"
                 ],
                 expected_rr: [
-                  spec: [list(integer)],
+                  spec: [list(%{})],
                   defualt: [],
                   description: "List of SSRCs of expected receiver reports"
                 ]
@@ -71,14 +71,19 @@ defmodule Membrane.RTP.Session.ReceiveBinTest do
       body_size = len - 4
       <<body::binary-size(body_size), rest::binary>> = body_and_rest
       {:ok, body} = Packet.parse_body(body, header)
+      IO.inspect(body)
 
       state =
         case header.packet_type do
           201 ->
-            %{state | expected_rr: List.delete(state.expected_rr, body.ssrc)}
+            %{
+              state
+              | expected_rr: Enum.filter(state.expected_rr, &(not match?(&1, body)))
+            }
 
           200 ->
-            %{state | expected_sr: List.delete(state.expected_sr, body.ssrc)}
+            %{state
+            | expected_sr: Enum.filter(state.expected_sr, &(not match?(&1, body)))}
 
           _ ->
             state
@@ -173,7 +178,7 @@ defmodule Membrane.RTP.Session.ReceiveBinTest do
           rtp_sink: Testing.Sink,
           rtcp_source: %Testing.Source{output: options.rtcp_input},
           rtcp_sink: Testing.Sink,
-          rtcp_packet_inspector: %RTCPUniqueFilter{
+          rtcp_packet_inspector: %RTCPPacketInspector{
             expected_rr: options.expected_rr,
             expected_sr: options.expected_sr
           }
@@ -239,8 +244,8 @@ defmodule Membrane.RTP.Session.ReceiveBinTest do
       @rtp_input,
       @rtp_output,
       sender_report,
-      [@rtp_input.audio.ssrc, @rtp_input.video.ssrc],
-      [@rtp_output.video.ssrc]
+      [%{:ssrc => @rtp_input.audio.ssrc}, %{:ssrc => @rtp_input.video.ssrc}],
+      [%{:ssrc => @rtp_output.video.ssrc, :sender_packet_count => 300}]
     )
   end
 
@@ -254,8 +259,8 @@ defmodule Membrane.RTP.Session.ReceiveBinTest do
       @srtp_input,
       @rtp_output,
       encrypted_sender_report,
-      [@srtp_input.audio.ssrc, @srtp_input.video.ssrc],
-      [@rtp_output.video.ssrc]
+      [%{:ssrc => @srtp_input.audio.ssrc}, %{:ssrc => @srtp_input.video.ssrc}],
+      [%{:ssrc => @rtp_output.video.ssrc, :sender_packet_count => 300}]
     )
   end
 
