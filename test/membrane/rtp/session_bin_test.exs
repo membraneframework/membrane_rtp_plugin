@@ -71,7 +71,6 @@ defmodule Membrane.RTP.Session.ReceiveBinTest do
       body_size = len - 4
       <<body::binary-size(body_size), rest::binary>> = body_and_rest
       {:ok, body} = Packet.parse_body(body, header)
-      IO.inspect(body)
 
       state =
         case header.packet_type do
