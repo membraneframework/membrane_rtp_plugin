@@ -77,12 +77,16 @@ defmodule Membrane.RTP.Session.ReceiveBinTest do
           201 ->
             %{
               state
-              | expected_rr: Enum.filter(state.expected_rr, &(not match?(&1, body)))
+              | expected_rr:
+                  Enum.filter(state.expected_rr, &(not compare_on_common_fields(&1, body)))
             }
 
           200 ->
-            %{state
-            | expected_sr: Enum.filter(state.expected_sr, &(not match?(&1, body)))}
+            %{
+              state
+              | expected_sr:
+                  Enum.filter(state.expected_sr, &(not compare_on_common_fields(&1, body)))
+            }
 
           _ ->
             state
@@ -109,6 +113,36 @@ defmodule Membrane.RTP.Session.ReceiveBinTest do
         end
 
       {{:ok, actions}, state}
+    end
+
+    defp compare_on_common_fields(left, right) when is_struct(left) when is_struct(right) do
+      right =
+        case is_struct(right) do
+          true -> Map.from_struct(right)
+          _ -> right
+        end
+
+      left =
+        case is_struct(left) do
+          true -> Map.from_struct(left)
+          _ -> left
+        end
+
+      compare_on_common_fields(left, right)
+    end
+
+    defp compare_on_common_fields(left, right) when is_map(left) and is_map(right) do
+      left
+      |> Enum.reduce(true, fn {k, v}, acc ->
+        case Map.has_key?(right, k) do
+          true -> acc and compare_on_common_fields(v, right[k])
+          _ -> acc
+        end
+      end)
+    end
+
+    defp compare_on_common_fields(left, right) do
+      left == right
     end
   end
 
@@ -243,8 +277,8 @@ defmodule Membrane.RTP.Session.ReceiveBinTest do
       @rtp_input,
       @rtp_output,
       sender_report,
-      [%{:ssrc => @rtp_input.audio.ssrc}, %{:ssrc => @rtp_input.video.ssrc}],
-      [%{:ssrc => @rtp_output.video.ssrc, :sender_packet_count => 300}]
+      [%{:ssrc => @rtp_input.video.ssrc}, %{:ssrc => @rtp_input.audio.ssrc}],
+      [%{:ssrc => @rtp_output.video.ssrc, :sender_info => %{:sender_packet_count => 300}}]
     )
   end
 
@@ -259,7 +293,7 @@ defmodule Membrane.RTP.Session.ReceiveBinTest do
       @rtp_output,
       encrypted_sender_report,
       [%{:ssrc => @srtp_input.audio.ssrc}, %{:ssrc => @srtp_input.video.ssrc}],
-      [%{:ssrc => @rtp_output.video.ssrc, :sender_packet_count => 300}]
+      [%{:ssrc => @rtp_output.video.ssrc, :sender_info => %{:sender_packet_count => 300}}]
     )
   end
 
