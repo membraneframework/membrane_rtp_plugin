@@ -293,7 +293,7 @@ defmodule Membrane.RTP.Session.ReceiveBinTest do
       @rtp_output,
       encrypted_sender_report,
       [%{:ssrc => @srtp_input.audio.ssrc}, %{:ssrc => @srtp_input.video.ssrc}],
-      [%{:ssrc => @rtp_output.video.ssrc, :sender_info => %{:sender_packet_count => 300}}]
+      [%{:ssrc => @rtp_output.video.ssrc}]
     )
   end
 
