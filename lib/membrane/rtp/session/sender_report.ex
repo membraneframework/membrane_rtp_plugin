@@ -3,6 +3,8 @@ defmodule Membrane.RTP.Session.SenderReport do
   alias Membrane.{RTP, RTCP, Time}
   require Membrane.Logger
 
+  @max_timestamp 0xFFFFFFFF
+
   defmodule Data do
     @moduledoc false
     @type t :: %__MODULE__{
@@ -86,11 +88,12 @@ defmodule Membrane.RTP.Session.SenderReport do
   end
 
   defp generate_sender_report(sender_ssrc, sender_stats) do
-    timestamp = Time.vm_time()
-
+    timestamp = Time.vm_time();
+    rtp_offset = (timestamp - sender_stats.timestamp) |> Ratio.mult(sender_stats.clock_rate) |> Time.to_seconds()
+    rtp_timestamp = rem(sender_stats.rtp_timestamp + rtp_offset, @max_timestamp + 1)
     sender_info = %{
       wallclock_timestamp: timestamp,
-      rtp_timestamp: timestamp,
+      rtp_timestamp: rtp_timestamp,
       sender_packet_count: sender_stats.sender_packet_count,
       sender_octet_count: sender_stats.sender_octet_count
     }
