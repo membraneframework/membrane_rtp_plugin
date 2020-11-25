@@ -12,10 +12,10 @@ defmodule Membrane.SRTCP.Decryptor do
   def_output_pad :output, caps: :any
 
   def_options policies: [
-                spec: [LibSRTP.Policy.t()],
+                spec: [ExLibSRTP.Policy.t()],
                 description: """
                 List of SRTP policies to use for decrypting packets.
-                See `t:LibSRTP.Policy.t/0` for details.
+                See `t:ExLibSRTP.Policy.t/0` for details.
                 """
               ]
 
@@ -26,11 +26,11 @@ defmodule Membrane.SRTCP.Decryptor do
 
   @impl true
   def handle_stopped_to_prepared(_ctx, state) do
-    srtp = LibSRTP.new()
+    srtp = ExLibSRTP.new()
 
     state.policies
     |> Bunch.listify()
-    |> Enum.each(&LibSRTP.add_stream(srtp, &1))
+    |> Enum.each(&ExLibSRTP.add_stream(srtp, &1))
 
     {:ok, %{state | srtp: srtp}}
   end
@@ -47,7 +47,7 @@ defmodule Membrane.SRTCP.Decryptor do
 
   @impl true
   def handle_process(:input, buffer, _ctx, state) do
-    {:ok, payload} = LibSRTP.unprotect_rtcp(state.srtp, buffer.payload)
+    {:ok, payload} = ExLibSRTP.unprotect_rtcp(state.srtp, buffer.payload)
     {{:ok, buffer: {:output, %Buffer{buffer | payload: payload}}}, state}
   end
 end

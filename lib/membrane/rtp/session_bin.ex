@@ -79,21 +79,21 @@ defmodule Membrane.RTP.SessionBin do
                 """
               ],
               srtp_policies: [
-                spec: [LibSRTP.Policy.t()],
+                spec: [ExLibSRTP.Policy.t()],
                 default: [],
                 description: """
                 List of SRTP policies to use for decrypting packets. Used only when `secure?` is set to `true`.
-                See `t:LibSRTP.Policy.t/0` for details.
+                See `t:ExLibSRTP.Policy.t/0` for details.
                 """
               ],
               receiver_srtp_policies: [
-                spec: [LibSRTP.Policy.t()] | nil,
+                spec: [ExLibSRTP.Policy.t()] | nil,
                 default: nil,
                 description: """
                 List of SRTP policies to use for encrypting receiver reports and other receiver RTCP packets.
                 Used only when `secure?` is set to `true`.
                 Defaults to the value of `srtp_policies`.
-                See `t:LibSRTP.Policy.t/0` for details.
+                See `t:ExLibSRTP.Policy.t/0` for details.
                 """
               ]
 
