@@ -4,7 +4,13 @@ defmodule Membrane.RTP.Serializer.Stats do
   """
   use Bunch.Access
 
-  @enforce_keys [:clock_rate, :timestamp, :rtp_timestamp, :sender_packet_count, :sender_octet_count]
+  @enforce_keys [
+    :clock_rate,
+    :timestamp,
+    :rtp_timestamp,
+    :sender_packet_count,
+    :sender_octet_count
+  ]
 
   defstruct @enforce_keys
 

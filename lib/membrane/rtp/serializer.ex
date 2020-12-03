@@ -54,6 +54,7 @@ defmodule Membrane.RTP.Serializer do
       sequence_number: Enum.random(0..@max_seq_num),
       init_timestamp: Enum.random(0..@max_timestamp)
     }
+
     state = state |> put_in([:stats_acc, :clock_rate], options.clock_rate)
     {:ok, Map.merge(Map.from_struct(options), state)}
   end
@@ -91,7 +92,12 @@ defmodule Membrane.RTP.Serializer do
     payload = RTP.Packet.serialize(packet, align_to: state.alignment)
     buffer = %Buffer{payload: payload, metadata: metadata}
     state = Map.update!(state, :sequence_number, &rem(&1 + 1, @max_seq_num + 1))
-    state = %{state | any_buffer_sent?: true, stats_acc: %{state.stats_acc | timestamp: Time.vm_time(), rtp_timestamp: rtp_timestamp}}
+
+    state = %{
+      state
+      | any_buffer_sent?: true,
+        stats_acc: %{state.stats_acc | timestamp: Time.vm_time(), rtp_timestamp: rtp_timestamp}
+    }
 
     {{:ok, buffer: {:output, buffer}}, state}
   end

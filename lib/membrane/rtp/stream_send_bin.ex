@@ -39,5 +39,4 @@ defmodule Membrane.RTP.StreamSendBin do
   def handle_notification({:serializer_stats, stats}, :serializer, _ctx, state) do
     {{:ok, notify: {:serializer_stats, stats}}, state}
   end
-
 end
