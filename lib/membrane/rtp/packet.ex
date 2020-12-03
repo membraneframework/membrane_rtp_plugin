@@ -43,7 +43,13 @@ defmodule Membrane.RTP.Packet do
   end
 
   defp serialize_header_extension(%Header.Extension{} = extension) do
-    <<extension.profile_specific::16, byte_size(extension.data)::16, extension.data::binary>>
+    data_size = byte_size(extension.data)
+    padded_data_size = Bunch.Math.min_multiple_gte(4, data_size)
+    padding = padded_data_size - data_size
+    length = div(padded_data_size, 4)
+
+    <<extension.profile_specific::16, length::16, extension.data::binary,
+      0::size(padding)-unit(8)>>
   end
 
   @spec parse(binary()) :: {:ok, t()} | {:error, :wrong_version | :malformed_packet}
@@ -80,7 +86,8 @@ defmodule Membrane.RTP.Packet do
   defp parse_header_extension(binary, false), do: {:ok, {nil, binary}}
 
   defp parse_header_extension(
-         <<profile_specific::16, data_len::16, data::binary-size(data_len), rest::binary>>,
+         <<profile_specific::16, data_len::16, data::binary-size(data_len)-unit(32),
+           rest::binary>>,
          true
        ) do
     extension = %Header.Extension{profile_specific: profile_specific, data: data}
