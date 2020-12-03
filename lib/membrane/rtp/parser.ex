@@ -6,13 +6,13 @@ defmodule Membrane.RTP.Parser do
   use Membrane.Filter
 
   alias Membrane.Buffer
-  alias Membrane.{RTP, Stream}
+  alias Membrane.{RTP, RemoteStream}
   alias Membrane.RTP.{Header, Packet}
 
   @metadata_fields [:timestamp, :sequence_number, :ssrc, :payload_type]
 
   def_input_pad :input,
-    caps: {Stream, type: :packet_stream, content: one_of([nil, RTP])},
+    caps: {RemoteStream, type: :packetized, content_format: one_of([nil, RTP])},
     demand_unit: :buffers
 
   def_output_pad :output, caps: RTP

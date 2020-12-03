@@ -4,14 +4,14 @@ defmodule Membrane.RTP.Serializer do
   """
   use Membrane.Filter
 
-  alias Membrane.{Buffer, RTP, Stream, Payload, Time}
+  alias Membrane.{Buffer, RTP, RemoteStream, Payload, Time}
   alias __MODULE__.{Stats}
 
   @max_seq_num 65535
   @max_timestamp 0xFFFFFFFF
 
   def_input_pad :input, caps: RTP, demand_unit: :buffers
-  def_output_pad :output, caps: {Stream, type: :packet_stream, content: RTP}
+  def_output_pad :output, caps: {RemoteStream, type: :packetized, content_format: RTP}
 
   def_options ssrc: [spec: RTP.ssrc_t()],
               payload_type: [spec: RTP.payload_type_t()],
@@ -61,7 +61,7 @@ defmodule Membrane.RTP.Serializer do
 
   @impl true
   def handle_caps(:input, _caps, _ctx, state) do
-    caps = %Stream{type: :packet_stream, content: RTP}
+    caps = %RemoteStream{type: :packetized, content_format: RTP}
     {{:ok, caps: {:output, caps}}, state}
   end
 
