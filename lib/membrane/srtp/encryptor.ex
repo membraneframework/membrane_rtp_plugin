@@ -13,6 +13,7 @@ defmodule Membrane.SRTP.Encryptor do
 
   def_options policies: [
                 spec: [ExLibSRTP.Policy.t()],
+                default: [],
                 description: """
                 List of SRTP policies to use for encrypting packets.
                 See `t:ExLibSRTP.Policy.t/0` for details.
@@ -20,9 +21,19 @@ defmodule Membrane.SRTP.Encryptor do
               ]
 
   @impl true
-  def handle_init(options) do
-    {:ok, Map.from_struct(options) |> Map.merge(%{srtp: nil})}
+  def handle_init(%__MODULE__{policies: policies}) do
+    state = %{
+      policies: policies,
+      srtp: nil,
+      ready: ready?(policies),
+      buffered_demand: []
+    }
+
+    {:ok, state}
   end
+
+  defp ready?([]), do: false
+  defp ready?(_), do: true
 
   @impl true
   def handle_stopped_to_prepared(_ctx, state) do
@@ -41,8 +52,31 @@ defmodule Membrane.SRTP.Encryptor do
   end
 
   @impl true
-  def handle_demand(:output, size, :buffers, _ctx, state) do
+  def handle_event(_pad, %{handshake_data: handshake_data}, _ctx, state) do
+    {client_keying_material, _server_keying_material, protection_profile} = handshake_data
+
+    {:ok, crypto_profile} =
+      ExLibSRTP.Policy.crypto_profile_from_dtls_srtp_protection_profile(protection_profile)
+
+    policy = %ExLibSRTP.Policy{
+      ssrc: :any_outbound,
+      key: client_keying_material,
+      rtp: crypto_profile,
+      rtcp: crypto_profile
+    }
+
+    :ok = ExLibSRTP.update(state.srtp, policy)
+    {{:ok, state.buffered_demand}, Map.put(state, :ready, true)}
+  end
+
+  @impl true
+  def handle_demand(:output, size, :buffers, _ctx, %{ready: true} = state) do
     {{:ok, demand: {:input, size}}, state}
+  end
+
+  @impl true
+  def handle_demand(:output, size, :buffers, _ctx, %{ready: false} = state) do
+    {:ok, Map.put(state, :buffered_demand, demand: {:input, size})}
   end
 
   @impl true

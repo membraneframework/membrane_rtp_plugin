@@ -6,6 +6,8 @@ defmodule Membrane.SRTP.Decryptor do
   """
   use Membrane.Filter
 
+  require Membrane.Logger
+
   alias Membrane.Buffer
 
   def_input_pad :input, caps: :any, demand_unit: :buffers
@@ -41,13 +43,37 @@ defmodule Membrane.SRTP.Decryptor do
   end
 
   @impl true
+  def handle_event(_pad, %{handshake_data: handshake_data}, _ctx, state) do
+    {_client_keying_material, server_keying_material, protection_profile} = handshake_data
+
+    {:ok, crypto_profile} =
+      ExLibSRTP.Policy.crypto_profile_from_dtls_srtp_protection_profile(protection_profile)
+
+    policy = %ExLibSRTP.Policy{
+      ssrc: :any_inbound,
+      key: server_keying_material,
+      rtp: crypto_profile,
+      rtcp: crypto_profile
+    }
+
+    :ok = ExLibSRTP.update(state.srtp, policy)
+    {:ok, state}
+  end
+
+  @impl true
   def handle_demand(:output, size, :buffers, _ctx, state) do
     {{:ok, demand: {:input, size}}, state}
   end
 
   @impl true
   def handle_process(:input, buffer, _ctx, state) do
-    {:ok, payload} = ExLibSRTP.unprotect(state.srtp, buffer.payload)
-    {{:ok, buffer: {:output, %Buffer{buffer | payload: payload}}}, state}
+    case ExLibSRTP.unprotect(state.srtp, buffer.payload) do
+      {:ok, payload} ->
+        {{:ok, buffer: {:output, %Buffer{buffer | payload: payload}}}, state}
+
+      _ ->
+        Membrane.Logger.warn("Couldn't unprotect payload. Ignoring packet.")
+        {:ok, state}
+    end
   end
 end

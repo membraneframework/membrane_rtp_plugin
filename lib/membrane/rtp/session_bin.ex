@@ -4,9 +4,9 @@ defmodule Membrane.RTP.SessionBin do
 
   ## Incoming streams
   Incoming RTP streams can be connected via `:rtp_input` pads. As each pad can provide multiple RTP streams,
-  they are distinguished basing on SSRC. Once a new stream is received, bin sends `t:new_stream_notification_t/0`
-  notification, meaning the parent should link `Pad.ref(:output, ssrc)` pad to consuming components. The stream is
-  then depayloaded and forwarded via said pad.
+  they are distinguished basing on SSRC. Once a new stream is received, bin sends
+  `t:Membrane.RTP.SSRCRouter.new_stream_notification_t/0` notification, meaning the parent should link
+  `Pad.ref(:output, ssrc)` pad to consuming components. The stream is then depayloaded and forwarded via said pad.
 
   ## Outgoing streams
   To create an RTP stream, the source stream needs to be connected via `Pad.ref(:input, ssrc)` pad and the sink -
@@ -32,8 +32,6 @@ defmodule Membrane.RTP.SessionBin do
   alias Membrane.ParentSpec
   alias Membrane.{RTCP, RTP, SRTCP, SRTP}
   alias Membrane.RTP.{PayloadFormat, Session}
-
-  @type new_stream_notification_t :: {:new_rtp_stream, RTP.ssrc_t(), RTP.encoding_name_t()}
 
   @ssrc_boundaries 2..(Bitwise.bsl(1, 32) - 1)
 
@@ -108,7 +106,26 @@ defmodule Membrane.RTP.SessionBin do
   def_input_pad :rtp_input, demand_unit: :buffers, caps: :any, availability: :on_request
   def_input_pad :rtcp_input, demand_unit: :buffers, caps: :any, availability: :on_request
 
-  def_output_pad :output, demand_unit: :buffers, caps: :any, availability: :on_request
+  def_output_pad :output,
+    demand_unit: :buffers,
+    caps: :any,
+    availability: :on_request,
+    options: [
+      encoding: [
+        spec: RTP.encoding_name_t() | nil,
+        default: nil,
+        description: """
+        Encoding name determining depayloader which will be used to produce output stream from RTP stream.
+        """
+      ],
+      clock_rate: [
+        spec: integer(),
+        default: nil,
+        description: """
+        Clock rate to use.
+        """
+      ]
+    ]
 
   def_output_pad :rtp_output,
     demand_unit: :buffers,
@@ -127,6 +144,13 @@ defmodule Membrane.RTP.SessionBin do
         default: nil,
         description: """
         Encoding name of output stream. If not provided, determined from `:payload_type`.
+        """
+      ],
+      clock_rate: [
+        spec: integer(),
+        default: nil,
+        description: """
+        Clock rate to use.
         """
       ]
     ]
@@ -239,16 +263,21 @@ defmodule Membrane.RTP.SessionBin do
   end
 
   @impl true
-  def handle_pad_added(Pad.ref(:output, ssrc) = pad, _ctx, state) do
-    pt_mapping = Map.fetch!(state.ssrc_pt_mapping, ssrc) |> get_payload_type_mapping!(state)
-    depayloader = get_depayloader!(pt_mapping.encoding_name, state)
+  def handle_pad_added(Pad.ref(:output, ssrc) = pad, ctx, state) do
+    %{encoding: encoding_name, clock_rate: clock_rate} = ctx.pads[pad].options
+    payload_type = Map.fetch!(state.ssrc_pt_mapping, ssrc)
+
+    encoding_name = encoding_name || get_from_register!(:encoding_name, payload_type, state)
+    clock_rate = clock_rate || get_from_register!(:clock_rate, payload_type, state)
+    depayloader = get_depayloader!(encoding_name, state)
+
     rtp_stream_name = {:stream_receive_bin, ssrc}
 
     new_children = %{
       rtp_stream_name => %RTP.StreamReceiveBin{
         depayloader: depayloader,
         ssrc: ssrc,
-        clock_rate: pt_mapping.clock_rate
+        clock_rate: clock_rate
       }
     }
 
@@ -294,10 +323,13 @@ defmodule Membrane.RTP.SessionBin do
     if not pads_present? or Map.has_key?(ctx.children, {:stream_send_bin, ssrc}) do
       {:ok, state}
     else
-      payload_type = get_output_payload_type(ctx, ssrc)
-      pt_mapping = get_payload_type_mapping!(payload_type, state)
-      payloader = get_payloader!(pt_mapping.encoding_name, state)
-      spec = send_stream_spec(ssrc, payload_type, payloader, pt_mapping.clock_rate, state)
+      pad = Pad.ref(:rtp_output, ssrc)
+      %{encoding: encoding_name, clock_rate: clock_rate} = ctx.pads[pad].options
+      payload_type = get_output_payload_type!(ctx, ssrc)
+      encoding_name = encoding_name || get_from_register!(:encoding_name, payload_type, state)
+      clock_rate = clock_rate || get_from_register!(:clock_rate, ssrc, state)
+      payloader = get_payloader!(encoding_name, state)
+      spec = send_stream_spec(ssrc, payload_type, payloader, clock_rate, state)
       {{:ok, spec: spec}, state}
     end
   end
@@ -400,8 +432,7 @@ defmodule Membrane.RTP.SessionBin do
   @impl true
   def handle_notification({:new_rtp_stream, ssrc, payload_type}, :ssrc_router, _ctx, state) do
     state = put_in(state.ssrc_pt_mapping[ssrc], payload_type)
-    %{encoding_name: encoding_name} = get_payload_type_mapping!(payload_type, state)
-    {{:ok, notify: {:new_rtp_stream, ssrc, encoding_name}}, state}
+    {{:ok, notify: {:new_rtp_stream, ssrc, payload_type}}, state}
   end
 
   @impl true
@@ -435,6 +466,11 @@ defmodule Membrane.RTP.SessionBin do
     Map.put(ssrcs, remote_ssrc, local_ssrc)
   end
 
+  defp get_from_register!(field, pt, state) do
+    pt_mapping = get_payload_type_mapping!(pt, state)
+    pt_mapping[field]
+  end
+
   defp get_payload_type_mapping!(payload_type, state) do
     pt_mapping =
       PayloadFormat.get_payload_type_mapping(payload_type)
@@ -461,7 +497,7 @@ defmodule Membrane.RTP.SessionBin do
     end
   end
 
-  defp get_output_payload_type(ctx, ssrc) do
+  defp get_output_payload_type!(ctx, ssrc) do
     pad = Pad.ref(:rtp_output, ssrc)
     %{payload_type: pt, encoding: encoding} = ctx.pads[pad].options
 
