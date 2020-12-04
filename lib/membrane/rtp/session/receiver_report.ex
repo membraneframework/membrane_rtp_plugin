@@ -1,4 +1,4 @@
-defmodule Membrane.RTP.Session.Report do
+defmodule Membrane.RTP.Session.ReceiverReport do
   @moduledoc false
   alias Membrane.{RTCP, RTP, Time}
   require Membrane.Logger

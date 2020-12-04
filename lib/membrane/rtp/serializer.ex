@@ -4,8 +4,8 @@ defmodule Membrane.RTP.Serializer do
   """
   use Membrane.Filter
 
+  alias __MODULE__.Stats
   alias Membrane.{Buffer, RTP, RemoteStream, Payload, Time}
-  alias __MODULE__.{Stats}
 
   @max_seq_num 65535
   @max_timestamp 0xFFFFFFFF

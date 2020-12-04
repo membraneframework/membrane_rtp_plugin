@@ -43,12 +43,12 @@ defmodule Membrane.RTP.Session.ReceiveBinTest do
     def_output_pad :output, caps: :any
 
     def_options expected_sr: [
-                  spec: [list(%{})],
+                  spec: [%{}],
                   default: [],
                   description: "List of SSRCs of expected sender reports"
                 ],
                 expected_rr: [
-                  spec: [list(%{})],
+                  spec: [%{}],
                   defualt: [],
                   description: "List of SSRCs of expected receiver reports"
                 ]
