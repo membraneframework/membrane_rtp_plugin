@@ -31,134 +31,20 @@ defmodule Membrane.RTP.Session.ReceiveBinTest do
   }
 
   @fmt_mapping %{96 => {:H264, 90_000}, 127 => {:MPA, 90_000}}
-  defmodule RTCPPacketInspector do
-    use Membrane.Filter
-
-    @moduledoc """
-    Inspects received RTCP buffers and send notification when all specified RTCP packets were
-    seen at least once.
-    """
-
-    def_input_pad :input, demand_unit: :buffers, caps: :any
-    def_output_pad :output, caps: :any
-
-    def_options expected_sr: [
-                  spec: [%{}],
-                  default: [],
-                  description: "List of SSRCs of expected sender reports"
-                ],
-                expected_rr: [
-                  spec: [%{}],
-                  defualt: [],
-                  description: "List of SSRCs of expected receiver reports"
-                ]
-
-    @impl true
-    def handle_init(opts) do
-      {:ok, Map.from_struct(opts)}
-    end
-
-    @impl true
-    def handle_demand(:output, size, :buffers, _ctx, state) do
-      {{:ok, demand: {:input, size}}, state}
-    end
-
-    @impl true
-    def handle_process(:input, buffer, _ctx, state) do
-      %Membrane.Buffer{payload: <<head::binary-size(4), body_and_rest::binary>>} = buffer
-      {:ok, %{header: header, length: len}} = Header.parse(head)
-
-      body_size = len - 4
-      <<body::binary-size(body_size), rest::binary>> = body_and_rest
-      {:ok, body} = Packet.parse_body(body, header)
-
-      state =
-        case header.packet_type do
-          201 ->
-            %{
-              state
-              | expected_rr:
-                  Enum.filter(state.expected_rr, &(not compare_on_common_fields(&1, body)))
-            }
-
-          200 ->
-            %{
-              state
-              | expected_sr:
-                  Enum.filter(state.expected_sr, &(not compare_on_common_fields(&1, body)))
-            }
-
-          _ ->
-            state
-        end
-
-      actions = [buffer: {:output, buffer}]
-
-      actions =
-        case Enum.empty?(state.expected_rr) do
-          true ->
-            actions ++ [{:notify, :all_rr_received}]
-
-          _ ->
-            actions
-        end
-
-      actions =
-        case Enum.empty?(state.expected_sr) do
-          true ->
-            actions ++ [{:notify, :all_sr_received}]
-
-          _ ->
-            actions
-        end
-
-      {{:ok, actions}, state}
-    end
-
-    defp compare_on_common_fields(left, right) when is_struct(left) when is_struct(right) do
-      right =
-        case is_struct(right) do
-          true -> Map.from_struct(right)
-          _ -> right
-        end
-
-      left =
-        case is_struct(left) do
-          true -> Map.from_struct(left)
-          _ -> left
-        end
-
-      compare_on_common_fields(left, right)
-    end
-
-    defp compare_on_common_fields(left, right) when is_map(left) and is_map(right) do
-      left
-      |> Enum.reduce(true, fn {k, v}, acc ->
-        case Map.has_key?(right, k) do
-          true -> acc and compare_on_common_fields(v, right[k])
-          _ -> acc
-        end
-      end)
-    end
-
-    defp compare_on_common_fields(left, right) do
-      left == right
-    end
-  end
 
   @spec inspect_packet_fields(Packet.t(), %{}) :: boolean()
-  defp inspect_packet_fields(packet, fields_values) do
-    compare(packet, fields_values)
-  end
+  defp inspect_packet_fields(packet, fields_values), do: compare(packet, fields_values)
 
   @spec compare(any(), any()) :: boolean()
-  defp compare(left, right) when is_struct(left) or is_map(left) do
+  defp compare(left, right) when is_struct(left), do: compare(Map.from_struct(left), right)
+
+  defp compare(left, right) when is_map(left) do
     if is_map(right) do
       right
       |> Enum.all?(fn {k, v} ->
         case Map.has_key?(left, k) do
           true ->
-            compare(left[k], right)
+            compare(left[k], v)
 
           _ ->
             false
@@ -172,14 +58,9 @@ defmodule Membrane.RTP.Session.ReceiveBinTest do
   defp compare(left, right), do: left == right
 
   # asserts all specified buffers were received by the sink
-  defp assert_specified_buffers(field_specyfications, _pipeline, _sink)
-       when field_specyfications == []
-       do
-        :ok
-       end
+  defp assert_specified_buffers(_pipeline, _sink, []), do: :ok
 
-  defp assert_specified_buffers(field_specyfications, pipeline, sink) do
-    IO.inspect(sink)
+  defp assert_specified_buffers(pipeline, sink, field_specyfications) do
     assert_sink_buffer(pipeline, sink, buffer, 10000)
     %Membrane.Buffer{payload: <<head::binary-size(4), body_and_rest::binary>>} = buffer
     {:ok, %{header: header, length: len}} = Header.parse(head)
@@ -187,9 +68,10 @@ defmodule Membrane.RTP.Session.ReceiveBinTest do
     <<body::binary-size(body_size), rest::binary>> = body_and_rest
     {:ok, packet} = Packet.parse_body(body, header)
 
-    field_specyfications = field_specyfications |> Enum.filter(&inspect_packet_fields(packet, &1))
+    field_specyfications =
+      field_specyfications |> Enum.filter(&(not inspect_packet_fields(packet, &1)))
 
-    assert_specified_buffers(field_specyfications, pipeline, sink)
+    assert_specified_buffers(pipeline, sink, field_specyfications)
   end
 
   defmodule Pauser do
@@ -355,18 +237,14 @@ defmodule Membrane.RTP.Session.ReceiveBinTest do
     Testing.Pipeline.play(pipeline)
     assert_pipeline_playback_changed(pipeline, _, :playing)
 
-
     %{audio: %{ssrc: audio_ssrc}, video: %{ssrc: video_ssrc}} = input
 
     assert_start_of_stream(pipeline, {:sink, ^video_ssrc})
     assert_start_of_stream(pipeline, {:sink, ^audio_ssrc})
     assert_start_of_stream(pipeline, :rtp_sink)
-    assert_start_of_stream(pipeline, :rtcp_sink, 10000)
+    assert_start_of_stream(pipeline, :rtcp_sink)
 
-    IO.inspect("I'm here")
-
-    # assert_pipeline_notified(pipeline, :rtcp_packet_inspector, :all_rr_received, 10000)
-    # assert_pipeline_notified(pipeline, :rtcp_packet_inspector, :all_sr_received, 10000)
+    assert_specified_buffers(pipeline, :rtcp_sink, sr_senders_ssrcs ++ rr_senders_ssrcs)
 
     Testing.Pipeline.message_child(pipeline, :pauser, :continue)
 
