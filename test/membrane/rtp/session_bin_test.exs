@@ -146,6 +146,52 @@ defmodule Membrane.RTP.Session.ReceiveBinTest do
     end
   end
 
+  @spec inspect_packet_fields(Packet.t(), %{}) :: boolean()
+  defp inspect_packet_fields(packet, fields_values) do
+    compare(packet, fields_values)
+  end
+
+  @spec compare(any(), any()) :: boolean()
+  defp compare(left, right) when is_struct(left) or is_map(left) do
+    if is_map(right) do
+      right
+      |> Enum.all?(fn {k, v} ->
+        case Map.has_key?(left, k) do
+          true ->
+            compare(left[k], right)
+
+          _ ->
+            false
+        end
+      end)
+    else
+      false
+    end
+  end
+
+  defp compare(left, right), do: left == right
+
+  # asserts all specified buffers were received by the sink
+  defp assert_specified_buffers(field_specyfications, _pipeline, _sink)
+       when field_specyfications == []
+       do
+        :ok
+       end
+
+  defp assert_specified_buffers(field_specyfications, pipeline, sink) do
+    IO.inspect(sink)
+    assert_sink_buffer(pipeline, sink, buffer, 10000)
+    %Membrane.Buffer{payload: <<head::binary-size(4), body_and_rest::binary>>} = buffer
+    {:ok, %{header: header, length: len}} = Header.parse(head)
+    body_size = len - 4
+    <<body::binary-size(body_size), rest::binary>> = body_and_rest
+    {:ok, packet} = Packet.parse_body(body, header)
+
+    field_specyfications = field_specyfications |> Enum.filter(&inspect_packet_fields(packet, &1))
+
+    assert_specified_buffers(field_specyfications, pipeline, sink)
+  end
+
   defmodule Pauser do
     # move to Core.Testing?
     @moduledoc """
@@ -210,11 +256,7 @@ defmodule Membrane.RTP.Session.ReceiveBinTest do
           parser: %Membrane.H264.FFmpeg.Parser{framerate: {30, 1}},
           rtp_sink: Testing.Sink,
           rtcp_source: %Testing.Source{output: options.rtcp_input},
-          rtcp_sink: Testing.Sink,
-          rtcp_packet_inspector: %RTCPPacketInspector{
-            expected_rr: options.expected_rr,
-            expected_sr: options.expected_sr
-          }
+          rtcp_sink: Testing.Sink
         ],
         links: [
           link(:pcap)
@@ -231,7 +273,6 @@ defmodule Membrane.RTP.Session.ReceiveBinTest do
           |> via_in(:rtcp_input)
           |> to(:rtp)
           |> via_out(:rtcp_output)
-          |> to(:rtcp_packet_inspector)
           |> to(:rtcp_sink)
         ]
       }
@@ -306,9 +347,7 @@ defmodule Membrane.RTP.Session.ReceiveBinTest do
           output: output,
           fmt_mapping: @fmt_mapping,
           rtcp_input: [sender_report],
-          rtcp_interval: Membrane.Time.second(),
-          expected_rr: rr_senders_ssrcs,
-          expected_sr: sr_senders_ssrcs
+          rtcp_interval: Membrane.Time.second()
         }
       }
       |> Testing.Pipeline.start_link()
@@ -316,14 +355,18 @@ defmodule Membrane.RTP.Session.ReceiveBinTest do
     Testing.Pipeline.play(pipeline)
     assert_pipeline_playback_changed(pipeline, _, :playing)
 
+
     %{audio: %{ssrc: audio_ssrc}, video: %{ssrc: video_ssrc}} = input
+
     assert_start_of_stream(pipeline, {:sink, ^video_ssrc})
     assert_start_of_stream(pipeline, {:sink, ^audio_ssrc})
     assert_start_of_stream(pipeline, :rtp_sink)
-    assert_start_of_stream(pipeline, :rtcp_sink)
+    assert_start_of_stream(pipeline, :rtcp_sink, 10000)
 
-    assert_pipeline_notified(pipeline, :rtcp_packet_inspector, :all_rr_received, 10000)
-    assert_pipeline_notified(pipeline, :rtcp_packet_inspector, :all_sr_received, 10000)
+    IO.inspect("I'm here")
+
+    # assert_pipeline_notified(pipeline, :rtcp_packet_inspector, :all_rr_received, 10000)
+    # assert_pipeline_notified(pipeline, :rtcp_packet_inspector, :all_sr_received, 10000)
 
     Testing.Pipeline.message_child(pipeline, :pauser, :continue)
 
