@@ -36,15 +36,13 @@ defmodule Membrane.RTP.Session.ReceiveBinTest do
   defp inspect_packet_fields(packet, fields_values), do: compare(packet, fields_values)
 
   @spec compare(any(), any()) :: boolean()
-  defp compare(left, right) when is_struct(left), do: compare(Map.from_struct(left), right)
-
-  defp compare(left, right) when is_map(left) do
+  defp compare(left, right) when is_map(left) or is_struct(left) do
     if is_map(right) do
       right
       |> Enum.all?(fn {k, v} ->
         case Map.has_key?(left, k) do
           true ->
-            compare(left[k], v)
+            compare(Map.get(left, k), v)
 
           _ ->
             false
