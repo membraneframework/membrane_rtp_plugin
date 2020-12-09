@@ -25,15 +25,11 @@ defmodule Membrane.SRTP.Encryptor do
     state = %{
       policies: policies,
       srtp: nil,
-      ready: ready?(policies),
-      buffered_demand: []
+      ready: not Enum.empty?(policies)
     }
 
     {:ok, state}
   end
-
-  defp ready?([]), do: false
-  defp ready?(_), do: true
 
   @impl true
   def handle_stopped_to_prepared(_ctx, state) do
@@ -52,7 +48,7 @@ defmodule Membrane.SRTP.Encryptor do
   end
 
   @impl true
-  def handle_event(_pad, %{handshake_data: handshake_data}, _ctx, state) do
+  def handle_event(_pad, %{handshake_data: handshake_data}, _ctx, %{ready: false} = state) do
     {client_keying_material, _server_keying_material, protection_profile} = handshake_data
 
     {:ok, crypto_profile} =
@@ -66,7 +62,7 @@ defmodule Membrane.SRTP.Encryptor do
     }
 
     :ok = ExLibSRTP.update(state.srtp, policy)
-    {{:ok, state.buffered_demand}, Map.put(state, :ready, true)}
+    {{:ok, redemand: :output}, Map.put(state, :ready, true)}
   end
 
   @impl true

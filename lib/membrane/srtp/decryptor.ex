@@ -71,9 +71,12 @@ defmodule Membrane.SRTP.Decryptor do
       {:ok, payload} ->
         {{:ok, buffer: {:output, %Buffer{buffer | payload: payload}}}, state}
 
-      _ ->
-        Membrane.Logger.warn("Couldn't unprotect payload. Ignoring packet.")
-        {:ok, state}
+      {:error, reason} ->
+        Membrane.Logger.warn("""
+        Couldn't unprotect payload:
+        #{inspect(buffer.payload, limit: :infinity)}
+        Reason: #{inspect(reason)}. Ignoring packet.
+        """)
     end
   end
 end
