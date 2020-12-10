@@ -71,8 +71,8 @@ defmodule Membrane.SRTP.Encryptor do
   end
 
   @impl true
-  def handle_demand(:output, size, :buffers, _ctx, %{ready: false} = state) do
-    {:ok, Map.put(state, :buffered_demand, demand: {:input, size})}
+  def handle_demand(:output, _size, :buffers, _ctx, %{ready: false} = state) do
+    {:ok, state}
   end
 
   @impl true
