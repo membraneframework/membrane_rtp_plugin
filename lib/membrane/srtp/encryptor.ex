@@ -6,6 +6,8 @@ defmodule Membrane.SRTP.Encryptor do
   """
   use Membrane.Filter
 
+  require Membrane.Logger
+
   alias Membrane.Buffer
 
   def_input_pad :input, caps: :any, demand_unit: :buffers
@@ -49,19 +51,19 @@ defmodule Membrane.SRTP.Encryptor do
 
   @impl true
   def handle_event(_pad, %{handshake_data: handshake_data}, _ctx, %{ready: false} = state) do
-    {client_keying_material, _server_keying_material, protection_profile} = handshake_data
+    {local_keying_material, _remote_keying_material, protection_profile} = handshake_data
 
     {:ok, crypto_profile} =
       ExLibSRTP.Policy.crypto_profile_from_dtls_srtp_protection_profile(protection_profile)
 
     policy = %ExLibSRTP.Policy{
       ssrc: :any_outbound,
-      key: client_keying_material,
+      key: local_keying_material,
       rtp: crypto_profile,
       rtcp: crypto_profile
     }
 
-    :ok = ExLibSRTP.update(state.srtp, policy)
+    :ok = ExLibSRTP.add_stream(state.srtp, policy)
     {{:ok, redemand: :output}, Map.put(state, :ready, true)}
   end
 
@@ -77,7 +79,18 @@ defmodule Membrane.SRTP.Encryptor do
 
   @impl true
   def handle_process(:input, buffer, _ctx, state) do
-    {:ok, payload} = ExLibSRTP.protect(state.srtp, buffer.payload)
-    {{:ok, buffer: {:output, %Buffer{buffer | payload: payload}}}, state}
+    case ExLibSRTP.protect(state.srtp, buffer.payload) do
+      {:ok, payload} ->
+        {{:ok, buffer: {:output, %Buffer{buffer | payload: payload}}}, state}
+
+      {:error, reason} ->
+        Membrane.Logger.warn("""
+        Couldn't protect payload:
+        #{inspect(buffer.payload, limit: :infinity)}
+        Reason: #{inspect(reason)}. Ignoring packet.
+        """)
+
+        {:ok, state}
+    end
   end
 end

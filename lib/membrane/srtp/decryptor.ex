@@ -22,8 +22,14 @@ defmodule Membrane.SRTP.Decryptor do
               ]
 
   @impl true
-  def handle_init(options) do
-    {:ok, Map.from_struct(options) |> Map.merge(%{srtp: nil})}
+  def handle_init(%__MODULE__{policies: policies}) do
+    state = %{
+      policies: policies,
+      srtp: nil,
+      ready: not Enum.empty?(policies)
+    }
+
+    {:ok, state}
   end
 
   @impl true
@@ -43,26 +49,31 @@ defmodule Membrane.SRTP.Decryptor do
   end
 
   @impl true
-  def handle_event(_pad, %{handshake_data: handshake_data}, _ctx, state) do
-    {_client_keying_material, server_keying_material, protection_profile} = handshake_data
+  def handle_event(_pad, %{handshake_data: handshake_data}, _ctx, %{ready: false} = state) do
+    {_local_keying_material, remote_keying_material, protection_profile} = handshake_data
 
     {:ok, crypto_profile} =
       ExLibSRTP.Policy.crypto_profile_from_dtls_srtp_protection_profile(protection_profile)
 
     policy = %ExLibSRTP.Policy{
       ssrc: :any_inbound,
-      key: server_keying_material,
+      key: remote_keying_material,
       rtp: crypto_profile,
       rtcp: crypto_profile
     }
 
-    :ok = ExLibSRTP.update(state.srtp, policy)
-    {:ok, state}
+    :ok = ExLibSRTP.add_stream(state.srtp, policy)
+    {{:ok, redemand: :output}, Map.put(state, :ready, true)}
   end
 
   @impl true
-  def handle_demand(:output, size, :buffers, _ctx, state) do
+  def handle_demand(:output, size, :buffers, _ctx, %{ready: true} = state) do
     {{:ok, demand: {:input, size}}, state}
+  end
+
+  @impl true
+  def handle_demand(:output, _size, :buffers, _ctx, %{ready: false} = state) do
+    {:ok, state}
   end
 
   @impl true
@@ -77,6 +88,8 @@ defmodule Membrane.SRTP.Decryptor do
         #{inspect(buffer.payload, limit: :infinity)}
         Reason: #{inspect(reason)}. Ignoring packet.
         """)
+
+        {:ok, state}
     end
   end
 end
