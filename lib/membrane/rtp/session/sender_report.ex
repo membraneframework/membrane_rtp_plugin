@@ -45,13 +45,10 @@ defmodule Membrane.RTP.Session.SenderReport do
         "Not received sender stats from ssrcs: #{Enum.join(report_data.senders_ssrcs, ", ")}"
       )
 
-      sender_reports = generate_report(report_data.stats)
-
-      case sender_reports.packets do
-        [] ->
-          {:no_report, report_data}
-
-        _ ->
+      with %RTCP.CompoundPacket{packets: []} <- generate_report(report_data.stats) do
+        {:no_report, report_data}
+      else
+        sender_reports ->
           {{:report, sender_reports}, %{report_data | senders_ssrcs: MapSet.new(), stats: %{}}}
       end
     end
@@ -65,11 +62,10 @@ defmodule Membrane.RTP.Session.SenderReport do
     data = %{data | stats: Map.put(data.stats, sender_ssrc, stats), senders_ssrcs: senders_ssrcs}
 
     if Enum.empty?(senders_ssrcs) do
-      sender_reports = generate_report(data.stats)
-
-      case sender_reports.packets do
-        [] -> {:no_report, data}
-        _ -> {{:report, sender_reports}, data}
+      with %RTCP.CompoundPacket{packets: []} <- generate_report(data.stats) do
+        {:no_report, data}
+      else
+        sender_reports -> {{:report, sender_reports}, data}
       end
     else
       {:no_report, data}

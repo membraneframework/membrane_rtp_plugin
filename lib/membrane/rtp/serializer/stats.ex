@@ -5,7 +5,6 @@ defmodule Membrane.RTP.Serializer.Stats do
   use Bunch.Access
 
   @enforce_keys [
-    :clock_rate,
     :timestamp,
     :rtp_timestamp,
     :sender_packet_count,
@@ -16,7 +15,6 @@ defmodule Membrane.RTP.Serializer.Stats do
 
   @type t ::
           %__MODULE__{
-            clock_rate: RTP.clock_rate_t(),
             timestamp: non_neg_integer(),
             rtp_timestamp: non_neg_integer(),
             sender_packet_count: non_neg_integer(),

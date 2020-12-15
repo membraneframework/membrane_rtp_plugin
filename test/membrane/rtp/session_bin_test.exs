@@ -3,7 +3,7 @@ defmodule Membrane.RTP.Session.ReceiveBinTest do
 
   import Membrane.Testing.Assertions
 
-  alias Membrane.RTCP.{Header, Packet}
+  alias Membrane.RTCP.{Header, Packet, CompoundPacket}
   alias Membrane.RTP
   alias Membrane.Testing
 
@@ -32,28 +32,18 @@ defmodule Membrane.RTP.Session.ReceiveBinTest do
 
   @fmt_mapping %{96 => {:H264, 90_000}, 127 => {:MPA, 90_000}}
 
-  @spec inspect_packet_fields(Packet.t(), %{}) :: boolean()
-  defp inspect_packet_fields(packet, fields_values), do: compare(packet, fields_values)
+  @spec match_packet(Packet.t(), %{}) :: boolean()
+  defp match_packet(packet, fields_values), do: compare_common_fields(packet, fields_values)
 
-  @spec compare(any(), any()) :: boolean()
-  defp compare(left, right) when is_map(left) or is_struct(left) do
-    if is_map(right) do
-      right
-      |> Enum.all?(fn {k, v} ->
-        case Map.has_key?(left, k) do
-          true ->
-            compare(Map.get(left, k), v)
-
-          _ ->
-            false
-        end
+  @spec compare_common_fields(any(), any()) :: boolean()
+  defp compare_common_fields(left, right) when is_map(left) or is_struct(left) do
+    is_map(right) and
+      Enum.all?(right, fn {k, v} ->
+        Map.has_key?(left, k) and compare_common_fields(Map.get(left, k), v)
       end)
-    else
-      false
-    end
   end
 
-  defp compare(left, right), do: left == right
+  defp compare_common_fields(left, right), do: left == right
 
   # asserts all specified buffers were received by the sink
   defp assert_specified_buffers(_pipeline, _sink, []), do: :ok
@@ -66,8 +56,7 @@ defmodule Membrane.RTP.Session.ReceiveBinTest do
     <<body::binary-size(body_size), rest::binary>> = body_and_rest
     {:ok, packet} = Packet.parse_body(body, header)
 
-    field_specyfications =
-      field_specyfications |> Enum.filter(&(not inspect_packet_fields(packet, &1)))
+    field_specyfications = field_specyfications |> Enum.filter(&(not match_packet(packet, &1)))
 
     assert_specified_buffers(pipeline, sink, field_specyfications)
   end

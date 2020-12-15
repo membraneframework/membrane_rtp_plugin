@@ -387,26 +387,28 @@ defmodule Membrane.RTP.SessionBin do
 
   @impl true
   def handle_tick(:rtcp_report_timer, _ctx, state) do
-    {maybe_report, report_data} = Session.ReceiverReport.flush_report(state.rtcp_report_data)
+    {maybe_receiver_report, report_data} =
+      Session.ReceiverReport.flush_report(state.rtcp_report_data)
+
     {remote_ssrcs, report_data} = Session.ReceiverReport.init_report(state.ssrcs, report_data)
 
-    {maybe_senders_report, senders_report_data} =
+    {maybe_sender_report, sender_report_data} =
       Session.SenderReport.flush_report(state.rtcp_sender_report_data)
 
-    {senders_ssrcs, senders_report_data} =
-      Session.SenderReport.init_report(state.senders_ssrcs, senders_report_data)
+    {senders_ssrcs, sender_report_data} =
+      Session.SenderReport.init_report(state.senders_ssrcs, sender_report_data)
 
     sender_stats_requests = Enum.map(senders_ssrcs, &{{:stream_send_bin, &1}, :send_stats})
     receiver_stats_requests = Enum.map(remote_ssrcs, &{{:stream_receive_bin, &1}, :send_stats})
 
     receiver_report_messages =
-      case maybe_report do
+      case maybe_receiver_report do
         {:report, report} -> [rtcp_forwarder: {:report, report}]
         :no_report -> []
       end
 
     sender_report_messages =
-      case maybe_senders_report do
+      case maybe_sender_report do
         {:report, report} -> [rtcp_forwarder: {:report, report}]
         :no_report -> []
       end
@@ -421,7 +423,7 @@ defmodule Membrane.RTP.SessionBin do
       )
 
     {{:ok, actions},
-     %{state | rtcp_report_data: report_data, rtcp_sender_report_data: senders_report_data}}
+     %{state | rtcp_report_data: report_data, rtcp_sender_report_data: sender_report_data}}
   end
 
   @impl true

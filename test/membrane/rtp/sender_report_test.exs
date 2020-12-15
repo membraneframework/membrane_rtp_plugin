@@ -18,7 +18,7 @@ defmodule Membrane.RTP.SenderReportTest do
 
     test_wallclock_time = Time.vm_time()
 
-    mock_serializer_stats = %Stats{
+    mock_serializer_stats = %{
       clock_rate: @h264_clock_rate,
       sender_octet_count: @octet_count,
       sender_packet_count: @packet_count,

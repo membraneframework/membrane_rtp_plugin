@@ -4,7 +4,6 @@ defmodule Membrane.RTP.Serializer do
   """
   use Membrane.Filter
 
-  alias __MODULE__.Stats
   alias Membrane.{Buffer, RTP, RemoteStream, Payload, Time}
 
   @max_seq_num 65535
@@ -32,7 +31,7 @@ defmodule Membrane.RTP.Serializer do
     defstruct sequence_number: 0,
               init_timestamp: 0,
               any_buffer_sent?: false,
-              stats_acc: %Stats{
+              stats_acc: %{
                 clock_rate: 0,
                 timestamp: 0,
                 rtp_timestamp: 0,
@@ -44,7 +43,7 @@ defmodule Membrane.RTP.Serializer do
             sequence_number: non_neg_integer(),
             init_timestamp: non_neg_integer(),
             any_buffer_sent?: boolean(),
-            stats_acc: Stats.t()
+            stats_acc: %{}
           }
   end
 
@@ -104,26 +103,22 @@ defmodule Membrane.RTP.Serializer do
 
   @impl true
   def handle_other(:send_stats, _ctx, state) do
-    {stats, state} = get_updated_stats(state)
+    stats = get_stats(state)
     state = %{state | any_buffer_sent?: false}
     {{:ok, notify: {:serializer_stats, stats}}, state}
   end
 
-  @spec get_updated_stats(State.t()) :: {Stats.t(), State.t()}
-  defp get_updated_stats(%State{any_buffer_sent?: false} = state) do
-    {:no_stats, state}
-  end
+  @spec get_stats(State.t()) :: %{} | :no_stats
+  defp get_stats(%State{any_buffer_sent?: false}), do: :no_stats
 
-  defp get_updated_stats(%State{stats_acc: stats} = state) do
-    {stats, state}
-  end
+  defp get_stats(%State{stats_acc: stats}), do: stats
 
   defp update_counters(%Buffer{payload: payload}, state) do
     state
-    |> put_in(
+    |> update_in(
       [:stats_acc, :sender_octet_count],
-      state.stats_acc.sender_octet_count + Payload.size(payload)
+      &(&1 + Payload.size(payload))
     )
-    |> put_in([:stats_acc, :sender_packet_count], state.stats_acc.sender_packet_count + 1)
+    |> update_in([:stats_acc, :sender_packet_count], &(&1 + 1))
   end
 end
