@@ -42,14 +42,9 @@ defmodule Membrane.RTP.Packet do
     <<>>
   end
 
-  defp serialize_header_extension(%Header.Extension{} = extension) do
-    data_size = byte_size(extension.data)
-    padded_data_size = Bunch.Math.min_multiple_gte(4, data_size)
-    padding = padded_data_size - data_size
-    length = div(padded_data_size, 4)
-
-    <<extension.profile_specific::16, length::16, extension.data::binary,
-      0::size(padding)-unit(8)>>
+  defp serialize_header_extension(%Header.Extension{data: data} = extension)
+       when byte_size(data) |> rem(4) == 0 do
+    <<extension.profile_specific::16, byte_size(data) |> div(4)::16, data::binary>>
   end
 
   @spec parse(binary()) :: {:ok, t()} | {:error, :wrong_version | :malformed_packet}

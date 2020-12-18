@@ -2,7 +2,7 @@ defmodule Membrane.RTP.Utils do
   @moduledoc false
 
   @spec strip_padding(binary, padding_present? :: boolean) ::
-          {:ok, {binary, padding :: non_neg_integer()}} | :error
+          {:ok, {binary, padding_size :: non_neg_integer()}} | :error
   def strip_padding(binary, padding_present?)
   def strip_padding(binary, false), do: {:ok, {binary, 0}}
 
@@ -18,15 +18,15 @@ defmodule Membrane.RTP.Utils do
   end
 
   @spec align(payload :: binary, align_to :: pos_integer()) ::
-          {binary, padding :: non_neg_integer()}
+          {binary, padding_size :: non_neg_integer()}
   def align(payload, align_to) do
     case rem(byte_size(payload), align_to) do
       0 ->
         {payload, 0}
 
-      padding ->
-        zeros_padding = padding - 1
-        {<<payload::binary, 0::size(zeros_padding)-unit(8), padding>>, padding}
+      padding_size ->
+        zeros_no = padding_size - 1
+        {<<payload::binary, 0::size(zeros_no)-unit(8), padding_size>>, padding_size}
     end
   end
 end

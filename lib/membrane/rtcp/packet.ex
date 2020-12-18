@@ -22,8 +22,8 @@ defmodule Membrane.RTCP.Packet do
   @doc """
   Converts packet structure into binary
   """
-  @spec to_binary(t()) :: binary()
-  def to_binary(%packet_module{} = packet) do
+  @spec serialize(t()) :: binary()
+  def serialize(%packet_module{} = packet) do
     {body, packet_type, packet_specific} = packet_module.encode(packet)
     length = body |> byte_size() |> div(4)
 
@@ -56,7 +56,7 @@ defmodule Membrane.RTCP.Packet do
               {:ok, struct()} | {:error, atom()}
 
   @doc """
-  Encodes packet struct into the tuple used by `to_binary/1`
+  Encodes packet struct into the tuple used by `serialize/1`
   """
   @callback encode(struct()) ::
               {body :: binary(), packet_type :: Header.packet_type_t(),

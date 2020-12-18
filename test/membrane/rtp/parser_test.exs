@@ -19,7 +19,10 @@ defmodule Membrane.RTP.ParserTest do
                           sequence_number: 3983,
                           timestamp: 1_653_702_647,
                           payload_type: 14,
-                          ssrc: 3_919_876_492
+                          ssrc: 3_919_876_492,
+                          csrcs: [],
+                          extension: nil,
+                          marker: false
                         }
                       },
                       payload: Fixtures.sample_packet_payload()

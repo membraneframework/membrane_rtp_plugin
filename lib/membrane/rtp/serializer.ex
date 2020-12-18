@@ -1,6 +1,9 @@
 defmodule Membrane.RTP.Serializer do
   @moduledoc """
-  Serializes RTP payload to RTP packets.
+  Serializes RTP payload to RTP packets by adding the RTP header to each of them.
+
+  Accepts the following metadata under `:rtp` key: `:marker`, `:csrcs`, `:extension`.
+  See `Membrane.RTP.Header` for their meaning and specifications.
   """
   use Membrane.Filter
 
@@ -58,7 +61,8 @@ defmodule Membrane.RTP.Serializer do
       payload_type: state.payload_type,
       timestamp: rtp_timestamp,
       sequence_number: state.sequence_number,
-      csrcs: Map.get(rtp_metadata, :csrcs, [])
+      csrcs: Map.get(rtp_metadata, :csrcs, []),
+      extension: Map.get(rtp_metadata, :extension)
     }
 
     packet = %RTP.Packet{header: header, payload: payload}

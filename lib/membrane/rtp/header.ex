@@ -23,7 +23,7 @@ defmodule Membrane.RTP.Header do
   @typedoc """
   This field identifies the version of RTP. The version defined by this specification is 2.
   """
-  @type version :: 0..2
+  @type version :: 2
 
   @typedoc """
   The interpretation of the marker is defined by a profile

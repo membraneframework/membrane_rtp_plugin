@@ -147,7 +147,7 @@ defmodule Membrane.RTP.Session.ReceiveBinTest do
         },
         ssrc: @rtp_input.video.ssrc
       }
-      |> Membrane.RTCP.Packet.to_binary()
+      |> Membrane.RTCP.Packet.serialize()
 
     test_stream(@rtp_input, @rtp_output, sender_report)
   end

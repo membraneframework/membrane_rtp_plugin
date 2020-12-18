@@ -29,15 +29,14 @@ defmodule Membrane.RTP.SessionBin do
   require Bitwise
   require Membrane.Logger
 
-  alias Membrane.ParentSpec
-  alias Membrane.{RTCP, RTP, SRTCP, SRTP}
+  alias Membrane.{ParentSpec, RemoteStream, RTCP, RTP, SRTCP, SRTP}
   alias Membrane.RTP.{PayloadFormat, Session}
 
   @type new_stream_notification_t :: Membrane.RTP.SSRCRouter.new_stream_notification_t()
 
   @ssrc_boundaries 2..(Bitwise.bsl(1, 32) - 1)
 
-  @bin_input_buffer_params [warn_size: 250, fail_size: 500]
+  @rtp_input_buffer_params [warn_size: 250, fail_size: 500]
 
   def_options fmt_mapping: [
                 spec: %{RTP.payload_type_t() => {RTP.encoding_name_t(), RTP.clock_rate_t()}},
@@ -105,8 +104,16 @@ defmodule Membrane.RTP.SessionBin do
   end
 
   def_input_pad :input, demand_unit: :buffers, caps: :any, availability: :on_request
-  def_input_pad :rtp_input, demand_unit: :buffers, caps: :any, availability: :on_request
-  def_input_pad :rtcp_input, demand_unit: :buffers, caps: :any, availability: :on_request
+
+  def_input_pad :rtp_input,
+    demand_unit: :buffers,
+    caps: {RemoteStream, type: :packetized, content_format: one_of([nil, RTP])},
+    availability: :on_request
+
+  def_input_pad :rtcp_input,
+    demand_unit: :buffers,
+    caps: {RemoteStream, type: :packetized, content_format: one_of([nil, RTCP])},
+    availability: :on_request
 
   def_output_pad :output,
     demand_unit: :buffers,
@@ -132,7 +139,7 @@ defmodule Membrane.RTP.SessionBin do
 
   def_output_pad :rtp_output,
     demand_unit: :buffers,
-    caps: RTP,
+    caps: {RemoteStream, type: :packetized, content_format: RTP},
     availability: :on_request,
     options: [
       payload_type: [
@@ -158,7 +165,10 @@ defmodule Membrane.RTP.SessionBin do
       ]
     ]
 
-  def_output_pad :rtcp_output, demand_unit: :buffers, caps: RTCP, availability: :on_request
+  def_output_pad :rtcp_output,
+    demand_unit: :buffers,
+    caps: {RemoteStream, type: :packetized, content_format: RTCP},
+    availability: :on_request
 
   defmodule State do
     @moduledoc false
@@ -211,8 +221,7 @@ defmodule Membrane.RTP.SessionBin do
     }
 
     links = [
-      link_bin_input(pad)
-      |> via_in(:input, buffer: @bin_input_buffer_params)
+      link_bin_input(pad, buffer: @rtp_input_buffer_params)
       |> to(decryptor_ref)
       |> to(parser_ref)
       |> to(:ssrc_router)
@@ -230,8 +239,7 @@ defmodule Membrane.RTP.SessionBin do
     children = %{parser_ref => RTP.Parser}
 
     links = [
-      link_bin_input(pad)
-      |> via_in(:input, buffer: @bin_input_buffer_params)
+      link_bin_input(pad, buffer: @rtp_input_buffer_params)
       |> to(parser_ref)
       |> to(:ssrc_router)
     ]
@@ -332,12 +340,12 @@ defmodule Membrane.RTP.SessionBin do
       encoding_name = encoding_name || get_from_register!(:encoding_name, payload_type, state)
       clock_rate = clock_rate || get_from_register!(:clock_rate, payload_type, state)
       payloader = get_payloader!(encoding_name, state)
-      spec = send_stream_spec(ssrc, payload_type, payloader, clock_rate, state)
+      spec = sent_stream_spec(ssrc, payload_type, payloader, clock_rate, state)
       {{:ok, spec: spec}, state}
     end
   end
 
-  defp send_stream_spec(ssrc, payload_type, payloader, clock_rate, %{
+  defp sent_stream_spec(ssrc, payload_type, payloader, clock_rate, %{
          secure?: true,
          srtp_policies: policies
        }) do
@@ -361,7 +369,7 @@ defmodule Membrane.RTP.SessionBin do
     %ParentSpec{children: children, links: links}
   end
 
-  defp send_stream_spec(ssrc, payload_type, payloader, clock_rate, %{secure?: false}) do
+  defp sent_stream_spec(ssrc, payload_type, payloader, clock_rate, %{secure?: false}) do
     children = %{
       {:stream_send_bin, ssrc} => %RTP.StreamSendBin{
         ssrc: ssrc,
