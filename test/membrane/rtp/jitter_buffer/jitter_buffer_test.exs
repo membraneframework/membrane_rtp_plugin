@@ -5,13 +5,13 @@ defmodule Membrane.RTP.JitterBufferTest do
   alias Membrane.RTP.JitterBuffer
   alias Membrane.RTP.JitterBuffer.{BufferStore, Record, State}
 
-  @base_seq_number 50
+  @base_seq_number BufferFactory.base_seq_number()
 
   setup_all do
     buffer = BufferFactory.sample_buffer(@base_seq_number)
     # {:ok, store} = BufferStore.insert_buffer(%BufferStore{}, buffer)
     state = %State{
-      clock_rate: 10000,
+      clock_rate: BufferFactory.clock_rate(),
       store: %BufferStore{},
       latency: 10 |> Membrane.Time.milliseconds()
     }
@@ -68,7 +68,7 @@ defmodule Membrane.RTP.JitterBufferTest do
 
       # 16 is defined by RFC
       assert state.stats_acc.jitter ==
-               div(Membrane.Time.to_seconds(packet_delay) * state.clock_rate, 16)
+               Membrane.Time.to_seconds(packet_delay) * state.clock_rate / 16
 
       assert state.stats_acc.last_transit ==
                Membrane.Time.to_seconds(ts + arrival_ts_increment + packet_delay) *

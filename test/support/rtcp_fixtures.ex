@@ -7,8 +7,8 @@ defmodule Membrane.RTCP.Fixtures do
   @external_resource "test/fixtures/rtcp/packets.hex"
   @sample_rtcp_communication File.read!("test/fixtures/rtcp/packets.hex")
 
-  @spec sample_packet() :: binary()
-  def sample_packet, do: hex_to_bin(@sample_rtcp_packet)
+  @spec sample_packet_binary() :: binary()
+  def sample_packet_binary, do: hex_to_bin(@sample_rtcp_packet)
 
   def packet_list() do
     @sample_rtcp_communication

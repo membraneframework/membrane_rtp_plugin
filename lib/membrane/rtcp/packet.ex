@@ -19,29 +19,11 @@ defmodule Membrane.RTCP.Packet do
           | SenderReportPacket.t()
           | SdesPacket.t()
 
-  # TODO: Remove if it won't be used by SRTCP
-  # @doc """
-  # Adds a padding to align body to a 32 bit boundary
-  # """
-  # @spec align(binary()) :: binary()
-  # def align(body) do
-  #   case body |> bit_size |> rem(32) do
-  #     0 ->
-  #       body
-
-  #     unaligned_bits ->
-  #       pad_bits = 32 - unaligned_bits
-  #       end_pad = <<0::size(pad_bits)>>
-  #       body <> end_pad
-  #   end
-  # end
-  #
-
   @doc """
   Converts packet structure into binary
   """
-  @spec to_binary(t()) :: binary()
-  def to_binary(%packet_module{} = packet) do
+  @spec serialize(t()) :: binary()
+  def serialize(%packet_module{} = packet) do
     {body, packet_type, packet_specific} = packet_module.encode(packet)
     length = body |> byte_size() |> div(4)
 
@@ -54,9 +36,9 @@ defmodule Membrane.RTCP.Packet do
   Parses packet body using data from parsed header
   """
   @spec parse_body(binary(), Header.t()) :: {:ok, t()} | {:error, reason :: atom()}
-  def parse_body(packet, %{packet_type: pt, packet_specific: packet_specific}) do
-    with {:ok, packet_module} <- decode_packet_type(pt) do
-      packet_module.decode(packet, packet_specific)
+  def parse_body(binary, %Header{} = header) do
+    with {:ok, packet_module} <- decode_packet_type(header.packet_type) do
+      packet_module.decode(binary, header.packet_specific)
     end
   end
 
@@ -67,8 +49,6 @@ defmodule Membrane.RTCP.Packet do
   defp decode_packet_type(204), do: {:ok, AppPacket}
   defp decode_packet_type(_pt), do: {:error, :unknown_pt}
 
-  defdelegate strip_padding(body, present?), to: Membrane.RTP.Packet
-
   @doc """
   Decodes binary with packet body (without header) into packet struct. Used by `parse/1`
   """
@@ -76,7 +56,7 @@ defmodule Membrane.RTCP.Packet do
               {:ok, struct()} | {:error, atom()}
 
   @doc """
-  Encodes packet struct into the tuple used by `to_binary/1`
+  Encodes packet struct into the tuple used by `serialize/1`
   """
   @callback encode(struct()) ::
               {body :: binary(), packet_type :: Header.packet_type_t(),

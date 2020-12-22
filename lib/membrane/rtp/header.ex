@@ -23,18 +23,7 @@ defmodule Membrane.RTP.Header do
   @typedoc """
   This field identifies the version of RTP. The version defined by this specification is 2.
   """
-  @type version :: 0..2
-
-  @typedoc """
-  Indicates whether a packet contains additional padding at the end.
-  The last octet of the padding contains a count of padding octets that should be ignored, including itself.
-  """
-  @type padding :: boolean()
-
-  @typedoc """
-  If the extension bit is set, the fixed header MUST be followed by exactly one header extension
-  """
-  @type extension :: boolean()
+  @type version :: 2
 
   @typedoc """
   The interpretation of the marker is defined by a profile
@@ -58,29 +47,20 @@ defmodule Membrane.RTP.Header do
 
   @type t :: %__MODULE__{
           version: version(),
-          padding: padding(),
-          extension_header: extension(),
-          csrc_count: 0..15,
           ssrc: RTP.ssrc_t(),
           marker: marker(),
           payload_type: RTP.payload_type_t(),
           timestamp: timestamp_t(),
           sequence_number: sequence_number_t(),
-          csrcs: [non_neg_integer()],
-          extension_header_data: __MODULE__.Extension.t() | nil
+          csrcs: [RTP.ssrc_t()],
+          extension: __MODULE__.Extension.t() | nil
         }
 
   @enforce_keys [
-    :version,
-    :padding,
-    :extension_header,
-    :csrc_count,
     :ssrc,
-    :marker,
     :payload_type,
     :timestamp,
-    :sequence_number,
-    :csrcs
+    :sequence_number
   ]
-  defstruct @enforce_keys ++ [:extension_header_data]
+  defstruct @enforce_keys ++ [version: 2, marker: false, csrcs: [], extension: nil]
 end

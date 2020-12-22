@@ -1,6 +1,6 @@
-defmodule Membrane.SRTP.Decryptor do
+defmodule Membrane.SRTP.Encryptor do
   @moduledoc """
-  Converts SRTP packets to plain RTP.
+  Converts plain RTP packets to SRTP.
 
   Requires adding [srtp](https://github.com/membraneframework/elixir_libsrtp) dependency to work.
   """
@@ -15,8 +15,9 @@ defmodule Membrane.SRTP.Decryptor do
 
   def_options policies: [
                 spec: [ExLibSRTP.Policy.t()],
+                default: [],
                 description: """
-                List of SRTP policies to use for decrypting packets.
+                List of SRTP policies to use for encrypting packets.
                 See `t:ExLibSRTP.Policy.t/0` for details.
                 """
               ]
@@ -50,14 +51,14 @@ defmodule Membrane.SRTP.Decryptor do
 
   @impl true
   def handle_event(_pad, %{handshake_data: handshake_data}, _ctx, %{ready: false} = state) do
-    {_local_keying_material, remote_keying_material, protection_profile} = handshake_data
+    {local_keying_material, _remote_keying_material, protection_profile} = handshake_data
 
     {:ok, crypto_profile} =
       ExLibSRTP.Policy.crypto_profile_from_dtls_srtp_protection_profile(protection_profile)
 
     policy = %ExLibSRTP.Policy{
-      ssrc: :any_inbound,
-      key: remote_keying_material,
+      ssrc: :any_outbound,
+      key: local_keying_material,
       rtp: crypto_profile,
       rtcp: crypto_profile
     }
@@ -78,13 +79,13 @@ defmodule Membrane.SRTP.Decryptor do
 
   @impl true
   def handle_process(:input, buffer, _ctx, state) do
-    case ExLibSRTP.unprotect(state.srtp, buffer.payload) do
+    case ExLibSRTP.protect(state.srtp, buffer.payload) do
       {:ok, payload} ->
         {{:ok, buffer: {:output, %Buffer{buffer | payload: payload}}}, state}
 
       {:error, reason} ->
         Membrane.Logger.warn("""
-        Couldn't unprotect payload:
+        Couldn't protect payload:
         #{inspect(buffer.payload, limit: :infinity)}
         Reason: #{inspect(reason)}. Ignoring packet.
         """)

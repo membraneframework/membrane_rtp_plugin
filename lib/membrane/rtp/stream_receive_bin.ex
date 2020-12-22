@@ -3,8 +3,6 @@ defmodule Membrane.RTP.StreamReceiveBin do
   This bin gets a parsed RTP stream on input and outputs raw media stream.
   Its responsibility is to depayload the RTP stream and compensate the
   jitter.
-
-  TODO: payload type demuxing
   """
 
   use Membrane.Bin

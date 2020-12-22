@@ -13,10 +13,11 @@ defmodule Membrane.RTP.Header.Extension do
 
   ```
   """
-  defstruct [:profile_specific, :header_extension]
+  @enforce_keys [:profile_specific, :data]
+  defstruct @enforce_keys
 
   @type t :: %__MODULE__{
           profile_specific: binary(),
-          header_extension: binary()
+          data: binary()
         }
 end

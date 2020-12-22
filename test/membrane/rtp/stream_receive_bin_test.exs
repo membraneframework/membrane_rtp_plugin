@@ -44,7 +44,7 @@ defmodule Membrane.RTP.StreamReceiveBinTest do
           ssrc: @ssrc,
           clock_rate: @h264_clock_rate
         },
-        video_parser: %Membrane.Element.FFmpeg.H264.Parser{framerate: {30, 1}},
+        video_parser: %Membrane.H264.FFmpeg.Parser{framerate: {30, 1}},
         frame_counter: FrameCounter
       ]
     }
