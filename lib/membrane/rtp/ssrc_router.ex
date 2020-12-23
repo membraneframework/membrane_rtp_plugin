@@ -63,6 +63,7 @@ defmodule Membrane.RTP.SSRCRouter do
   def handle_prepared_to_playing(ctx, state) do
     actions =
       ctx.pads
+      |> Enum.filter(fn {_pad_ref, pad_data} -> pad_data.direction == :input end)
       |> Enum.map(fn {pad_ref, _pad_data} -> {:demand, {pad_ref, 1}} end)
 
     {{:ok, actions}, state}
