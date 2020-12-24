@@ -85,10 +85,10 @@ defmodule Membrane.RTP.Session.ReceiveBinTest do
             secure?: Map.has_key?(options.input, :srtp_policies),
             srtp_policies: Map.get(options.input, :srtp_policies, [])
           },
-          hackney: %Membrane.Element.Hackney.Source{
+          hackney: %Membrane.Hackney.Source{
             location: "https://membraneframework.github.io/static/video-samples/test-video.h264"
           },
-          parser: %Membrane.H264.FFmpeg.Parser{framerate: {30, 1}},
+          parser: %Membrane.H264.FFmpeg.Parser{framerate: {30, 1}, alignment: :nal},
           rtp_sink: Testing.Sink,
           rtcp_source: %Testing.Source{output: options.rtcp_input},
           rtcp_sink: Testing.Sink
