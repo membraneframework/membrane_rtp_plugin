@@ -6,11 +6,13 @@ defmodule Membrane.RTCP.Parser do
   use Membrane.Log, tag: :membrane_rtcp_parser
   use Membrane.Sink
 
-  alias Membrane.{Buffer, RTCP, Time}
+  alias Membrane.{Buffer, RemoteStream, RTCP, Time}
 
   @type notification_t() :: {:received_rtcp, RTCP.CompoundPacket.t()}
 
-  def_input_pad :input, caps: :any, demand_unit: :buffers
+  def_input_pad :input,
+    caps: {RemoteStream, type: :packetized, content_format: one_of([nil, RTCP])},
+    demand_unit: :buffers
 
   @impl true
   def handle_prepared_to_playing(_ctx, state) do

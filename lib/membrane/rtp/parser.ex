@@ -1,6 +1,11 @@
 defmodule Membrane.RTP.Parser do
   @moduledoc """
   Parses RTP packets.
+
+  Outputs each packet payload as a separate `Membrane.Buffer`.
+  Attaches the following metadata under `:rtp` key: `:timestamp`, `:sequence_number`,
+  `:ssrc`, `:payload_type`, `:marker`, `:extension`. See `Membrane.RTP.Header` for
+  their meaning and specifications.
   """
 
   use Membrane.Filter
@@ -9,7 +14,15 @@ defmodule Membrane.RTP.Parser do
   alias Membrane.{RTP, RemoteStream}
   alias Membrane.RTP.{Header, Packet}
 
-  @metadata_fields [:timestamp, :sequence_number, :ssrc, :payload_type]
+  @metadata_fields [
+    :timestamp,
+    :sequence_number,
+    :ssrc,
+    :csrcs,
+    :payload_type,
+    :marker,
+    :extension
+  ]
 
   def_input_pad :input,
     caps: {RemoteStream, type: :packetized, content_format: one_of([nil, RTP])},

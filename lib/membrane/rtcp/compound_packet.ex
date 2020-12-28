@@ -10,9 +10,9 @@ defmodule Membrane.RTCP.CompoundPacket do
 
   @type t :: %__MODULE__{packets: [Packet.t()]}
 
-  @spec to_binary(t()) :: binary()
-  def to_binary(%__MODULE__{packets: packets}) do
-    Enum.map_join(packets, &Packet.to_binary/1)
+  @spec serialize(t()) :: binary()
+  def serialize(%__MODULE__{packets: packets}) do
+    Enum.map_join(packets, &Packet.serialize/1)
   end
 
   @spec parse(binary()) :: {:ok, t()} | {:error, any()}

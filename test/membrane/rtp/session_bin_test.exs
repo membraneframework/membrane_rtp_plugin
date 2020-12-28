@@ -122,7 +122,7 @@ defmodule Membrane.RTP.Session.ReceiveBinTest do
           hackney: %Membrane.Element.Hackney.Source{
             location: "https://membraneframework.github.io/static/video-samples/test-video.h264"
           },
-          parser: %Membrane.H264.FFmpeg.Parser{framerate: {30, 1}},
+          parser: %Membrane.H264.FFmpeg.Parser{framerate: {30, 1}, alignment: :nal},
           rtp_sink: Testing.Sink,
           rtcp_source: %Testing.Source{output: options.rtcp_input},
           rtcp_sink: Testing.Sink
@@ -181,14 +181,14 @@ defmodule Membrane.RTP.Session.ReceiveBinTest do
         },
         ssrc: @rtp_input.video.ssrc
       }
-      |> Membrane.RTCP.Packet.to_binary()
+      |> Membrane.RTCP.Packet.serialize()
 
     test_stream(
       @rtp_input,
       @rtp_output,
       sender_report,
       [%{:ssrc => @rtp_input.video.ssrc}, %{:ssrc => @rtp_input.audio.ssrc}],
-      [%{:ssrc => @rtp_output.video.ssrc, :sender_info => %{:sender_packet_count => 300}}]
+      [%{:ssrc => @rtp_output.video.ssrc, :sender_info => %{:sender_packet_count => 313}}]
     )
   end
 

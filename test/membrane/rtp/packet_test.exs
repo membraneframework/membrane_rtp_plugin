@@ -40,10 +40,10 @@ defmodule Membrane.RTP.PacketTest do
   end
 
   test "reads and serializes extension header" do
-    extension_header = <<0::16, 4::16, 254::32>>
+    extension_header = <<0::16, 4::16, 1::32, 2::32, 3::32, 4::32>>
 
     expected_parsed_extension = %Header.Extension{
-      data: <<254::32>>,
+      data: <<1::32, 2::32, 3::32, 4::32>>,
       profile_specific: 0
     }
 
@@ -52,8 +52,7 @@ defmodule Membrane.RTP.PacketTest do
       Fixtures.sample_packet_binary()
 
     # Glueing data back together with extension header in place
-    packet_binary =
-      <<header_1::3, 1::1, header_2::92, extension_header::binary-size(8), payload::binary>>
+    packet_binary = <<header_1::3, 1::1, header_2::92, extension_header::binary, payload::binary>>
 
     packet = %Packet{
       Fixtures.sample_packet()
