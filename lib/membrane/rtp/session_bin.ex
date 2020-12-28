@@ -179,9 +179,11 @@ defmodule Membrane.RTP.SessionBin do
               payloaders: nil,
               depayloaders: nil,
               ssrcs: %{},
+              senders_ssrcs: %MapSet{},
               rtcp_interval: nil,
               receiver_ssrc_generator: nil,
-              rtcp_report_data: %Session.Report.Data{},
+              rtcp_report_data: %Session.ReceiverReport.Data{},
+              rtcp_sender_report_data: %Session.SenderReport.Data{},
               secure?: nil,
               srtp_policies: nil,
               receiver_srtp_policies: nil
@@ -341,6 +343,8 @@ defmodule Membrane.RTP.SessionBin do
       clock_rate = clock_rate || get_from_register!(:clock_rate, payload_type, state)
       payloader = get_payloader!(encoding_name, state)
       spec = sent_stream_spec(ssrc, payload_type, payloader, clock_rate, state)
+      state = %{state | senders_ssrcs: MapSet.put(state.senders_ssrcs, ssrc)}
+
       {{:ok, spec: spec}, state}
     end
   end
@@ -417,6 +421,7 @@ defmodule Membrane.RTP.SessionBin do
       when name in [:input, :rtp_output] do
     case Map.fetch(ctx.children, {:stream_send_bin, ssrc}) do
       {:ok, %{terminating?: false}} ->
+        state = %{state | senders_ssrcs: MapSet.delete(state.senders_ssrcs, ssrc)}
         {{:ok, remove_child: {:stream_send_bin, ssrc}}, state}
 
       _result ->
@@ -426,18 +431,43 @@ defmodule Membrane.RTP.SessionBin do
 
   @impl true
   def handle_tick(:rtcp_report_timer, _ctx, state) do
-    {maybe_report, report_data} = Session.Report.flush_report(state.rtcp_report_data)
-    {remote_ssrcs, report_data} = Session.Report.init_report(state.ssrcs, report_data)
-    stats_requests = Enum.map(remote_ssrcs, &{{:stream_receive_bin, &1}, :send_stats})
+    {maybe_receiver_report, report_data} =
+      Session.ReceiverReport.flush_report(state.rtcp_report_data)
 
-    report_messages =
-      case maybe_report do
+    {remote_ssrcs, report_data} = Session.ReceiverReport.init_report(state.ssrcs, report_data)
+
+    {maybe_sender_report, sender_report_data} =
+      Session.SenderReport.flush_report(state.rtcp_sender_report_data)
+
+    {senders_ssrcs, sender_report_data} =
+      Session.SenderReport.init_report(state.senders_ssrcs, sender_report_data)
+
+    sender_stats_requests = Enum.map(senders_ssrcs, &{{:stream_send_bin, &1}, :send_stats})
+    receiver_stats_requests = Enum.map(remote_ssrcs, &{{:stream_receive_bin, &1}, :send_stats})
+
+    receiver_report_messages =
+      case maybe_receiver_report do
         {:report, report} -> [rtcp_forwarder: {:report, report}]
         :no_report -> []
       end
 
-    actions = Enum.map(report_messages ++ stats_requests, &{:forward, &1})
-    {{:ok, actions}, %{state | rtcp_report_data: report_data}}
+    sender_report_messages =
+      case maybe_sender_report do
+        {:report, report} -> [rtcp_forwarder: {:report, report}]
+        :no_report -> []
+      end
+
+    actions =
+      Enum.map(
+        receiver_report_messages ++
+          receiver_stats_requests ++
+          sender_report_messages ++
+          sender_stats_requests,
+        &{:forward, &1}
+      )
+
+    {{:ok, actions},
+     %{state | rtcp_report_data: report_data, rtcp_sender_report_data: sender_report_data}}
   end
 
   @impl true
@@ -448,8 +478,23 @@ defmodule Membrane.RTP.SessionBin do
 
   @impl true
   def handle_notification({:received_rtcp, rtcp, timestamp}, {:rtcp_parser, _ref}, _ctx, state) do
-    report_data = Session.Report.handle_remote_report(rtcp, timestamp, state.rtcp_report_data)
+    report_data =
+      Session.ReceiverReport.handle_remote_report(rtcp, timestamp, state.rtcp_report_data)
+
     {:ok, %{state | rtcp_report_data: report_data}}
+  end
+
+  @impl true
+  def handle_notification(
+        {:serializer_stats, stats},
+        {:stream_send_bin, sender_ssrc},
+        ctx,
+        state
+      ) do
+    {result, report_data} =
+      Session.SenderReport.handle_stats(stats, sender_ssrc, state.rtcp_sender_report_data)
+
+    {{:ok, forward_action(result, ctx)}, %{state | rtcp_sender_report_data: report_data}}
   end
 
   @impl true
@@ -460,15 +505,17 @@ defmodule Membrane.RTP.SessionBin do
         state
       ) do
     {result, report_data} =
-      Session.Report.handle_stats(stats, remote_ssrc, state.ssrcs, state.rtcp_report_data)
+      Session.ReceiverReport.handle_stats(stats, remote_ssrc, state.ssrcs, state.rtcp_report_data)
 
-    state = %{state | rtcp_report_data: report_data}
+    {{:ok, forward_action(result, ctx)}, %{state | rtcp_report_data: report_data}}
+  end
 
+  defp forward_action(result, ctx) do
     with {:report, report} <- result,
          true <- Map.has_key?(ctx.children, :rtcp_forwarder) do
-      {{:ok, forward: {:rtcp_forwarder, {:report, report}}}, state}
+      [forward: {:rtcp_forwarder, {:report, report}}]
     else
-      _result -> {:ok, state}
+      _ -> []
     end
   end
 
