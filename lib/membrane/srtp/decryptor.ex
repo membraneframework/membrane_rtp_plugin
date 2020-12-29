@@ -25,8 +25,7 @@ defmodule Membrane.SRTP.Decryptor do
   def handle_init(%__MODULE__{policies: policies}) do
     state = %{
       policies: policies,
-      srtp: nil,
-      ready: not Enum.empty?(policies)
+      srtp: nil
     }
 
     {:ok, state}
@@ -45,11 +44,11 @@ defmodule Membrane.SRTP.Decryptor do
 
   @impl true
   def handle_prepared_to_stopped(_ctx, state) do
-    {:ok, %{state | srtp: nil}}
+    {:ok, %{state | srtp: nil, policies: []}}
   end
 
   @impl true
-  def handle_event(_pad, %{handshake_data: handshake_data}, _ctx, %{ready: false} = state) do
+  def handle_event(_pad, %{handshake_data: handshake_data}, _ctx, %{policies: []} = state) do
     {_local_keying_material, remote_keying_material, protection_profile} = handshake_data
 
     {:ok, crypto_profile} =
@@ -63,17 +62,23 @@ defmodule Membrane.SRTP.Decryptor do
     }
 
     :ok = ExLibSRTP.add_stream(state.srtp, policy)
-    {{:ok, redemand: :output}, Map.put(state, :ready, true)}
+    {{:ok, redemand: :output}, Map.put(state, :policies, [policy])}
   end
 
   @impl true
-  def handle_demand(:output, size, :buffers, _ctx, %{ready: true} = state) do
-    {{:ok, demand: {:input, size}}, state}
-  end
-
-  @impl true
-  def handle_demand(:output, _size, :buffers, _ctx, %{ready: false} = state) do
+  def handle_event(_pad, other, _ctx, state) do
+    Membrane.Logger.warn("Got unexpected event: #{inspect(other)}. Ignoring.")
     {:ok, state}
+  end
+
+  @impl true
+  def handle_demand(:output, _size, :buffers, _ctx, %{policies: []} = state) do
+    {:ok, state}
+  end
+
+  @impl true
+  def handle_demand(:output, size, :buffers, _ctx, state) do
+    {{:ok, demand: {:input, size}}, state}
   end
 
   @impl true

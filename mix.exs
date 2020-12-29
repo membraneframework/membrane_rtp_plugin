@@ -75,8 +75,7 @@ defmodule Membrane.Element.RTP.MixProject do
   defp deps do
     [
       # {:membrane_core, "~> 0.6.0", override: true},
-      {:membrane_core,
-       github: "membraneframework/membrane_core", branch: "fix/playback", override: true},
+      {:membrane_core, github: "membraneframework/membrane_core", override: true},
       {:membrane_rtp_format, "~> 0.3.0"},
       {:membrane_remote_stream_format, "~> 0.1.0"},
       {:ex_libsrtp, "~> 0.1.0"},
