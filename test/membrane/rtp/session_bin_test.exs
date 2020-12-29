@@ -3,12 +3,9 @@ defmodule Membrane.RTP.Session.ReceiveBinTest do
 
   import Membrane.Testing.Assertions
 
-  alias Membrane.RTCP.{Header, Packet, CompoundPacket}
+  alias Membrane.RTCP.{Header, Packet}
   alias Membrane.RTP
   alias Membrane.Testing
-
-  @rtcp_packet_type_sender 200
-  @rtcp_packet_type_receiver 201
 
   @rtp_input %{
     pcap: "test/fixtures/rtp/session/demo_rtp.pcap",
@@ -36,11 +33,10 @@ defmodule Membrane.RTP.Session.ReceiveBinTest do
   defp match_packet(packet, fields_values), do: compare_common_fields(packet, fields_values)
 
   @spec compare_common_fields(any(), any()) :: boolean()
-  defp compare_common_fields(left, right) when is_map(left) or is_struct(left) do
-    is_map(right) and
-      Enum.all?(right, fn {k, v} ->
-        Map.has_key?(left, k) and compare_common_fields(Map.get(left, k), v)
-      end)
+  defp compare_common_fields(left, right) when is_map(left) and is_map(right) do
+    Enum.all?(right, fn {k, v} ->
+      Map.has_key?(left, k) and compare_common_fields(Map.get(left, k), v)
+    end)
   end
 
   defp compare_common_fields(left, right), do: left == right
@@ -48,17 +44,15 @@ defmodule Membrane.RTP.Session.ReceiveBinTest do
   # asserts all specified buffers were received by the sink
   defp assert_specified_buffers(_pipeline, _sink, []), do: :ok
 
-  defp assert_specified_buffers(pipeline, sink, field_specyfications) do
-    assert_sink_buffer(pipeline, sink, buffer, 10000)
+  defp assert_specified_buffers(pipeline, sink, field_specifications) do
+    assert_sink_buffer(pipeline, sink, buffer)
     %Membrane.Buffer{payload: <<head::binary-size(4), body_and_rest::binary>>} = buffer
     {:ok, %{header: header, length: len}} = Header.parse(head)
     body_size = len - 4
-    <<body::binary-size(body_size), rest::binary>> = body_and_rest
+    <<body::binary-size(body_size), _rest::binary>> = body_and_rest
     {:ok, packet} = Packet.parse_body(body, header)
-
-    field_specyfications = field_specyfications |> Enum.filter(&(not match_packet(packet, &1)))
-
-    assert_specified_buffers(pipeline, sink, field_specyfications)
+    field_specifications = field_specifications |> Enum.reject(&match_packet(packet, &1))
+    assert_specified_buffers(pipeline, sink, field_specifications)
   end
 
   defmodule Pauser do
