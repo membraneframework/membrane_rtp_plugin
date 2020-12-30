@@ -1,4 +1,4 @@
-defmodule Membrane.Element.RTP.MixProject do
+defmodule Membrane.RTP.Plugin.MixProject do
   use Mix.Project
 
   @version "0.5.0"
