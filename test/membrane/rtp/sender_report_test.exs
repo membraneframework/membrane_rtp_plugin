@@ -3,7 +3,6 @@ defmodule Membrane.RTP.SenderReportTest do
 
   alias Membrane.RTCP.CompoundPacket
   alias Membrane.RTP.Session.SenderReport
-  alias Membrane.RTP.Serializer.Stats
   alias Membrane.Time
 
   @ssrc_1 790_688_045
