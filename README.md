@@ -1,4 +1,4 @@
-# Membrane Multimedia Framework: RTP plugin
+# Membrane RTP plugin
 [![Hex.pm](https://img.shields.io/hexpm/v/membrane_rtp_plugin.svg)](https://hex.pm/packages/membrane_rtp_plugin)
 [![API Docs](https://img.shields.io/badge/api-docs-yellow.svg?style=flat)](https://hexdocs.pm/membrane_rtp_plugin/)
 [![CircleCI](https://circleci.com/gh/membraneframework/membrane_rtp_plugin.svg?style=svg)](https://circleci.com/gh/membraneframework/membrane_rtp_plugin)
@@ -23,7 +23,7 @@ end
 
 For usage examples, check the [RTP demo](https://github.com/membraneframework/membrane_demo/tree/master/rtp).
 
-The docs can be found at <https://hexdocs.pm/membrane_rtp_plugin>.
+The docs can be found at [HexDocs](https://hexdocs.pm/membrane_rtp_plugin).
 
 ## Copyright and License
 
