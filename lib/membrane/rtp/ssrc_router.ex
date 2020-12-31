@@ -2,7 +2,7 @@ defmodule Membrane.RTP.SSRCRouter do
   @moduledoc """
   A filter separating RTP packets from different SSRCs into different outpts.
 
-  When receiving a new SSRC, it creates a new pad and notifies its parent (`t:new_ssrc_notification/0`) that should link
+  When receiving a new SSRC, it creates a new pad and notifies its parent (`t:new_stream_notification_t/0`) that should link
   the new output pad.
   """
 
@@ -32,8 +32,8 @@ defmodule Membrane.RTP.SSRCRouter do
   @typedoc """
   Notification sent when an RTP packet with new SSRC arrives and new output pad should be linked
   """
-  @type new_ssrc_notification() ::
-          {:new_ssrc_stream, RTP.ssrc_t(), RTP.payload_type_t()}
+  @type new_stream_notification_t ::
+          {:new_rtp_stream, RTP.ssrc_t(), RTP.payload_type_t()}
 
   @impl true
   def handle_init(_opts), do: {:ok, %State{}}
@@ -91,7 +91,7 @@ defmodule Membrane.RTP.SSRCRouter do
   @impl true
   def handle_event(Pad.ref(:input, _id), event, _ctx, state) do
     {actions, state} =
-      Enum.flat_map_reduce(state.pads, state, fn {{ssrc, _input}, state} ->
+      Enum.flat_map_reduce(state.pads, state, fn {ssrc, _input}, state ->
         maybe_add_to_linking_buffer(:event, event, ssrc, state)
       end)
 
