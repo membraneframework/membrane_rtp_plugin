@@ -75,8 +75,7 @@ defmodule Membrane.RTP.Plugin.MixProject do
   defp deps do
     [
       {:membrane_core, "~> 0.6.1"},
-      # {:membrane_rtp_format, "~> 0.3.0"},
-      {:membrane_rtp_format, path: "../membrane_rtp_format", override: true},
+      {:membrane_rtp_format, "~> 0.3.1"},
       {:membrane_remote_stream_format, "~> 0.1.0"},
       {:ex_libsrtp, "~> 0.1.0"},
       {:bunch, "~> 1.0"},
