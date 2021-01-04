@@ -135,7 +135,7 @@ defmodule Membrane.RTP.JitterBufferTest do
       assert is_reference(state.max_latency_timer)
       assert_receive message, (state.latency |> Membrane.Time.to_milliseconds()) + 20
 
-      assert {{:ok, actions}, state} = JitterBuffer.handle_other(message, %{}, state)
+      assert {{:ok, actions}, _state} = JitterBuffer.handle_other(message, %{}, state)
 
       assert [event: event, buffer: buffer_action, redemand: :output] = actions
       assert event == {:output, %Membrane.Event.Discontinuity{}}
@@ -148,7 +148,7 @@ defmodule Membrane.RTP.JitterBufferTest do
       store = %BufferStore{state.store | prev_index: @base_seq_number - 2, base_index: 0}
       {:ok, store} = BufferStore.insert_buffer(store, buffer)
       state = %{state | store: store}
-      assert {{:ok, actions}, r_state} = JitterBuffer.handle_end_of_stream(:input, nil, state)
+      assert {{:ok, actions}, _state} = JitterBuffer.handle_end_of_stream(:input, nil, state)
 
       assert [event: event, buffer: buffer_action, end_of_stream: :output] = actions
       assert event == {:output, %Membrane.Event.Discontinuity{}}
