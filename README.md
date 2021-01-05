@@ -3,7 +3,7 @@
 [![API Docs](https://img.shields.io/badge/api-docs-yellow.svg?style=flat)](https://hexdocs.pm/membrane_rtp_plugin/)
 [![CircleCI](https://circleci.com/gh/membraneframework/membrane_rtp_plugin.svg?style=svg)](https://circleci.com/gh/membraneframework/membrane_rtp_plugin)
 
-This package provides bins and elements for handling RTP streams.
+This package provides bins and elements for sending and receiving RTP/SRTP and RTCP/SRTCP streams.
 
 It is a part of [Membrane Multimedia Framework](https://membraneframework.org).
 
@@ -14,7 +14,8 @@ The package can be installed by adding `membrane_rtp_plugin` to your list of dep
 ```elixir
 def deps do
   [
-    {:membrane_rtp_plugin, "~> 0.5.0"}
+    {:membrane_rtp_plugin, "~> 0.5.0"},
+    {:ex_libsrtp, "~> 0.1.0"} # required only if SRTP/SRTCP support is needed
   ]
 end
 ```
