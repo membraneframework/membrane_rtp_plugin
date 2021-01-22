@@ -47,7 +47,8 @@ defmodule Membrane.RTCP.Packet do
   defp decode_packet_type(202), do: {:ok, SdesPacket}
   defp decode_packet_type(203), do: {:ok, ByePacket}
   defp decode_packet_type(204), do: {:ok, AppPacket}
-  defp decode_packet_type(_pt), do: {:error, :unknown_pt}
+  defp decode_packet_type(206), do: {:ok, Membrane.RTCP.FeedbackPacket}
+  defp decode_packet_type(pt), do: {:error, {:unknown_pt, pt}}
 
   @doc """
   Decodes binary with packet body (without header) into packet struct. Used by `parse/1`
