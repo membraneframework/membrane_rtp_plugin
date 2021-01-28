@@ -11,7 +11,7 @@ defmodule Membrane.RTP.Parser do
   use Membrane.Filter
 
   alias Membrane.Buffer
-  alias Membrane.{RTCP, RTP, RemoteStream}
+  alias Membrane.{RTCP, RTCPEvent, RTP, RemoteStream}
 
   require Membrane.Logger
 
@@ -31,6 +31,8 @@ defmodule Membrane.RTP.Parser do
 
   def_output_pad :output, caps: RTP
 
+  def_output_pad :rtcp_output, mode: :push, caps: :any, availability: :on_request
+
   @impl true
   def handle_init(_opts) do
     {:ok, %{}}
@@ -48,7 +50,7 @@ defmodule Membrane.RTP.Parser do
 
     case packet_type do
       :rtp -> RTP.Packet.parse(payload)
-      :rtcp -> RTCP.CompoundPacket.parse(payload)
+      :rtcp -> RTCP.Packet.parse(payload)
     end
     |> case do
       {:ok, packet} ->
@@ -61,6 +63,8 @@ defmodule Membrane.RTP.Parser do
         #{inspect(payload, limit: :infinity)}
         Reason: #{inspect(reason)}. Ignoring packet.
         """)
+
+        {:ok, state}
     end
   end
 
@@ -69,14 +73,35 @@ defmodule Membrane.RTP.Parser do
     {{:ok, demand: {:input, size}}, state}
   end
 
-  defp process_packet(%RTP.Packet{} = packet, metadata) do
-    extracted = Map.take(packet.header, @metadata_fields)
-    metadata = Map.put(metadata, :rtp, extracted)
-    %Buffer{payload: packet.payload, metadata: metadata}
+  @impl true
+  def handle_event(:output, %RTCPEvent{} = event, ctx, state) do
+    ctx.pads
+    |> Map.keys()
+    |> Enum.find(fn
+      Pad.ref(:rtcp_output, _id) -> true
+      _pad -> false
+    end)
+    |> case do
+      nil ->
+        {:ok, state}
+
+      pad ->
+        buffer = %Buffer{payload: RTCP.Packet.serialize(event.packet)}
+        {{:ok, buffer: {pad, buffer}}, state}
+    end
   end
 
-  defp process_packet(%RTCP.CompoundPacket{} = packet, _metadata) do
-    IO.inspect(packet)
+  @impl true
+  def handle_event(pad, event, ctx, state), do: super(pad, event, ctx, state)
+
+  defp process_packet(%RTP.Packet{} = rtp, metadata) do
+    extracted = Map.take(rtp.header, @metadata_fields)
+    metadata = Map.put(metadata, :rtp, extracted)
+    %Buffer{payload: rtp.payload, metadata: metadata}
+  end
+
+  defp process_packet(rtcp, _metadata) do
+    # IO.inspect(rtcp)
     []
   end
 end

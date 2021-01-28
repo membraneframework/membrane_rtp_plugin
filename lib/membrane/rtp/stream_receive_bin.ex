@@ -11,7 +11,8 @@ defmodule Membrane.RTP.StreamReceiveBin do
 
   def_options clock_rate: [type: :integer, spec: Membrane.RTP.clock_rate_t()],
               depayloader: [type: :module],
-              ssrc: [spec: Membrane.RTP.ssrc_t()]
+              local_ssrc: [spec: Membrane.RTP.ssrc_t()],
+              remote_ssrc: [spec: Membrane.RTP.ssrc_t()]
 
   def_input_pad :input, demand_unit: :buffers, caps: :any
 
@@ -20,12 +21,17 @@ defmodule Membrane.RTP.StreamReceiveBin do
   @impl true
   def handle_init(opts) do
     children = [
+      rtcp_receiver: %Membrane.RTCP.Receiver{
+        local_ssrc: opts.local_ssrc,
+        remote_ssrc: opts.remote_ssrc
+      },
       jitter_buffer: %Membrane.RTP.JitterBuffer{clock_rate: opts.clock_rate},
       depayloader: opts.depayloader
     ]
 
     links = [
       link_bin_input()
+      |> to(:rtcp_receiver)
       |> to(:jitter_buffer)
       |> to(:depayloader)
       |> to_bin_output()

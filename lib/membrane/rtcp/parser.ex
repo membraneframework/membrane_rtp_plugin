@@ -8,7 +8,7 @@ defmodule Membrane.RTCP.Parser do
 
   alias Membrane.{Buffer, RemoteStream, RTCP, Time}
 
-  @type notification_t() :: {:received_rtcp, RTCP.CompoundPacket.t()}
+  @type notification_t() :: {:received_rtcp, RTCP.Packet.t()}
 
   def_input_pad :input,
     caps: {RemoteStream, type: :packetized, content_format: one_of([nil, RTCP])},
@@ -23,7 +23,7 @@ defmodule Membrane.RTCP.Parser do
   def handle_write(:input, %Buffer{payload: payload, metadata: metadata}, _ctx, state) do
     arrival_ts = Map.get(metadata, :arrival_ts, Time.vm_time())
 
-    with {:ok, parsed_rtcp} <- RTCP.CompoundPacket.parse(payload) do
+    with {:ok, parsed_rtcp} <- RTCP.Packet.parse(payload) do
       {{:ok, notify: {:received_rtcp, parsed_rtcp, arrival_ts}, demand: {:input, 1}}, state}
     else
       {:error, reason} ->

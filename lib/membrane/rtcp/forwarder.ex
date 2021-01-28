@@ -1,6 +1,6 @@
 defmodule Membrane.RTCP.Forwarder do
   @moduledoc """
-  Serializes and forwards `Membrane.RTCP.CompoundPacket`s via output pad.
+  Serializes and forwards `Membrane.RTCP.Packet`s via output pad.
   """
   use Membrane.Source
   alias Membrane.{Buffer, RemoteStream, RTCP}
@@ -20,8 +20,8 @@ defmodule Membrane.RTCP.Forwarder do
   end
 
   @impl true
-  def handle_other({:report, %RTCP.CompoundPacket{} = report}, _ctx, state) do
-    buffer = %Buffer{payload: RTCP.CompoundPacket.serialize(report)}
+  def handle_other({:report, report}, _ctx, state) do
+    buffer = %Buffer{payload: RTCP.Packet.serialize(report)}
     {{:ok, buffer: {:output, buffer}}, state}
   end
 end

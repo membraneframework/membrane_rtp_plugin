@@ -8,7 +8,7 @@ defmodule Membrane.RTP.SSRCRouter do
 
   use Membrane.Filter
 
-  alias Membrane.RTP
+  alias Membrane.{RTP, RTCPEvent}
 
   def_input_pad :input, demand_unit: :buffers, caps: RTP, availability: :on_request
 
@@ -96,6 +96,14 @@ defmodule Membrane.RTP.SSRCRouter do
       end)
 
     {{:ok, actions}, state}
+  end
+
+  @impl true
+  def handle_event(Pad.ref(:output, ssrc), %RTCPEvent{} = event, _ctx, state) do
+    case Map.fetch(state.pads, ssrc) do
+      {:ok, input} -> {{:ok, event: {input, event}}, state}
+      :error -> {:ok, state}
+    end
   end
 
   @impl true

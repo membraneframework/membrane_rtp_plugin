@@ -22,7 +22,7 @@ defmodule Membrane.RTP.Session.ReceiverReport do
               stats: []
   end
 
-  @type maybe_report_t :: {:report, RTCP.CompoundPacket.t()} | :no_report
+  @type maybe_report_t :: {:report, RTCP.Packet.t()} | :no_report
 
   @spec init_report(ssrcs :: %{RTP.ssrc_t() => RTP.ssrc_t()}, Data.t()) ::
           {MapSet.t(RTP.ssrc_t()), Data.t()}
@@ -51,7 +51,7 @@ defmodule Membrane.RTP.Session.ReceiverReport do
     else
       Membrane.Logger.warn("Not received stats from ssrcs: #{Enum.join(report_data.ssrcs, ", ")}")
 
-      with %RTCP.CompoundPacket{packets: []} <- generate_report(report_data) do
+      with [] <- generate_report(report_data) do
         {:no_report, report_data}
       else
         reports -> {{:report, reports}, %{report_data | remote_ssrcs: MapSet.new(), stats: []}}
@@ -78,7 +78,7 @@ defmodule Membrane.RTP.Session.ReceiverReport do
     report_data = %{report_data | stats: stats ++ report_data.stats, remote_ssrcs: report_ssrcs}
 
     if Enum.empty?(report_ssrcs) do
-      with %RTCP.CompoundPacket{packets: []} <- generate_report(report_data) do
+      with [] <- generate_report(report_data) do
         {:no_report, report_data}
       else
         reports -> {{:report, reports}, %{report_data | remote_ssrcs: MapSet.new(), stats: []}}
@@ -89,11 +89,11 @@ defmodule Membrane.RTP.Session.ReceiverReport do
   end
 
   @spec handle_remote_report(
-          RTCP.CompoundPacket.t() | RTCP.Packet.t(),
+          RTCP.Packet.t() | RTCP.Packet.t(),
           Membrane.Time.t(),
           Data.t()
         ) :: Data.t()
-  def handle_remote_report(%RTCP.CompoundPacket{packets: packets}, timestamp, report_data) do
+  def handle_remote_report(packets, timestamp, report_data) when is_list(packets) do
     Enum.reduce(packets, report_data, &handle_remote_report(&1, timestamp, &2))
   end
 
@@ -114,9 +114,7 @@ defmodule Membrane.RTP.Session.ReceiverReport do
   end
 
   defp generate_report(%{stats: stats, remote_reports: remote_reports}) do
-    %RTCP.CompoundPacket{
-      packets: Enum.flat_map(stats, &generate_receiver_report(&1, remote_reports))
-    }
+    Enum.flat_map(stats, &generate_receiver_report(&1, remote_reports))
   end
 
   defp generate_receiver_report({_local_ssrc, _remote_ssrc, :no_stats}, _remote_reports) do

@@ -1,4 +1,5 @@
 %{
+  "bimap": {:hex, :bimap, "1.1.0", "135ce3bf1c0e02b83559493b3a9f2ec970afb57e4d1ba47a0247295f9f21e2ad", [:mix], [], "hexpm", "2cb7959ad57e0b70f13711e9c3cdbb89e6caf91bb4feb5c2f05ad3ebc80bf266"},
   "bunch": {:hex, :bunch, "1.3.0", "51b4423088b7fb9e21eae6d6bc5e5d219d955ea5556fbd6130bfb6213df4be32", [:mix], [], "hexpm", "9ad233a2bacc0dae8aa6553a9b9057f27446443b1c5903c3479b6f9f3820ce2d"},
   "bunch_native": {:hex, :bunch_native, "0.3.0", "a292baf340608d07bf2f2bbc7928a29648c15c90192e8f4c50b77ea16366d61c", [:mix], [{:bundlex, "~> 0.4.0", [hex: :bundlex, repo: "hexpm", optional: false]}], "hexpm", "8a3b4b4bc6de06f863469f6f06a0a37026bd87b0dcaa2dba688ea9da9b18b4c1"},
   "bundlex": {:hex, :bundlex, "0.4.1", "4bf149099cb6d12e8ec62601c66086442a427ff18eb6cd5fd6350451646d5db0", [:mix], [{:bunch, "~> 1.0", [hex: :bunch, repo: "hexpm", optional: false]}, {:qex, "~> 0.5", [hex: :qex, repo: "hexpm", optional: false]}, {:secure_random, "~> 0.5", [hex: :secure_random, repo: "hexpm", optional: false]}], "hexpm", "8779fe382555046edfc4efefc10a26867e3da9d5010f1b590a61dec210eedc32"},

@@ -88,8 +88,8 @@ defmodule Membrane.SRTP.Decryptor do
     packet_type = RTP.Packet.identify(payload)
 
     case packet_type do
-      :rtp -> ExLibSRTP.unprotect(state.srtp, buffer.payload)
-      :rtcp -> ExLibSRTP.unprotect_rtcp(state.srtp, buffer.payload)
+      :rtp -> ExLibSRTP.unprotect(state.srtp, payload)
+      :rtcp -> ExLibSRTP.unprotect_rtcp(state.srtp, payload)
     end
     |> case do
       {:ok, payload} ->

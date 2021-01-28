@@ -222,14 +222,25 @@ defmodule Membrane.RTP.SessionBin do
   end
 
   @impl true
-  def handle_pad_added(Pad.ref(:rtp_input, ref) = pad, _ctx, %{secure?: true} = state) do
+  def handle_pad_added(Pad.ref(:rtp_input, ref) = pad, ctx, %{secure?: true} = state) do
     parser_ref = {:rtp_parser, ref}
     decryptor_ref = {:srtp_decryptor, ref}
+    encryptor_ref = {:srtcp_encryptor, ref}
+    rtcp_output = Pad.ref(:rtcp_output, ref)
+    rtcp? = Map.has_key?(ctx.pads, rtcp_output)
 
-    children = %{
-      parser_ref => RTP.Parser,
-      decryptor_ref => %SRTP.Decryptor{policies: state.srtp_policies}
-    }
+    children =
+      %{
+        parser_ref => RTP.Parser,
+        decryptor_ref => %SRTP.Decryptor{policies: state.srtp_policies}
+      }
+      |> Map.merge(
+        if rtcp? do
+          %{encryptor_ref => %SRTP.Encryptor{policies: state.receiver_srtp_policies}}
+        else
+          %{}
+        end
+      )
 
     links = [
       link_bin_input(pad, buffer: @rtp_input_buffer_params)
@@ -238,14 +249,29 @@ defmodule Membrane.RTP.SessionBin do
       |> to(:ssrc_router)
     ]
 
+    links =
+      links ++
+        if rtcp? do
+          [
+            link(parser_ref)
+            |> via_out(:rtcp_output)
+            |> to(encryptor_ref)
+            |> to_bin_output(rtcp_output)
+          ]
+        else
+          []
+        end
+
     new_spec = %ParentSpec{children: children, links: links}
 
     {{:ok, spec: new_spec}, state}
   end
 
   @impl true
-  def handle_pad_added(Pad.ref(:rtp_input, ref) = pad, _ctx, state) do
+  def handle_pad_added(Pad.ref(:rtp_input, ref) = pad, ctx, state) do
     parser_ref = {:rtp_parser, ref}
+    rtcp_output = Pad.ref(:rtcp_output, ref)
+    rtcp? = Map.has_key?(ctx.pads, rtcp_output)
 
     children = %{parser_ref => RTP.Parser}
 
@@ -254,6 +280,18 @@ defmodule Membrane.RTP.SessionBin do
       |> to(parser_ref)
       |> to(:ssrc_router)
     ]
+
+    links =
+      links ++
+        if rtcp? do
+          [
+            link(parser_ref)
+            |> via_out(:rtcp_output)
+            |> to_bin_output(rtcp_output)
+          ]
+        else
+          []
+        end
 
     new_spec = %ParentSpec{children: children, links: links}
 
@@ -294,13 +332,15 @@ defmodule Membrane.RTP.SessionBin do
     encoding_name = encoding_name || get_from_register!(:encoding_name, payload_type, state)
     clock_rate = clock_rate || get_from_register!(:clock_rate, payload_type, state)
     depayloader = get_depayloader!(encoding_name, state)
+    {local_ssrc, state} = add_ssrc(ssrc, state)
 
     rtp_stream_name = {:stream_receive_bin, ssrc}
 
     new_children = %{
       rtp_stream_name => %RTP.StreamReceiveBin{
         depayloader: depayloader,
-        ssrc: ssrc,
+        local_ssrc: local_ssrc,
+        remote_ssrc: ssrc,
         clock_rate: clock_rate
       }
     }
@@ -330,28 +370,16 @@ defmodule Membrane.RTP.SessionBin do
       end
 
     new_spec = %ParentSpec{children: new_children, links: new_links}
-    state = %{state | ssrcs: add_ssrc(ssrc, state.ssrcs, state.receiver_ssrc_generator)}
     {{:ok, spec: new_spec}, state}
   end
 
   @impl true
-  def handle_pad_added(Pad.ref(:rtcp_output, _ref) = pad, _ctx, %{secure?: true} = state) do
-    new_children = [
-      srtcp_encryptor: %SRTCP.Encryptor{policies: state.receiver_srtp_policies},
-      rtcp_forwarder: RTCP.Forwarder
-    ]
+  def handle_pad_added(Pad.ref(:rtcp_output, ref), ctx, state) do
+    if Map.has_key?(ctx.children, {:rtp_parser, ref}) do
+      raise "RTCP output has to be linked before RTP input"
+    end
 
-    new_links = [link(:rtcp_forwarder) |> to(:srtcp_encryptor) |> to_bin_output(pad)]
-    new_spec = %ParentSpec{children: new_children, links: new_links}
-    {{:ok, spec: new_spec, start_timer: {:rtcp_report_timer, state.rtcp_interval}}, state}
-  end
-
-  @impl true
-  def handle_pad_added(Pad.ref(:rtcp_output, _ref) = pad, _ctx, state) do
-    new_children = [rtcp_forwarder: RTCP.Forwarder]
-    new_links = [link(:rtcp_forwarder) |> to_bin_output(pad)]
-    new_spec = %ParentSpec{children: new_children, links: new_links}
-    {{:ok, spec: new_spec, start_timer: {:rtcp_report_timer, state.rtcp_interval}}, state}
+    {:ok, state}
   end
 
   @impl true
@@ -439,10 +467,10 @@ defmodule Membrane.RTP.SessionBin do
     {{:ok, remove_child: {:stream_receive_bin, ssrc}}, state}
   end
 
-  @impl true
-  def handle_pad_removed(Pad.ref(:rtcp_output, _ref), _ctx, state) do
-    {{:ok, stop_timer: :rtcp_report_timer, remove_child: :rtcp_forwarder}, state}
-  end
+  # @impl true
+  # def handle_pad_removed(Pad.ref(:rtcp_output, _ref), _ctx, state) do
+  #   {{:ok, stop_timer: :rtcp_report_timer, remove_child: :rtcp_forwarder}, state}
+  # end
 
   @impl true
   def handle_pad_removed(Pad.ref(name, ssrc), ctx, state)
@@ -457,46 +485,46 @@ defmodule Membrane.RTP.SessionBin do
     end
   end
 
-  @impl true
-  def handle_tick(:rtcp_report_timer, _ctx, state) do
-    {maybe_receiver_report, report_data} =
-      Session.ReceiverReport.flush_report(state.rtcp_report_data)
+  # @impl true
+  # def handle_tick(:rtcp_report_timer, _ctx, state) do
+  #   {maybe_receiver_report, report_data} =
+  #     Session.ReceiverReport.flush_report(state.rtcp_report_data)
 
-    {remote_ssrcs, report_data} = Session.ReceiverReport.init_report(state.ssrcs, report_data)
+  #   {remote_ssrcs, report_data} = Session.ReceiverReport.init_report(state.ssrcs, report_data)
 
-    {maybe_sender_report, sender_report_data} =
-      Session.SenderReport.flush_report(state.rtcp_sender_report_data)
+  #   {maybe_sender_report, sender_report_data} =
+  #     Session.SenderReport.flush_report(state.rtcp_sender_report_data)
 
-    {senders_ssrcs, sender_report_data} =
-      Session.SenderReport.init_report(state.senders_ssrcs, sender_report_data)
+  #   {senders_ssrcs, sender_report_data} =
+  #     Session.SenderReport.init_report(state.senders_ssrcs, sender_report_data)
 
-    sender_stats_requests = Enum.map(senders_ssrcs, &{{:stream_send_bin, &1}, :send_stats})
-    receiver_stats_requests = Enum.map(remote_ssrcs, &{{:stream_receive_bin, &1}, :send_stats})
+  #   sender_stats_requests = Enum.map(senders_ssrcs, &{{:stream_send_bin, &1}, :send_stats})
+  #   receiver_stats_requests = Enum.map(remote_ssrcs, &{{:stream_receive_bin, &1}, :send_stats})
 
-    receiver_report_messages =
-      case maybe_receiver_report do
-        {:report, report} -> [rtcp_forwarder: {:report, report}]
-        :no_report -> []
-      end
+  #   receiver_report_messages =
+  #     case maybe_receiver_report do
+  #       {:report, report} -> [rtcp_forwarder: {:report, report}]
+  #       :no_report -> []
+  #     end
 
-    sender_report_messages =
-      case maybe_sender_report do
-        {:report, report} -> [rtcp_forwarder: {:report, report}]
-        :no_report -> []
-      end
+  #   sender_report_messages =
+  #     case maybe_sender_report do
+  #       {:report, report} -> [rtcp_forwarder: {:report, report}]
+  #       :no_report -> []
+  #     end
 
-    actions =
-      Enum.map(
-        receiver_report_messages ++
-          receiver_stats_requests ++
-          sender_report_messages ++
-          sender_stats_requests,
-        &{:forward, &1}
-      )
+  #   actions =
+  #     Enum.map(
+  #       receiver_report_messages ++
+  #         receiver_stats_requests ++
+  #         sender_report_messages ++
+  #         sender_stats_requests,
+  #       &{:forward, &1}
+  #     )
 
-    {{:ok, actions},
-     %{state | rtcp_report_data: report_data, rtcp_sender_report_data: sender_report_data}}
-  end
+  #   {{:ok, actions},
+  #    %{state | rtcp_report_data: report_data, rtcp_sender_report_data: sender_report_data}}
+  # end
 
   @impl true
   def handle_notification({:new_rtp_stream, ssrc, payload_type}, :ssrc_router, _ctx, state) do
@@ -552,9 +580,10 @@ defmodule Membrane.RTP.SessionBin do
     end
   end
 
-  defp add_ssrc(remote_ssrc, ssrcs, generator) do
+  defp add_ssrc(remote_ssrc, state) do
+    %{ssrcs: ssrcs, receiver_ssrc_generator: generator} = state
     local_ssrc = generator.([remote_ssrc | Map.keys(ssrcs)], Map.values(ssrcs))
-    Map.put(ssrcs, remote_ssrc, local_ssrc)
+    {local_ssrc, put_in(state, [:ssrcs, remote_ssrc], local_ssrc)}
   end
 
   defp get_from_register!(field, pt, state) do
