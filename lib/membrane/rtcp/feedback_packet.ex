@@ -17,7 +17,9 @@ defmodule Membrane.RTCP.FeedbackPacket do
   @callback encode(struct()) :: binary()
 
   @packet_type_payload BiMap.new(%{
-                         4 => __MODULE__.FIR
+                         1 => __MODULE__.PLI,
+                         4 => __MODULE__.FIR,
+                         15 => __MODULE__.TWCC
                        })
 
   @impl true

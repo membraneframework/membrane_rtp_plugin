@@ -50,13 +50,18 @@ defmodule Membrane.RTP.SSRCRouter do
   end
 
   @impl true
-  def handle_pad_removed(Pad.ref(:input, _) = pad, _ctx, state) do
+  def handle_pad_removed(Pad.ref(:input, _id) = pad, _ctx, state) do
     new_pads =
       state.pads
       |> Enum.filter(fn {_ssrc, p} -> p != pad end)
       |> Enum.into(%{})
 
     {:ok, %State{state | pads: new_pads}}
+  end
+
+  @impl true
+  def handle_pad_removed(Pad.ref(:output, _ssrc), _ctx, state) do
+    {:ok, state}
   end
 
   @impl true
@@ -86,6 +91,18 @@ defmodule Membrane.RTP.SSRCRouter do
     {new_stream_actions, state} = maybe_handle_new_stream(pad, ssrc, payload_type, state)
     {actions, state} = maybe_add_to_linking_buffer(:buffer, buffer, ssrc, state)
     {{:ok, new_stream_actions ++ actions}, state}
+  end
+
+  @impl true
+  def handle_event(Pad.ref(:input, _id), %RTCPEvent{} = event, _ctx, state) do
+    {actions, state} =
+      event.ssrcs
+      |> Enum.filter(&Map.has_key?(state.pads, &1))
+      |> Enum.flat_map_reduce(state, fn ssrc, state ->
+        maybe_add_to_linking_buffer(:event, event, ssrc, state)
+      end)
+
+    {{:ok, actions}, state}
   end
 
   @impl true

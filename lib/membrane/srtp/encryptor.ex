@@ -89,7 +89,7 @@ defmodule Membrane.SRTP.Encryptor do
 
     case packet_type do
       :rtp -> ExLibSRTP.protect(state.srtp, payload)
-      :rtcp -> IO.inspect(payload) && ExLibSRTP.protect_rtcp(state.srtp, payload)
+      :rtcp -> ExLibSRTP.protect_rtcp(state.srtp, payload)
     end
     |> case do
       {:ok, payload} ->

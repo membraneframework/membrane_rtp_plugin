@@ -54,8 +54,8 @@ defmodule Membrane.RTP.Parser do
     end
     |> case do
       {:ok, packet} ->
-        buffers = process_packet(packet, buffer.metadata)
-        {{:ok, buffer: {:output, buffers}}, state}
+        actions = process_packet(packet, buffer.metadata)
+        {{:ok, actions}, state}
 
       {:error, reason} ->
         Membrane.Logger.warn("""
@@ -86,7 +86,7 @@ defmodule Membrane.RTP.Parser do
         {:ok, state}
 
       pad ->
-        buffer = %Buffer{payload: RTCP.Packet.serialize(event.packet)}
+        buffer = %Buffer{payload: RTCP.Packet.serialize(event.rtcp)}
         {{:ok, buffer: {pad, buffer}}, state}
     end
   end
@@ -97,11 +97,29 @@ defmodule Membrane.RTP.Parser do
   defp process_packet(%RTP.Packet{} = rtp, metadata) do
     extracted = Map.take(rtp.header, @metadata_fields)
     metadata = Map.put(metadata, :rtp, extracted)
-    %Buffer{payload: rtp.payload, metadata: metadata}
+    [buffer: {:output, %Buffer{payload: rtp.payload, metadata: metadata}}]
   end
 
-  defp process_packet(rtcp, _metadata) do
-    # IO.inspect(rtcp)
+  defp process_packet(rtcp, metadata) do
+    Enum.flat_map(rtcp, &process_rtcp(&1, metadata)) ++ [redemand: :output]
+  end
+
+  defp process_rtcp(%RTCP.FeedbackPacket{payload: %RTCP.FeedbackPacket.PLI{}}, _metadata) do
+    Membrane.Logger.warn("Received packet loss indicator RTCP packet")
+    []
+  end
+
+  defp process_rtcp(%RTCP.SenderReportPacket{ssrc: ssrc} = packet, metadata) do
+    event = %RTCPEvent{
+      rtcp: %{packet | reports: []},
+      ssrcs: [ssrc],
+      arrival_timestamp: Map.get(metadata, :arrival_ts, Membrane.Time.vm_time())
+    }
+
+    [event: {:output, event}]
+  end
+
+  defp process_rtcp(_unknown_rtcp_packet, _metadata) do
     []
   end
 end
