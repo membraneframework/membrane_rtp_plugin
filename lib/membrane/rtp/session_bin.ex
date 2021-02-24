@@ -542,14 +542,14 @@ defmodule Membrane.RTP.SessionBin do
   end
 
   defp get_payloader!(encoding_name, state) do
-    case PayloadFormat.get(encoding_name).payloader || state.custom_payloaders[encoding_name] do
+    case state.custom_payloaders[encoding_name] || PayloadFormat.get(encoding_name).payloader do
       nil -> raise "Cannot find payloader for encoding #{encoding_name}"
       payloader -> payloader
     end
   end
 
   defp get_depayloader!(encoding_name, state) do
-    case PayloadFormat.get(encoding_name).depayloader || state.custom_depayloaders[encoding_name] do
+    case state.custom_depayloaders[encoding_name] || PayloadFormat.get(encoding_name).depayloader do
       nil -> raise "Cannot find depayloader for encoding #{encoding_name}"
       depayloader -> depayloader
     end
