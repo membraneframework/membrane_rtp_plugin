@@ -2,11 +2,13 @@ defmodule Membrane.RTP.VAD do
   @moduledoc """
   Simple vad based on audio level sent in RTP header.
 
+  To make this module work appropriate RTP header extension has to be set in SDP offer/answer.
+
   If avg of audio level in packets in `time_window` exceeds `vad_threshold` it emits
-  notification `{:vad, true}`.
+  notification `t:speech_notification_t/0`.
 
   When avg falls below `vad_threshold` and doesn't exceed it in the next `vad_silence_timer`
-  it emits notification `{:vad, false}`.
+  it emits notification `t:silence_notification_t/0`.
   """
   use Membrane.Filter
 
@@ -45,12 +47,21 @@ defmodule Membrane.RTP.VAD do
                 spec: pos_integer(),
                 default: 300,
                 description: """
-                Time to wait before emitting notification `{:vad, false}` after audio track is
+                Time to wait before emitting notification `t:silence_notification_t/0` after audio track is
                 no longer considered to represent speech.
-                If at this time audio track is considered to represent speech again the notification
-                `{:vad, false}` will not be sent.
+                If at this time audio track is considered to represent speech again the notification will not be sent.
                 """
               ]
+
+  @typedoc """
+  Notification sent after detecting speech activity.
+  """
+  @type speech_notification_t() :: {:vad, :speech}
+
+  @typedoc """
+  Notification sent after detecting silence activity.
+  """
+  @type silence_notification_t() :: {:vad, :silence}
 
   @impl true
   def handle_init(opts) do
