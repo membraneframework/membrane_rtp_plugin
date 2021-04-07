@@ -134,6 +134,15 @@ defmodule Membrane.RTP.SessionBin do
         Clock rate to use. If not provided, determined from `fmt_mapping` or defaults registered by proper plugins i.e.
         `Membrane.RTP.X.Plugin` where X is the name of codec corresponding to `encoding`.
         """
+      ],
+      extensions: [
+        spec: [:vad],
+        default: [],
+        description: """
+        List of extensions. Currently `:vad` is only supported.
+        * `:vad` will turn on Voice Activity Detection mechanism firing appropriate notifications when needed.
+        Should be set only for audio tracks. For more information refer to `Membrane.RTP.VAD` module documentation.
+        """
       ]
     ]
 
@@ -277,7 +286,9 @@ defmodule Membrane.RTP.SessionBin do
 
   @impl true
   def handle_pad_added(Pad.ref(:output, ssrc) = pad, ctx, state) do
-    %{encoding: encoding_name, clock_rate: clock_rate} = ctx.pads[pad].options
+    %{encoding: encoding_name, clock_rate: clock_rate, extensions: extensions} =
+      ctx.pads[pad].options
+
     payload_type = Map.fetch!(state.ssrc_pt_mapping, ssrc)
 
     encoding_name = encoding_name || get_from_register!(:encoding_name, payload_type, state)
@@ -300,6 +311,23 @@ defmodule Membrane.RTP.SessionBin do
       |> to(rtp_stream_name)
       |> to_bin_output(pad)
     ]
+
+    {new_children, new_links} =
+      if extensions == [:vad] do
+        new_children = Map.merge(new_children, %{{:vad, ssrc} => RTP.VAD})
+
+        new_links = [
+          link(:ssrc_router)
+          |> via_out(Pad.ref(:output, ssrc))
+          |> to(rtp_stream_name)
+          |> to({:vad, ssrc})
+          |> to_bin_output(pad)
+        ]
+
+        {new_children, new_links}
+      else
+        {new_children, new_links}
+      end
 
     new_spec = %ParentSpec{children: new_children, links: new_links}
     state = %{state | ssrcs: add_ssrc(ssrc, state.ssrcs, state.receiver_ssrc_generator)}
@@ -508,6 +536,11 @@ defmodule Membrane.RTP.SessionBin do
       Session.ReceiverReport.handle_stats(stats, remote_ssrc, state.ssrcs, state.rtcp_report_data)
 
     {{:ok, forward_action(result, ctx)}, %{state | rtcp_report_data: report_data}}
+  end
+
+  @impl true
+  def handle_notification({:vad, _val} = msg, _from, _ctx, state) do
+    {{:ok, notify: msg}, state}
   end
 
   defp forward_action(result, ctx) do
