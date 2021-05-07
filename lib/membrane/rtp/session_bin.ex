@@ -34,6 +34,14 @@ defmodule Membrane.RTP.SessionBin do
 
   @type new_stream_notification_t :: Membrane.RTP.SSRCRouter.new_stream_notification_t()
 
+  @typedoc """
+  A module that will be spawned and linked just before a newly created `:output` pad representing
+  a single RTP stream.
+
+  Given extension config must be a valid `Membrane.Filter`.
+
+  An extension will be spawned inside the bin with under `{extension_name :: atom(), ssrc}` name.
+  """
   @type extension_t ::
           {extension_name :: atom(), extension_config :: Membrane.ParentSpec.child_spec_t()}
 
