@@ -153,6 +153,8 @@ defmodule Membrane.RTP.SessionBin do
         List of extensions. Currently `:vad` is only supported.
         * `:vad` will turn on Voice Activity Detection mechanism firing appropriate notifications when needed.
         Should be set only for audio tracks. For more information refer to `Membrane.RTP.VAD` module documentation.
+
+        Extensions are applied in the same order as passed to the pad options.
         """
       ]
     ]
