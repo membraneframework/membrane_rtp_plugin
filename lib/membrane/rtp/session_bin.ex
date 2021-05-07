@@ -144,7 +144,7 @@ defmodule Membrane.RTP.SessionBin do
         description: """
         List of extensions. Currently `:vad` is only supported.
         * `:vad` will turn on Voice Activity Detection mechanism firing appropriate notifications when needed.
-           Should be set only for audio tracks. For more information refer to `Membrane.RTP.VAD` module documentation.
+        Should be set only for audio tracks. For more information refer to `Membrane.RTP.VAD` module documentation.
         """
       ]
     ]
@@ -353,10 +353,11 @@ defmodule Membrane.RTP.SessionBin do
       |> via_out(Pad.ref(:output, ssrc))
       |> to(rtp_stream_name)
 
+    acc = {new_children, router_link}
+
     {new_children, router_link} =
       extensions
-      |> Enum.reduce({new_children, router_link}, fn {extension_name, config},
-                                                     {new_children, new_link} ->
+      |> Enum.reduce(acc, fn {extension_name, config}, {new_children, new_link} ->
         extension_id = {extension_name, ssrc}
 
         {
@@ -365,9 +366,7 @@ defmodule Membrane.RTP.SessionBin do
         }
       end)
 
-    new_links = [
-      router_link |> to_bin_output(pad)
-    ]
+    new_links = [router_link |> to_bin_output(pad)]
 
     new_spec = %ParentSpec{children: new_children, links: new_links}
     {{:ok, spec: new_spec}, state}
