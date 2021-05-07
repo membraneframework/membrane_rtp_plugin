@@ -41,6 +41,12 @@ defmodule Membrane.RTP.SessionBin do
   Given extension config must be a valid `Membrane.Filter`.
 
   An extension will be spawned inside the bin under `{extension_name :: atom(), ssrc}` name.
+
+  ### Currently supported extensions are:
+  * `Membrane.RTP.VAD`
+
+  ### Example usage
+  `{:vad, %Mebrane.RTP.VAD{time_window: 1_000_000}}`
   """
   @type extension_t ::
           {extension_name :: atom(), extension_config :: Membrane.ParentSpec.child_spec_t()}
