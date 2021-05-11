@@ -34,6 +34,23 @@ defmodule Membrane.RTP.SessionBin do
 
   @type new_stream_notification_t :: Membrane.RTP.SSRCRouter.new_stream_notification_t()
 
+  @typedoc """
+  A module that will be spawned and linked just before a newly created `:output` pad representing
+  a single RTP stream.
+
+  Given extension config must be a valid `Membrane.Filter`.
+
+  An extension will be spawned inside the bin under `{extension_name :: atom(), ssrc}` name.
+
+  ### Currently supported extensions are:
+  * `Membrane.RTP.VAD`
+
+  ### Example usage
+  `{:vad, %Mebrane.RTP.VAD{time_window: 1_000_000}}`
+  """
+  @type extension_t ::
+          {extension_name :: atom(), extension_config :: Membrane.ParentSpec.child_spec_t()}
+
   @ssrc_boundaries 2..(Bitwise.bsl(1, 32) - 1)
 
   @rtp_input_buffer_params [warn_size: 250, fail_size: 500]
@@ -136,12 +153,14 @@ defmodule Membrane.RTP.SessionBin do
         """
       ],
       extensions: [
-        spec: [:vad],
+        spec: [extension_t()],
         default: [],
         description: """
         List of extensions. Currently `:vad` is only supported.
         * `:vad` will turn on Voice Activity Detection mechanism firing appropriate notifications when needed.
         Should be set only for audio tracks. For more information refer to `Membrane.RTP.VAD` module documentation.
+
+        Extensions are applied in the same order as passed to the pad options.
         """
       ]
     ]
@@ -345,29 +364,25 @@ defmodule Membrane.RTP.SessionBin do
       }
     }
 
-    new_links = [
+    router_link =
       link(:ssrc_router)
       |> via_out(Pad.ref(:output, ssrc))
       |> to(rtp_stream_name)
-      |> to_bin_output(pad)
-    ]
 
-    {new_children, new_links} =
-      if extensions == [:vad] do
-        new_children = Map.merge(new_children, %{{:vad, ssrc} => RTP.VAD})
+    acc = {new_children, router_link}
 
-        new_links = [
-          link(:ssrc_router)
-          |> via_out(Pad.ref(:output, ssrc))
-          |> to(rtp_stream_name)
-          |> to({:vad, ssrc})
-          |> to_bin_output(pad)
-        ]
+    {new_children, router_link} =
+      extensions
+      |> Enum.reduce(acc, fn {extension_name, config}, {new_children, new_link} ->
+        extension_id = {extension_name, ssrc}
 
-        {new_children, new_links}
-      else
-        {new_children, new_links}
-      end
+        {
+          Map.merge(new_children, %{extension_id => config}),
+          new_link |> to(extension_id)
+        }
+      end)
+
+    new_links = [router_link |> to_bin_output(pad)]
 
     new_spec = %ParentSpec{children: new_children, links: new_links}
     {{:ok, spec: new_spec}, state}
