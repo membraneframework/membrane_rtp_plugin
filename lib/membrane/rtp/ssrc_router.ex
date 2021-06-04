@@ -60,6 +60,11 @@ defmodule Membrane.RTP.SSRCRouter do
   end
 
   @impl true
+  def handle_pad_removed(Pad.ref(:output, _ssrc), _ctx, state) do
+    {:ok, state}
+  end
+
+  @impl true
   def handle_prepared_to_playing(ctx, state) do
     actions =
       ctx.pads
