@@ -14,7 +14,7 @@ The package can be installed by adding `membrane_rtp_plugin` to your list of dep
 ```elixir
 def deps do
   [
-    {:membrane_rtp_plugin, "~> 0.5.0"},
+    {:membrane_rtp_plugin, "~> 0.5.1"},
     {:ex_libsrtp, "~> 0.1.0"} # required only if SRTP/SRTCP support is needed
   ]
 end
