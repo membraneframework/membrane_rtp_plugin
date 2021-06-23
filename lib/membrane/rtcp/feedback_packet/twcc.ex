@@ -9,4 +9,9 @@ defmodule Membrane.RTCP.FeedbackPacket.TWCC do
   def decode(_binary) do
     {:ok, %__MODULE__{}}
   end
+
+  @impl true
+  def encode(_packet) do
+    {:ok, <<>>}
+  end
 end
