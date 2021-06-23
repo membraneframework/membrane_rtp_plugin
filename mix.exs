@@ -1,7 +1,7 @@
 defmodule Membrane.RTP.Plugin.MixProject do
   use Mix.Project
 
-  @version "0.5.1"
+  @version "0.6.0"
   @github_url "https://github.com/membraneframework/membrane_rtp_plugin"
 
   def project do
@@ -74,7 +74,7 @@ defmodule Membrane.RTP.Plugin.MixProject do
 
   defp deps do
     [
-      {:membrane_core, "~> 0.6.1"},
+      {:membrane_core, "~> 0.7.0"},
       {:membrane_rtp_format, "~> 0.3.1"},
       {:membrane_remote_stream_format, "~> 0.1.0"},
       {:ex_libsrtp, "~> 0.1.0", optional: true},
@@ -87,7 +87,7 @@ defmodule Membrane.RTP.Plugin.MixProject do
       {:excoveralls, ">= 0.8.0", only: :test},
       {:membrane_rtp_h264_plugin, "~> 0.4.0", only: :test},
       {:membrane_rtp_mpegaudio_plugin, "~> 0.5.0-alpha", only: :test},
-      {:membrane_h264_ffmpeg_plugin, "~> 0.7.0", only: :test},
+      {:membrane_h264_ffmpeg_plugin, "~> 0.8.0", only: :test},
       {:membrane_element_pcap, github: "membraneframework/membrane-element-pcap", only: :test},
       {:membrane_element_udp, "~> 0.4.0", only: :test},
       {:membrane_hackney_plugin, "~> 0.4.0", only: :test}
