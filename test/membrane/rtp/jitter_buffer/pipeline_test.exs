@@ -135,5 +135,7 @@ defmodule Membrane.RTP.JitterBuffer.PipelineTest do
           )
       end
     end)
+
+    Membrane.Pipeline.stop_and_terminate(pipeline, blocking?: true)
   end
 end

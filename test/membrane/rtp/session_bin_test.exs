@@ -3,6 +3,8 @@ defmodule Membrane.RTP.Session.ReceiveBinTest do
 
   import Membrane.Testing.Assertions
 
+  alias Membrane.RemoteStream
+  alias Membrane.RTCP
   alias Membrane.RTCP.{Header, Packet}
   alias Membrane.RTP
   alias Membrane.Testing
@@ -118,7 +120,10 @@ defmodule Membrane.RTP.Session.ReceiveBinTest do
           },
           parser: %Membrane.H264.FFmpeg.Parser{framerate: {30, 1}, alignment: :nal},
           rtp_sink: Testing.Sink,
-          rtcp_source: %Testing.Source{output: options.rtcp_input},
+          rtcp_source: %Testing.Source{
+            output: options.rtcp_input,
+            caps: %RemoteStream{type: :packetized, content_format: RTCP}
+          },
           rtcp_sink: Testing.Sink
         ],
         links: [
@@ -245,7 +250,7 @@ defmodule Membrane.RTP.Session.ReceiveBinTest do
     end)
 
     assert_end_of_stream(pipeline, {:sink, ^video_ssrc})
-    Testing.Pipeline.stop(pipeline)
+    Testing.Pipeline.stop_and_terminate(pipeline, blcoking?: true)
     assert_pipeline_playback_changed(pipeline, _, :stopped)
   end
 end
