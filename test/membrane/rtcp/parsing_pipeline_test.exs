@@ -3,6 +3,7 @@ defmodule Membrane.RTCP.ParsingPipelineTest do
 
   import Membrane.Testing.Assertions
 
+  alias Membrane.RemoteStream
   alias Membrane.RTCP
   alias Membrane.RTCP.{Fixtures, Parser}
   alias Membrane.Testing.{Source, Pipeline}
@@ -13,7 +14,10 @@ defmodule Membrane.RTCP.ParsingPipelineTest do
     assert {:ok, pipeline} =
              Pipeline.start_link(%Pipeline.Options{
                elements: [
-                 source: %Source{output: packets},
+                 source: %Source{
+                   output: packets,
+                   caps: %RemoteStream{type: :packetized, content_format: RTCP}
+                 },
                  parser: Parser
                ]
              })
@@ -42,5 +46,7 @@ defmodule Membrane.RTCP.ParsingPipelineTest do
                tool: contents.tool
              }
     end)
+
+    Pipeline.stop_and_terminate(pipeline, blocking?: true)
   end
 end
