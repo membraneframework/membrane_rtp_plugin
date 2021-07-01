@@ -16,7 +16,10 @@ defmodule Membrane.RTP.PipelineTest do
     {:ok, pipeline} =
       Pipeline.start_link(%Pipeline.Options{
         elements: [
-          source: %Source{output: test_data},
+          source: %Source{
+            output: test_data,
+            caps: %Membrane.RemoteStream{type: :packetized, content_format: Membrane.RTP}
+          },
           parser: Parser,
           sink: %Sink{}
         ]
@@ -27,5 +30,7 @@ defmodule Membrane.RTP.PipelineTest do
     Enum.each(test_data_base, fn _ ->
       assert_sink_buffer(pipeline, :sink, %Buffer{}, @buffer_receive_timeout)
     end)
+
+    Pipeline.stop_and_terminate(pipeline, blocking?: true)
   end
 end

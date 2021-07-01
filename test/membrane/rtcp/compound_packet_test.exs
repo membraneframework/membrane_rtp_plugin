@@ -8,7 +8,7 @@ defmodule Membrane.RTCP.PacketTest do
 
   test "compound packets parsing" do
     packet = Fixtures.sample_packet_binary()
-    assert {:ok, %RTCP.Packet{packets: packets}} = RTCP.Packet.parse(packet)
+    assert {:ok, packets} = RTCP.Packet.parse(packet)
 
     assert %RTCP.SenderReportPacket{reports: [], sender_info: %{}, ssrc: @sample_ssrc} =
              hd(packets)

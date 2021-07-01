@@ -3,6 +3,11 @@ defmodule Membrane.RTP.ParserTest do
 
   alias Membrane.Buffer
   alias Membrane.RTP.{Fixtures, Parser}
+  alias Membrane.Testing.{Pipeline, Sink, Source}
+
+  import Membrane.Testing.Assertions
+
+  @buffer_receive_timeout 1000
 
   describe "Parser" do
     test "parse a packet" do
@@ -27,6 +32,31 @@ defmodule Membrane.RTP.ParserTest do
                       },
                       payload: Fixtures.sample_packet_payload()
                     }}}, %{}}
+    end
+
+    test "works in pipeline" do
+      test_data_base = 1..100
+      test_data = Fixtures.fake_packet_list(test_data_base)
+
+      {:ok, pipeline} =
+        Pipeline.start_link(%Pipeline.Options{
+          elements: [
+            source: %Source{
+              output: test_data,
+              caps: %Membrane.RemoteStream{type: :packetized, content_format: Membrane.RTP}
+            },
+            parser: Parser,
+            sink: %Sink{}
+          ]
+        })
+
+      Pipeline.play(pipeline)
+
+      Enum.each(test_data_base, fn _ ->
+        assert_sink_buffer(pipeline, :sink, %Buffer{}, @buffer_receive_timeout)
+      end)
+
+      Pipeline.stop_and_terminate(pipeline, blocking?: true)
     end
   end
 end

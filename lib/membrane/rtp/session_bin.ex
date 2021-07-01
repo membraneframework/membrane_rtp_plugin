@@ -127,11 +127,6 @@ defmodule Membrane.RTP.SessionBin do
     caps: {RemoteStream, type: :packetized, content_format: one_of([nil, RTP])},
     availability: :on_request
 
-  def_input_pad :rtcp_input,
-    demand_unit: :buffers,
-    caps: {RemoteStream, type: :packetized, content_format: one_of([nil, RTCP])},
-    availability: :on_request
-
   def_output_pad :output,
     demand_unit: :buffers,
     caps: :any,
@@ -317,30 +312,6 @@ defmodule Membrane.RTP.SessionBin do
   end
 
   @impl true
-  def handle_pad_added(Pad.ref(:rtcp_input, ref) = pad, _ctx, %{secure?: true} = state) do
-    parser_ref = {:rtcp_parser, ref}
-    decryptor_ref = {:srtcp_decryptor, ref}
-
-    children = %{
-      parser_ref => RTCP.Parser,
-      decryptor_ref => %SRTCP.Decryptor{policies: state.srtp_policies}
-    }
-
-    links = [link_bin_input(pad) |> to(decryptor_ref) |> to(parser_ref)]
-    new_spec = %ParentSpec{children: children, links: links}
-    {{:ok, spec: new_spec}, state}
-  end
-
-  @impl true
-  def handle_pad_added(Pad.ref(:rtcp_input, ref) = pad, _ctx, state) do
-    parser_ref = {:rtcp_parser, ref}
-    children = [{parser_ref, RTCP.Parser}]
-    links = [link_bin_input(pad) |> to(parser_ref)]
-    new_spec = %ParentSpec{children: children, links: links}
-    {{:ok, spec: new_spec}, state}
-  end
-
-  @impl true
   def handle_pad_added(Pad.ref(:output, ssrc) = pad, ctx, state) do
     %{encoding: encoding_name, clock_rate: clock_rate, extensions: extensions} =
       ctx.pads[pad].options
@@ -466,12 +437,6 @@ defmodule Membrane.RTP.SessionBin do
   @impl true
   def handle_pad_removed(Pad.ref(:rtp_input, ref), _ctx, state) do
     children = [rtp_parser: ref] ++ if state.secure?, do: [srtp_decryptor: ref], else: []
-    {{:ok, remove_child: children}, state}
-  end
-
-  @impl true
-  def handle_pad_removed(Pad.ref(:rtcp_input, ref), _ctx, state) do
-    children = [rtcp_parser: ref] ++ if state.secure?, do: [srtcp_decryptor: ref], else: []
     {{:ok, remove_child: children}, state}
   end
 
