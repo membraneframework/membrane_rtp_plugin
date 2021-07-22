@@ -243,7 +243,10 @@ defmodule Membrane.RTP.SessionBin do
     children =
       %{
         parser_ref => RTP.Parser,
-        decryptor_ref => %SRTP.Decryptor{policies: state.srtp_policies, packet_filter: ctx.pads[pad].options.packet_filter}
+        decryptor_ref => %SRTP.Decryptor{
+          policies: state.srtp_policies,
+          packet_filter: ctx.pads[pad].options.packet_filter
+        }
       }
       |> Map.merge(
         if rtcp? do

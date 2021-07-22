@@ -11,7 +11,11 @@ defmodule Membrane.SRTP.Decryptor do
   alias Membrane.Buffer
   alias Membrane.{Buffer, RTP}
 
-  @type packet_filter_t :: ((binary()) -> boolean())
+  @typedoc """
+  Function taking a binary payload representing SRTP packet and deciding
+  if it should be dropped (returns true) or decrypted (returns false).
+  """
+  @type packet_filter_t :: (binary() -> boolean())
 
   def_input_pad :input, caps: :any, demand_unit: :buffers
   def_output_pad :output, caps: :any
@@ -27,9 +31,7 @@ defmodule Membrane.SRTP.Decryptor do
                 spec: packet_filter_t(),
                 default: nil,
                 description: """
-                A filter deciding if packet should be dropped (returned true) or decrypted and forwarded.
-                Dropping certain packet (e.g. silent audio frames) can boost performance
-                as the packet gets dropped before any expensive operations (in this case decryption and any operations down the line) is performed.
+                Optional packet's filter.
                 """
               ]
 
