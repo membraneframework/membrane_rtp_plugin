@@ -21,15 +21,16 @@ defmodule Membrane.RTP.SessionBin do
   dependencies.
 
   ## RTCP
-  RTCP packets are received via `:rtcp_input` and sent via `:rtcp_output` pad. Only one instance of each of them
-  can be linked. RTCP packets should be delivered to each involved peer that supports RTCP.
+  RTCP packets for inbound stream can be provided either in-band or via a separate `rtp_input` pad instance. Corresponding
+  receiver report packets will be sent back through `rtcp_output` with the same id as `rtp_input` for the RTP stream.
+  RTCP for outbound stream is not yet supported.
   """
   use Membrane.Bin
 
   require Bitwise
   require Membrane.Logger
 
-  alias Membrane.{ParentSpec, RemoteStream, RTCP, RTP, SRTCP, SRTP}
+  alias Membrane.{ParentSpec, RemoteStream, RTCP, RTP, SRTP}
   alias Membrane.RTP.{PayloadFormat, Session}
 
   @type new_stream_notification_t :: Membrane.RTP.SSRCRouter.new_stream_notification_t()
