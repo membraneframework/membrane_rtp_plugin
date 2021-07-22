@@ -108,7 +108,19 @@ defmodule Membrane.RTP.SessionBin do
   def_input_pad :rtp_input,
     demand_unit: :buffers,
     caps: {RemoteStream, type: :packetized, content_format: one_of([nil, RTP])},
-    availability: :on_request
+    availability: :on_request,
+    options: [
+      packet_filter: [
+        spec: [SRTP.Decryptor.packet_filter_t()],
+        default: nil,
+        description: """
+        A filter deciding if packet should be dropped (returned true) or decrypted and forwarded.
+        Dropping certain packet (e.g. silent audio frames) can boost performance
+        as the packet gets dropped before any expensive operations (in this case decryption and any operations down the line) is performed.
+        Used only when `secure?` is set to `true`.
+        """
+      ]
+    ]
 
   def_input_pad :rtcp_input,
     demand_unit: :buffers,
@@ -231,7 +243,7 @@ defmodule Membrane.RTP.SessionBin do
     children =
       %{
         parser_ref => RTP.Parser,
-        decryptor_ref => %SRTP.Decryptor{policies: state.srtp_policies}
+        decryptor_ref => %SRTP.Decryptor{policies: state.srtp_policies, packet_filter: ctx.pads[pad].options.packet_filter}
       }
       |> Map.merge(
         if rtcp? do

@@ -11,6 +11,8 @@ defmodule Membrane.SRTP.Decryptor do
   alias Membrane.Buffer
   alias Membrane.{Buffer, RTP}
 
+  @type packet_filter_t :: ((binary()) -> boolean())
+
   def_input_pad :input, caps: :any, demand_unit: :buffers
   def_output_pad :output, caps: :any
 
@@ -20,12 +22,22 @@ defmodule Membrane.SRTP.Decryptor do
                 List of SRTP policies to use for decrypting packets.
                 See `t:ExLibSRTP.Policy.t/0` for details.
                 """
+              ],
+              packet_filter: [
+                spec: packet_filter_t(),
+                default: nil,
+                description: """
+                A filter deciding if packet should be dropped (returned true) or decrypted and forwarded.
+                Dropping certain packet (e.g. silent audio frames) can boost performance
+                as the packet gets dropped before any expensive operations (in this case decryption and any operations down the line) is performed.
+                """
               ]
 
   @impl true
-  def handle_init(%__MODULE__{policies: policies}) do
+  def handle_init(%__MODULE__{policies: policies, packet_filter: packet_filter}) do
     state = %{
       policies: policies,
+      filter: packet_filter,
       srtp: nil
     }
 
@@ -84,25 +96,29 @@ defmodule Membrane.SRTP.Decryptor do
 
   @impl true
   def handle_process(:input, buffer, _ctx, state) do
-    %Buffer{payload: payload} = buffer
-    packet_type = RTP.Packet.identify(payload)
+    if state.filter != nil and state.filter.(buffer) do
+      {:ok, state}
+    else
+      %Buffer{payload: payload} = buffer
+      packet_type = RTP.Packet.identify(payload)
 
-    case packet_type do
-      :rtp -> ExLibSRTP.unprotect(state.srtp, payload)
-      :rtcp -> ExLibSRTP.unprotect_rtcp(state.srtp, payload)
-    end
-    |> case do
-      {:ok, payload} ->
-        {{:ok, buffer: {:output, %Buffer{buffer | payload: payload}}}, state}
+      case packet_type do
+        :rtp -> ExLibSRTP.unprotect(state.srtp, payload)
+        :rtcp -> ExLibSRTP.unprotect_rtcp(state.srtp, payload)
+      end
+      |> case do
+        {:ok, payload} ->
+          {{:ok, buffer: {:output, %Buffer{buffer | payload: payload}}}, state}
 
-      {:error, reason} ->
-        Membrane.Logger.warn("""
-        Couldn't unprotect #{packet_type} packet:
-        #{inspect(payload, limit: :infinity)}
-        Reason: #{inspect(reason)}. Ignoring packet.
-        """)
+        {:error, reason} ->
+          Membrane.Logger.warn("""
+          Couldn't unprotect #{packet_type} packet:
+          #{inspect(payload, limit: :infinity)}
+          Reason: #{inspect(reason)}. Ignoring packet.
+          """)
 
-        {:ok, state}
+          {:ok, state}
+      end
     end
   end
 end
