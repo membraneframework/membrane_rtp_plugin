@@ -12,6 +12,6 @@ defmodule Membrane.RTCP.FeedbackPacket.PLI do
 
   @impl true
   def encode(_packet) do
-    {:ok, <<>>}
+    <<>>
   end
 end

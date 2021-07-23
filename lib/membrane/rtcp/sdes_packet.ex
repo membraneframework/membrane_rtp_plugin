@@ -39,8 +39,6 @@ defmodule Membrane.RTCP.SdesPacket do
           }
         }
 
-  @packet_type 202
-
   @sdes_type_atom %{
     1 => :cname,
     2 => :name,
@@ -124,7 +122,7 @@ defmodule Membrane.RTCP.SdesPacket do
         <<ssrc::32, encode_chunk(chunk)::binary>>
       end)
 
-    {body, @packet_type, length(chunk_list)}
+    {body, length(chunk_list)}
   end
 
   @spec encode_chunk(chunk :: %__MODULE__.Chunk{}) :: binary()
