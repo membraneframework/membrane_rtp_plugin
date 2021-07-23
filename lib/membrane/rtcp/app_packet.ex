@@ -3,6 +3,9 @@ defmodule Membrane.RTCP.AppPacket do
   Parses RTCP Application-defined (APP) packets
   defined in [RFC3550](https://tools.ietf.org/html/rfc3550#section-6.7)
   """
+
+  @behaviour Membrane.RTCP.Packet
+
   defstruct [:subtype, :ssrc, :name, :data]
 
   @type t :: %__MODULE__{
@@ -11,8 +14,6 @@ defmodule Membrane.RTCP.AppPacket do
           name: String.t(),
           data: binary()
         }
-
-  @behaviour Membrane.RTCP.Packet
 
   @impl true
   def decode(<<ssrc::32, name::bitstring-size(32), data::binary>>, subtype) do

@@ -14,6 +14,7 @@ defmodule Membrane.RTP.Packet do
   @enforce_keys [:header, :payload]
   defstruct @enforce_keys
 
+  @spec identify(binary()) :: :rtp | :rtcp
   def identify(<<_first_byte, _marker::1, payload_type::7, _rest::binary>>)
       when payload_type in 64..95,
       do: :rtcp

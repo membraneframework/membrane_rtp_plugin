@@ -7,7 +7,7 @@ defmodule Membrane.RTP.Fixtures do
   @external_resource "test/fixtures/rtp/rtp_packet_payload.bin"
   @sample_packet_payload File.read!("test/fixtures/rtp/rtp_packet_payload.bin")
 
-  @spec sample_packet() :: binary()
+  @spec sample_packet_binary() :: binary()
   def sample_packet_binary, do: @sample_packet
 
   @spec sample_packet() :: Packet.t()
@@ -25,6 +25,7 @@ defmodule Membrane.RTP.Fixtures do
       }
     }
 
+  @spec sample_header() :: Header.t()
   def sample_header,
     do: %Header{
       payload_type: 14,

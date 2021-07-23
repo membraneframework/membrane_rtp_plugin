@@ -1,5 +1,9 @@
 defmodule Membrane.RTCP.FeedbackPacket.TWCC do
-  # TODO: mock module, to be implemented
+  @moduledoc """
+  TODO: MOCK MODULE, TO BE IMPLEMENTED
+
+  For now, ignores [Transport-wide congestion control](https://datatracker.ietf.org/doc/html/draft-holmer-rmcat-transport-wide-cc-extensions-01) packets.
+  """
 
   @behaviour Membrane.RTCP.FeedbackPacket
 

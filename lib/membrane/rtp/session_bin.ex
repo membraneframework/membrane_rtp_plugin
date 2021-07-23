@@ -27,11 +27,11 @@ defmodule Membrane.RTP.SessionBin do
   """
   use Membrane.Bin
 
-  require Bitwise
-  require Membrane.Logger
-
   alias Membrane.{ParentSpec, RemoteStream, RTCP, RTP, SRTP}
   alias Membrane.RTP.{PayloadFormat, Session}
+
+  require Bitwise
+  require Membrane.Logger
 
   @type new_stream_notification_t :: Membrane.RTP.SSRCRouter.new_stream_notification_t()
 
@@ -115,6 +115,7 @@ defmodule Membrane.RTP.SessionBin do
               ]
 
   @doc false
+  @spec generate_receiver_ssrc([RTP.ssrc_t()], [RTP.ssrc_t()]) :: RTP.ssrc_t()
   def generate_receiver_ssrc(local_ssrcs, remote_ssrcs) do
     fn -> Enum.random(@ssrc_boundaries) end
     |> Stream.repeatedly()

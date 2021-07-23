@@ -6,10 +6,10 @@ defmodule Membrane.SRTP.Decryptor do
   """
   use Membrane.Filter
 
-  require Membrane.Logger
-
   alias Membrane.Buffer
   alias Membrane.{Buffer, RTP}
+
+  require Membrane.Logger
 
   def_input_pad :input, caps: :any, demand_unit: :buffers
   def_output_pad :output, caps: :any

@@ -90,7 +90,8 @@ defmodule Membrane.RTP.Plugin.MixProject do
       # Dev
       {:ex_doc, "~> 0.21", only: :dev, runtime: false},
       {:dialyxir, "~> 1.0", only: :dev, runtime: false},
-      {:excoveralls, ">= 0.8.0", only: :test}
+      {:excoveralls, ">= 0.8.0", only: :test},
+      {:credo, "~> 1.5", only: :dev, runtime: false}
     ]
   end
 end

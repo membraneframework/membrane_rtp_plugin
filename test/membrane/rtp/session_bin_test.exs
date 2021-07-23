@@ -1,4 +1,4 @@
-defmodule Membrane.RTP.Session.ReceiveBinTest do
+defmodule Membrane.RTP.Session.BinTest do
   use ExUnit.Case
 
   import Membrane.Testing.Assertions
@@ -106,7 +106,9 @@ defmodule Membrane.RTP.Session.ReceiveBinTest do
             rtcp_interval: options.rtcp_interval,
             secure?: Map.has_key?(options.input, :srtp_policies),
             srtp_policies: Map.get(options.input, :srtp_policies, []),
-            receiver_ssrc_generator: fn [sender_ssrc | _], _ -> sender_ssrc end
+            receiver_ssrc_generator: fn [sender_ssrc | _local_ssrcs], _remote_ssrcs ->
+              sender_ssrc
+            end
           },
           hackney: %Membrane.Hackney.Source{
             location: "https://membraneframework.github.io/static/video-samples/test-video.h264"
@@ -114,7 +116,7 @@ defmodule Membrane.RTP.Session.ReceiveBinTest do
           parser: %Membrane.H264.FFmpeg.Parser{framerate: {30, 1}, alignment: :nal},
           rtp_sink: Testing.Sink,
           rtcp_source: %Testing.Source{output: options.rtcp_input}
-          # FIXME: put back to test for RTCP output
+          # TODO: put back to test for RTCP output
           # rtcp_sink: Testing.Sink
         ],
         links: [
@@ -164,7 +166,7 @@ defmodule Membrane.RTP.Session.ReceiveBinTest do
         reports: [],
         sender_info: %{
           rtp_timestamp: 555_689_664,
-          sender_octet_count: 27843,
+          sender_octet_count: 27_843,
           sender_packet_count: 158,
           wallclock_timestamp: 1_582_306_181_225_999_999
         },

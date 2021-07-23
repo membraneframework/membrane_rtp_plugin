@@ -4,7 +4,7 @@ defmodule Membrane.RTCP.SdesPacket do
   [RFC3550](https://tools.ietf.org/html/rfc3550#section-6.5)
   """
 
-  alias Membrane.RTCP.Packet
+  @behaviour Membrane.RTCP.Packet
 
   defmodule Chunk do
     @moduledoc false
@@ -60,8 +60,6 @@ defmodule Membrane.RTCP.SdesPacket do
     :note => 7,
     :priv => 8
   }
-
-  @behaviour Packet
 
   @impl true
   def decode(packet, ssrc_count) do

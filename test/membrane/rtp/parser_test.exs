@@ -1,11 +1,11 @@
 defmodule Membrane.RTP.ParserTest do
   use ExUnit.Case
 
+  import Membrane.Testing.Assertions
+
   alias Membrane.Buffer
   alias Membrane.RTP.{Fixtures, Parser}
   alias Membrane.Testing.{Pipeline, Sink, Source}
-
-  import Membrane.Testing.Assertions
 
   @buffer_receive_timeout 1000
 
@@ -52,7 +52,7 @@ defmodule Membrane.RTP.ParserTest do
 
       Pipeline.play(pipeline)
 
-      Enum.each(test_data_base, fn _ ->
+      Enum.each(test_data_base, fn _test_data ->
         assert_sink_buffer(pipeline, :sink, %Buffer{}, @buffer_receive_timeout)
       end)
 

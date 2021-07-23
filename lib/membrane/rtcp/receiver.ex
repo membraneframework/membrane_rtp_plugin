@@ -1,4 +1,7 @@
 defmodule Membrane.RTCP.Receiver do
+  @moduledoc """
+  Element exchanging RTCP packets and jitter buffer statistics.
+  """
   use Membrane.Filter
 
   alias Membrane.RTCPEvent
@@ -20,10 +23,10 @@ defmodule Membrane.RTCP.Receiver do
 
   @impl true
   def handle_prepared_to_playing(_ctx, state) do
-    # FIXME: reenable timer and fix receiver reports
+    # TODO: reenable timer and fix receiver reports
     # {{:ok, start_timer: {:stats_timer, state.report_interval}}, state}
 
-    # FIXME: find out why FIRs on FIR requests are not sufficient
+    # TODO: find out why FIRs on FIR requests are not sufficient
     # TODO: make interval configurable
     {{:ok, start_timer: {:fir_timer, Membrane.Time.second()}}, state}
   end
@@ -76,7 +79,7 @@ defmodule Membrane.RTCP.Receiver do
       interarrival_jitter: trunc(stats.interarrival_jitter),
       last_sr_timestamp: Map.get(state.sr_info, :cut_wallclock_ts, 0),
       # delay_since_sr is expressed in 1/65536 seconds, see https://tools.ietf.org/html/rfc3550#section-6.4.1
-      delay_since_sr: Time.to_seconds(65536 * delay_since_sr)
+      delay_since_sr: Time.to_seconds(65_536 * delay_since_sr)
     }
 
     packet = %RTCP.ReceiverReportPacket{ssrc: state.local_ssrc, reports: [report_block]}
