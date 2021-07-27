@@ -8,7 +8,7 @@ defmodule Membrane.RTP.Plugin.MixProject do
     [
       app: :membrane_rtp_plugin,
       version: @version,
-      elixir: "~> 1.9",
+      elixir: "~> 1.12",
       elixirc_paths: elixirc_paths(Mix.env()),
       deps: deps(),
 

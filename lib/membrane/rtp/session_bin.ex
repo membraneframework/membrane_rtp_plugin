@@ -234,6 +234,8 @@ defmodule Membrane.RTP.SessionBin do
 
   @impl true
   def handle_pad_added(Pad.ref(:rtp_input, ref) = pad, ctx, %{secure?: true} = state) do
+    pre_parser_ref = {:rtp_pre_parser, ref}
+    silence_discarder_ref = {:rtp_silence_discarder, ref}
     parser_ref = {:rtp_parser, ref}
     decryptor_ref = {:srtp_decryptor, ref}
     encryptor_ref = {:srtcp_encryptor, ref}
@@ -242,10 +244,11 @@ defmodule Membrane.RTP.SessionBin do
 
     children =
       %{
+        pre_parser_ref => RTP.PreParser,
+        silence_discarder_ref => RTP.SilenceDiscarder,
         parser_ref => RTP.Parser,
         decryptor_ref => %SRTP.Decryptor{
-          policies: state.srtp_policies,
-          packet_filter: ctx.pads[pad].options.packet_filter
+          policies: state.srtp_policies
         }
       }
       |> Map.merge(
@@ -258,6 +261,8 @@ defmodule Membrane.RTP.SessionBin do
 
     links = [
       link_bin_input(pad, buffer: @rtp_input_buffer_params)
+      |> to(pre_parser_ref)
+      |> to(silence_discarder_ref)
       |> to(decryptor_ref)
       |> to(parser_ref)
       |> to(:ssrc_router)

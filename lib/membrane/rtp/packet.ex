@@ -14,6 +14,7 @@ defmodule Membrane.RTP.Packet do
   @enforce_keys [:header, :payload]
   defstruct @enforce_keys
 
+  @spec identify(binary()) :: :rtp | :rtcp
   def identify(<<_first_byte, _marker::1, payload_type::7, _rest::binary>>)
       when payload_type in 64..95,
       do: :rtcp
@@ -50,7 +51,7 @@ defmodule Membrane.RTP.Packet do
 
   defp serialize_header_extension(%Header.Extension{data: data} = extension)
        when byte_size(data) |> rem(4) == 0 do
-    <<extension.profile_specific::16, byte_size(data) |> div(4)::16, data::binary>>
+    <<extension.profile_specific::bitstring, byte_size(data) |> div(4)::16, data::binary>>
   end
 
   @spec parse(binary()) :: {:ok, t()} | {:error, :wrong_version | :malformed_packet}
@@ -87,7 +88,7 @@ defmodule Membrane.RTP.Packet do
   defp parse_header_extension(binary, false), do: {:ok, {nil, binary}}
 
   defp parse_header_extension(
-         <<profile_specific::16, data_len::16, data::binary-size(data_len)-unit(32),
+         <<profile_specific::binary-size(2), data_len::16, data::binary-size(data_len)-unit(32),
            rest::binary>>,
          true
        ) do

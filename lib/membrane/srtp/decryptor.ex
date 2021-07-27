@@ -26,20 +26,12 @@ defmodule Membrane.SRTP.Decryptor do
                 List of SRTP policies to use for decrypting packets.
                 See `t:ExLibSRTP.Policy.t/0` for details.
                 """
-              ],
-              packet_filter: [
-                spec: packet_filter_t(),
-                default: nil,
-                description: """
-                Optional packet's filter.
-                """
               ]
 
   @impl true
-  def handle_init(%__MODULE__{policies: policies, packet_filter: packet_filter}) do
+  def handle_init(%__MODULE__{policies: policies}) do
     state = %{
       policies: policies,
-      filter: packet_filter,
       srtp: nil
     }
 
@@ -81,6 +73,11 @@ defmodule Membrane.SRTP.Decryptor do
   end
 
   @impl true
+  def handle_event(_pad, %RTP.DiscardedPacket{} = packet, _ctx, state) do
+    {{:ok, event: {:output, packet}}, state}
+  end
+
+  @impl true
   def handle_event(_pad, other, _ctx, state) do
     Membrane.Logger.warn("Got unexpected event: #{inspect(other)}. Ignoring.")
     {:ok, state}
@@ -98,29 +95,25 @@ defmodule Membrane.SRTP.Decryptor do
 
   @impl true
   def handle_process(:input, buffer, _ctx, state) do
-    if state.filter != nil and state.filter.(buffer) do
-      {:ok, state}
-    else
-      %Buffer{payload: payload} = buffer
-      packet_type = RTP.Packet.identify(payload)
+    %Buffer{payload: payload} = buffer
+    packet_type = RTP.Packet.identify(payload)
 
-      case packet_type do
-        :rtp -> ExLibSRTP.unprotect(state.srtp, payload)
-        :rtcp -> ExLibSRTP.unprotect_rtcp(state.srtp, payload)
-      end
-      |> case do
-        {:ok, payload} ->
-          {{:ok, buffer: {:output, %Buffer{buffer | payload: payload}}}, state}
+    case packet_type do
+      :rtp -> ExLibSRTP.unprotect(state.srtp, payload)
+      :rtcp -> ExLibSRTP.unprotect_rtcp(state.srtp, payload)
+    end
+    |> case do
+      {:ok, payload} ->
+        {{:ok, buffer: {:output, %Buffer{buffer | payload: payload}}}, state}
 
-        {:error, reason} ->
-          Membrane.Logger.warn("""
-          Couldn't unprotect #{packet_type} packet:
-          #{inspect(payload, limit: :infinity)}
-          Reason: #{inspect(reason)}. Ignoring packet.
-          """)
+      {:error, reason} ->
+        Membrane.Logger.warn("""
+        Couldn't unprotect #{packet_type} packet:
+        #{inspect(payload, limit: :infinity)}
+        Reason: #{inspect(reason)}. Ignoring packet.
+        """)
 
-          {:ok, state}
-      end
+        {:ok, state}
     end
   end
 end

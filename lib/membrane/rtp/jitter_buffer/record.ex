@@ -5,20 +5,28 @@ defmodule Membrane.RTP.JitterBuffer.Record do
 
   alias Membrane.RTP.JitterBuffer
   @enforce_keys [:index, :timestamp, :buffer]
-  defstruct @enforce_keys
+  defstruct @enforce_keys ++ [discarded?: false]
 
   @type t :: %__MODULE__{
           index: JitterBuffer.packet_index(),
           timestamp: Membrane.Time.t(),
-          buffer: Membrane.Buffer.t()
+          buffer: Membrane.Buffer.t(),
+          discarded?: boolean()
         }
 
   @spec new(Membrane.Buffer.t(), JitterBuffer.packet_index()) :: t()
   def new(buffer, index) do
+    discarded? =
+      case buffer.metadata do
+        %{discarded?: true} -> true
+        _ -> false
+      end
+
     %__MODULE__{
       index: index,
       timestamp: Membrane.Time.monotonic_time(),
-      buffer: buffer
+      buffer: buffer,
+      discarded?: discarded?
     }
   end
 

@@ -135,6 +135,29 @@ defmodule Membrane.RTP.JitterBuffer do
   end
 
   @impl true
+  def handle_event(
+        :input,
+        %RTP.DiscardedPacket{header: header},
+        _ctx,
+        %State{store: store} = state
+      ) do
+    # TODO: add jitter update in here
+
+    case BufferStore.insert_buffer(store, %Buffer{
+           payload: nil,
+           metadata: %{discarded?: true, rtp: header}
+         }) do
+      {:ok, result} ->
+        %State{state | store: result}
+        send_buffers(state)
+
+      {:error, :late_packet} ->
+        warn("Late packet event")
+        {{:ok, redemand: :output}, state}
+    end
+  end
+
+  @impl true
   def handle_event(pad, event, ctx, state), do: super(pad, event, ctx, state)
 
   @impl true
@@ -156,6 +179,8 @@ defmodule Membrane.RTP.JitterBuffer do
     {buffers, store} = BufferStore.shift_ordered(store)
 
     {actions, state} = (too_old_records ++ buffers) |> Enum.map_reduce(state, &record_to_action/2)
+
+    actions = Enum.reject(actions, &is_nil/1)
 
     state = %{state | store: store} |> set_timer()
 
@@ -183,6 +208,10 @@ defmodule Membrane.RTP.JitterBuffer do
   defp record_to_action(nil, state) do
     action = {:event, {:output, %Membrane.Event.Discontinuity{}}}
     {action, state}
+  end
+
+  defp record_to_action(%Record{discarded?: true}, state) do
+    {nil, state}
   end
 
   defp record_to_action(%Record{buffer: buffer}, state) do
