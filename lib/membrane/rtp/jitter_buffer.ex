@@ -157,8 +157,6 @@ defmodule Membrane.RTP.JitterBuffer do
 
     {actions, state} = (too_old_records ++ buffers) |> Enum.map_reduce(state, &record_to_action/2)
 
-    actions = Enum.reject(actions, &is_nil/1)
-
     state = %{state | store: store} |> set_timer()
 
     {{:ok, actions ++ [redemand: :output]}, state}
@@ -185,10 +183,6 @@ defmodule Membrane.RTP.JitterBuffer do
   defp record_to_action(nil, state) do
     action = {:event, {:output, %Membrane.Event.Discontinuity{}}}
     {action, state}
-  end
-
-  defp record_to_action(%Record{discarded?: true}, state) do
-    {nil, state}
   end
 
   defp record_to_action(%Record{buffer: buffer}, state) do

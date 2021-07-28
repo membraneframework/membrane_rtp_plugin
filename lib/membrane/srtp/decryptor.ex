@@ -11,12 +11,6 @@ defmodule Membrane.SRTP.Decryptor do
   alias Membrane.Buffer
   alias Membrane.{Buffer, RTP}
 
-  @typedoc """
-  Function taking a binary payload representing SRTP packet and deciding
-  if it should be dropped (returns true) or decrypted (returns false).
-  """
-  @type packet_filter_t :: (binary() -> boolean())
-
   def_input_pad :input, caps: :any, demand_unit: :buffers
   def_output_pad :output, caps: :any
 
