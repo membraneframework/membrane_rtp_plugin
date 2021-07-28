@@ -1,7 +1,9 @@
-defmodule Membrane.RTP.PreParser do
+defmodule Membrane.RTP.HeaderParser do
   @moduledoc """
-  Element that should be used for packet pre-parsing to further decide if it should be discarded or passed to the Decryptor.
-  By pre-parsing we mean identifying the packet based on unencrypted header and parsing as many available information as possible.
+  Element responsible for packet's header parsing. It is similar to the `RTP.Parser` but does not
+  change the packet, just parses the header and puts it as buffer's metadata.
+
+  Sometimes we may want to read the header and discard the packet before decrypting which is an expensive operation.
   """
 
   use Membrane.Filter
@@ -35,8 +37,7 @@ defmodule Membrane.RTP.PreParser do
 
     case header_parser.(payload) do
       {:ok, header} ->
-        {{:ok, buffer: {:output, %Buffer{payload: payload, metadata: header}}, redemand: :output},
-         state}
+        {{:ok, buffer: {:output, %Buffer{buffer | metadata: header}}, redemand: :output}, state}
 
       {:error, :malformed_packet} ->
         Membrane.Logger.warn("""
@@ -50,8 +51,9 @@ defmodule Membrane.RTP.PreParser do
   end
 
   defp parse_rtp_header(
-         <<version::2, has_padding::1, has_extension::1, csrcs_cnt::4, marker::1, payload_type::7,
-           sequence_number::16, timestamp::32, ssrc::32, csrcs::binary-size(csrcs_cnt)-unit(32),
+         <<version::2, _has_padding::1, has_extension::1, csrcs_cnt::4, marker::1,
+           payload_type::7, sequence_number::16, timestamp::32, ssrc::32,
+           csrcs::binary-size(csrcs_cnt)-unit(32),
            extension_profile_specific::binary-size(has_extension)-unit(16),
            extension_data_len::size(has_extension)-unit(16),
            extension_data::binary-size(extension_data_len)-unit(32), _rest::binary>>

@@ -73,11 +73,6 @@ defmodule Membrane.SRTP.Decryptor do
   end
 
   @impl true
-  def handle_event(_pad, %RTP.DiscardedPacket{} = packet, _ctx, state) do
-    {{:ok, event: {:output, packet}}, state}
-  end
-
-  @impl true
   def handle_event(_pad, other, _ctx, state) do
     Membrane.Logger.warn("Got unexpected event: #{inspect(other)}. Ignoring.")
     {:ok, state}

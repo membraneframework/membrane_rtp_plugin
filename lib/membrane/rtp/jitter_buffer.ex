@@ -135,29 +135,6 @@ defmodule Membrane.RTP.JitterBuffer do
   end
 
   @impl true
-  def handle_event(
-        :input,
-        %RTP.DiscardedPacket{header: header},
-        _ctx,
-        %State{store: store} = state
-      ) do
-    # TODO: add jitter update in here
-
-    case BufferStore.insert_buffer(store, %Buffer{
-           payload: nil,
-           metadata: %{discarded?: true, rtp: header}
-         }) do
-      {:ok, result} ->
-        %State{state | store: result}
-        send_buffers(state)
-
-      {:error, :late_packet} ->
-        warn("Late packet event")
-        {{:ok, redemand: :output}, state}
-    end
-  end
-
-  @impl true
   def handle_event(pad, event, ctx, state), do: super(pad, event, ctx, state)
 
   @impl true

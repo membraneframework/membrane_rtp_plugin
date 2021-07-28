@@ -110,14 +110,22 @@ defmodule Membrane.RTP.SessionBin do
     caps: {RemoteStream, type: :packetized, content_format: one_of([nil, RTP])},
     availability: :on_request,
     options: [
-      packet_filter: [
-        spec: [SRTP.Decryptor.packet_filter_t()],
-        default: nil,
+      use_header_parser?: [
+        spec: :boolean,
+        default: false,
         description: """
-        A filter deciding if packet should be dropped (returned true) or decrypted and forwarded.
-        Dropping certain packet (e.g. silent audio frames) can boost performance
-        as the packet gets dropped before any expensive operations (in this case decryption and any operations down the line) is performed.
-        Used only when `secure?` is set to `true`.
+        Whether a header parser should be attached right to the input pad.
+        """
+      ],
+      packet_filters: [
+        spec: [module() | struct()],
+        default: [],
+        description: """
+        A list of filter elements that will be attached to the packets flow. In case of using SRTP all the filters
+        will be placed before the encryptor and right after the header parser (if enabled).
+
+        A filter can be responsible e.g. for dropping silent audio packets when encountered VAD extension data in the
+        packet header.
         """
       ]
     ]
@@ -234,8 +242,9 @@ defmodule Membrane.RTP.SessionBin do
 
   @impl true
   def handle_pad_added(Pad.ref(:rtp_input, ref) = pad, ctx, %{secure?: true} = state) do
-    pre_parser_ref = {:rtp_pre_parser, ref}
-    silence_discarder_ref = {:rtp_silence_discarder, ref}
+    %{packet_filters: packet_filters, use_header_parser?: use_header_parser?} =
+      ctx.pads[pad].options
+
     parser_ref = {:rtp_parser, ref}
     decryptor_ref = {:srtp_decryptor, ref}
     encryptor_ref = {:srtcp_encryptor, ref}
@@ -244,8 +253,6 @@ defmodule Membrane.RTP.SessionBin do
 
     children =
       %{
-        pre_parser_ref => RTP.PreParser,
-        silence_discarder_ref => RTP.SilenceDiscarder,
         parser_ref => RTP.Parser,
         decryptor_ref => %SRTP.Decryptor{
           policies: state.srtp_policies
@@ -258,11 +265,11 @@ defmodule Membrane.RTP.SessionBin do
           %{}
         end
       )
+      |> Map.merge(packet_filters_children(ref, packet_filters, use_header_parser?))
 
     links = [
       link_bin_input(pad, buffer: @rtp_input_buffer_params)
-      |> to(pre_parser_ref)
-      |> to(silence_discarder_ref)
+      |> link_packet_filters(ref, packet_filters, use_header_parser?)
       |> to(decryptor_ref)
       |> to(parser_ref)
       |> to(:ssrc_router)
@@ -288,14 +295,21 @@ defmodule Membrane.RTP.SessionBin do
 
   @impl true
   def handle_pad_added(Pad.ref(:rtp_input, ref) = pad, ctx, state) do
+    %{packet_filters: packet_filters, use_header_parser?: use_header_parser?} =
+      ctx.pads[pad].options
+
     parser_ref = {:rtp_parser, ref}
     rtcp_output = Pad.ref(:rtcp_output, ref)
     rtcp? = Map.has_key?(ctx.pads, rtcp_output)
 
-    children = %{parser_ref => RTP.Parser}
+    children =
+      ref
+      |> packet_filters_children(packet_filters, use_header_parser?)
+      |> Map.merge(%{parser_ref => RTP.Parser})
 
     links = [
       link_bin_input(pad, buffer: @rtp_input_buffer_params)
+      |> link_packet_filters(ref, packet_filters, use_header_parser?)
       |> to(parser_ref)
       |> to(:ssrc_router)
     ]
@@ -525,6 +539,40 @@ defmodule Membrane.RTP.SessionBin do
     %{ssrcs: ssrcs, receiver_ssrc_generator: generator} = state
     local_ssrc = generator.([remote_ssrc | Map.keys(ssrcs)], Map.values(ssrcs))
     {local_ssrc, put_in(state, [:ssrcs, remote_ssrc], local_ssrc)}
+  end
+
+  defp packet_filters_children(ref, packet_filters, use_header_parser?) do
+    if use_header_parser? do
+      [RTP.HeaderParser | packet_filters]
+    else
+      packet_filters
+    end
+    |> Enum.map(fn
+      module when is_atom(module) ->
+        {{module, ref}, module}
+
+      %module{} = struct ->
+        {{module, ref}, struct}
+    end)
+    |> Map.new()
+  end
+
+  defp link_packet_filters(link_builder, ref, packet_filters, use_header_parser?) do
+    link_builder =
+      if use_header_parser? do
+        to(link_builder, {RTP.HeaderParser, ref})
+      else
+        link_builder
+      end
+
+    packet_filters
+    |> Enum.reduce(link_builder, fn
+      filter, builder when is_atom(filter) ->
+        to(builder, {filter, ref})
+
+      %module{} = _filter, builder ->
+        to(builder, {module, ref})
+    end)
   end
 
   defp get_from_register!(field, pt, state) do

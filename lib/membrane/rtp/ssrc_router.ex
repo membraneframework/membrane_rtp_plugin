@@ -94,13 +94,6 @@ defmodule Membrane.RTP.SSRCRouter do
   end
 
   @impl true
-  def handle_event(Pad.ref(:input, _id), %RTP.DiscardedPacket{} = packet, _ctx, state) do
-    {actions, state} = maybe_add_to_linking_buffer(:event, packet, packet.header.ssrc, state)
-
-    {{:ok, actions}, state}
-  end
-
-  @impl true
   def handle_event(Pad.ref(:input, _id), %RTCPEvent{} = event, _ctx, state) do
     {actions, state} =
       event.ssrcs
