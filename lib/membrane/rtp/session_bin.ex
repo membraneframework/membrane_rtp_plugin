@@ -71,8 +71,8 @@ defmodule Membrane.RTP.SessionBin do
                 default: %{},
                 description: "Mapping from encoding names to custom depayloader modules"
               ],
-              rtcp_interval: [
-                type: :time,
+              rtcp_report_interval: [
+                spec: Membrane.Time.t() | nil,
                 default: 5 |> Membrane.Time.seconds(),
                 description: "Interval between sending subseqent RTCP receiver reports."
               ],
@@ -159,6 +159,11 @@ defmodule Membrane.RTP.SessionBin do
 
         Extensions are applied in the same order as passed to the pad options.
         """
+      ],
+      rtcp_fir_interval: [
+        spec: Membrane.Time.t() | nil,
+        default: nil,
+        description: "Interval between sending subseqent RTCP Full Intra Request packets."
       ]
     ]
 
@@ -205,7 +210,7 @@ defmodule Membrane.RTP.SessionBin do
               depayloaders: nil,
               ssrcs: %{},
               senders_ssrcs: %MapSet{},
-              rtcp_interval: nil,
+              rtcp_report_interval: nil,
               receiver_ssrc_generator: nil,
               rtcp_sender_report_data: %Session.SenderReport.Data{},
               secure?: nil,
@@ -315,8 +320,12 @@ defmodule Membrane.RTP.SessionBin do
 
   @impl true
   def handle_pad_added(Pad.ref(:output, ssrc) = pad, ctx, state) do
-    %{encoding: encoding_name, clock_rate: clock_rate, extensions: extensions} =
-      ctx.pads[pad].options
+    %{
+      encoding: encoding_name,
+      clock_rate: clock_rate,
+      extensions: extensions,
+      rtcp_fir_interval: fir_interval
+    } = ctx.pads[pad].options
 
     payload_type = Map.fetch!(state.ssrc_pt_mapping, ssrc)
 
@@ -333,7 +342,8 @@ defmodule Membrane.RTP.SessionBin do
         local_ssrc: local_ssrc,
         remote_ssrc: ssrc,
         clock_rate: clock_rate,
-        rtcp_interval: state.rtcp_interval
+        rtcp_report_interval: state.rtcp_report_interval,
+        rtcp_fir_interval: fir_interval
       }
     }
 

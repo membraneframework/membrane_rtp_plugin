@@ -14,7 +14,10 @@ defmodule Membrane.RTCP.Receiver do
   def_input_pad :input, demand_unit: :buffers, caps: :any
   def_output_pad :output, caps: :any
 
-  def_options local_ssrc: [], remote_ssrc: [], report_interval: []
+  def_options local_ssrc: [spec: RTP.ssrc_t()],
+              remote_ssrc: [spec: RTP.ssrc_t()],
+              report_interval: [spec: Membrane.Time.t() | nil, default: nil],
+              fir_interval: [spec: Membrane.Time.t() | nil, default: nil]
 
   @impl true
   def handle_init(opts) do
@@ -23,21 +26,26 @@ defmodule Membrane.RTCP.Receiver do
 
   @impl true
   def handle_prepared_to_playing(_ctx, state) do
-    # TODO: reenable timer and fix receiver reports
-    # {{:ok, start_timer: {:stats_timer, state.report_interval}}, state}
+    fir_timer =
+      if state.fir_interval, do: [start_timer: {:fir_timer, state.fir_interval}], else: []
 
-    # TODO: find out why FIRs on FIR requests are not sufficient
-    # TODO: make interval configurable
-    {{:ok, start_timer: {:fir_timer, Membrane.Time.second()}}, state}
+    report_timer =
+      if state.report_interval,
+        do: [start_timer: {:report_timer, state.report_interval}],
+        else: []
+
+    {{:ok, fir_timer ++ report_timer}, state}
   end
 
   @impl true
   def handle_playing_to_prepared(_ctx, state) do
-    {{:ok, stop_timer: :fir_timer}, state}
+    fir_timer = if state.fir_interval, do: [stop_timer: :fir_timer], else: []
+    report_timer = if state.report_interval, do: [stop_timer: :report_timer], else: []
+    {{:ok, fir_timer ++ report_timer}, state}
   end
 
   @impl true
-  def handle_tick(:stats_timer, _ctx, state) do
+  def handle_tick(:report_timer, _ctx, state) do
     {{:ok, event: {:output, %RTP.JitterBuffer.StatsRequestEvent{}}}, state}
   end
 

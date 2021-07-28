@@ -13,7 +13,8 @@ defmodule Membrane.RTP.StreamReceiveBin do
               depayloader: [type: :module],
               local_ssrc: [spec: Membrane.RTP.ssrc_t()],
               remote_ssrc: [spec: Membrane.RTP.ssrc_t()],
-              rtcp_interval: [spec: Membrane.Time.t()]
+              rtcp_report_interval: [spec: Membrane.Time.t() | nil],
+              rtcp_fir_interval: [spec: Membrane.Time.t() | nil]
 
   def_input_pad :input, demand_unit: :buffers, caps: :any
 
@@ -25,7 +26,8 @@ defmodule Membrane.RTP.StreamReceiveBin do
       rtcp_receiver: %Membrane.RTCP.Receiver{
         local_ssrc: opts.local_ssrc,
         remote_ssrc: opts.remote_ssrc,
-        report_interval: opts.rtcp_interval
+        report_interval: opts.rtcp_report_interval,
+        fir_interval: opts.rtcp_fir_interval
       },
       jitter_buffer: %Membrane.RTP.JitterBuffer{clock_rate: opts.clock_rate},
       depayloader: opts.depayloader
@@ -45,15 +47,5 @@ defmodule Membrane.RTP.StreamReceiveBin do
     }
 
     {{:ok, spec: spec}, %{}}
-  end
-
-  @impl true
-  def handle_other(:send_stats, _ctx, state) do
-    {{:ok, forward: {:jitter_buffer, :send_stats}}, state}
-  end
-
-  @impl true
-  def handle_notification({:jitter_buffer_stats, stats}, :jitter_buffer, _ctx, state) do
-    {{:ok, notify: {:jitter_buffer_stats, stats}}, state}
   end
 end

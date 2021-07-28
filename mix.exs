@@ -53,10 +53,9 @@ defmodule Membrane.RTP.Plugin.MixProject do
       ],
       groups_for_modules: [
         "RTP session": [~r/^Membrane\.RTP\.Session/],
-        RTP: [~r/^Membrane\.RTP($|\.)/],
-        RTCP: [~r/^Membrane\.RTCP($|\.)/],
-        SRTP: [~r/^Membrane\.SRTP($|\.)/],
-        SRTCP: [~r/^Membrane\.SRTCP($|\.)/]
+        RTP: [~r/^Membrane\.RTP/],
+        RTCP: [~r/^Membrane\.RTCP/],
+        SRTP: [~r/^Membrane\.SRTP/]
       ]
     ]
   end
