@@ -157,7 +157,7 @@ defmodule Membrane.RTP.SessionBin do
 
         Extensions are applied in the same order as passed to the pad options.
         """
-      ]
+      ],
     ]
 
   def_output_pad :rtp_output,
@@ -316,10 +316,8 @@ defmodule Membrane.RTP.SessionBin do
     %{encoding: encoding_name, clock_rate: clock_rate, extensions: extensions} =
       ctx.pads[pad].options
 
-    payload_type = Map.fetch!(state.ssrc_pt_mapping, ssrc)
 
-    encoding_name = encoding_name || get_from_register!(:encoding_name, payload_type, state)
-    clock_rate = clock_rate || get_from_register!(:clock_rate, payload_type, state)
+
     depayloader = get_depayloader!(encoding_name, state)
     {local_ssrc, state} = add_ssrc(ssrc, state)
 
@@ -496,6 +494,8 @@ defmodule Membrane.RTP.SessionBin do
     pt_mapping =
       PayloadFormat.get_payload_type_mapping(payload_type)
       |> Map.merge(state.fmt_mapping[payload_type] || %{})
+
+
 
     if Map.has_key?(pt_mapping, :encoding_name) and Map.has_key?(pt_mapping, :clock_rate) do
       pt_mapping
