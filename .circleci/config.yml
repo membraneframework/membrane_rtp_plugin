@@ -12,7 +12,9 @@ jobs:
       - checkout
       - run: mix deps.get
       - run: mix compile --force --warnings-as-errors
-      - run: mix test --include long_running
+      - run: 
+          command: mix test --include long_running
+          no_output_timeout: 30m
 
   lint:
     docker:
