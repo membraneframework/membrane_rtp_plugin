@@ -63,6 +63,8 @@ defmodule Membrane.RTP.StreamReceiveBinTest do
     assert_end_of_stream(pipeline, :frame_counter)
     assert_pipeline_notified(pipeline, :frame_counter, {:frame_count, count})
     assert count == @frames_count
+
+    Testing.Pipeline.stop_and_terminate(pipeline, blocking?: true)
   end
 
   test "RTCP reports are generated properly" do

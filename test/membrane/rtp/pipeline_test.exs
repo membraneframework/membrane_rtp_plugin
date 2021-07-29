@@ -4,6 +4,8 @@ defmodule Membrane.RTP.PipelineTest do
   import Membrane.Testing.Assertions
 
   alias Membrane.Buffer
+  alias Membrane.RemoteStream
+  alias Membrane.RTP
   alias Membrane.RTP.{Parser, Fixtures}
   alias Membrane.Testing.{Source, Pipeline, Sink}
 
@@ -18,7 +20,7 @@ defmodule Membrane.RTP.PipelineTest do
         elements: [
           source: %Source{
             output: test_data,
-            caps: %Membrane.RemoteStream{type: :packetized, content_format: Membrane.RTP}
+            caps: %RemoteStream{type: :packetized, content_format: RTP}
           },
           parser: Parser,
           sink: %Sink{}
