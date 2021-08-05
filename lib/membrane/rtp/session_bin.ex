@@ -327,10 +327,6 @@ defmodule Membrane.RTP.SessionBin do
       rtcp_fir_interval: fir_interval
     } = ctx.pads[pad].options
 
-    payload_type = Map.fetch!(state.ssrc_pt_mapping, ssrc)
-
-    encoding_name = encoding_name || get_from_register!(:encoding_name, payload_type, state)
-    clock_rate = clock_rate || get_from_register!(:clock_rate, payload_type, state)
     depayloader = get_depayloader!(encoding_name, state)
     {local_ssrc, state} = add_ssrc(ssrc, state)
 
