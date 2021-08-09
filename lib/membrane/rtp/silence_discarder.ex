@@ -62,8 +62,8 @@ defmodule Membrane.RTP.SilenceDiscarder do
         _ctx,
         %{dropped: dropped, max_consecutive_drops: max_consecutive_drops} = state
       ) do
-    case buffer.metadata do
-      %Header{
+    case buffer.metadata.rtp do
+      %{
         extension: %Header.Extension{
           # profile specific for one-byte extensions
           profile_specific: <<0xBE, 0xDE>>,
@@ -73,7 +73,7 @@ defmodule Membrane.RTP.SilenceDiscarder do
       } ->
         cond do
           audio_level == @vad_silence_level and dropped + 1 < max_consecutive_drops ->
-            {:ok, %{state | dropped: dropped + 1}}
+            {{:ok, redemand: :output}, %{state | dropped: dropped + 1}}
 
           # packet is silent but we exceeded max_consecutive_drops
           audio_level == @vad_silence_level ->

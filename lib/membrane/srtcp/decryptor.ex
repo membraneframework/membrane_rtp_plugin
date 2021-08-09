@@ -50,4 +50,25 @@ defmodule Membrane.SRTCP.Decryptor do
     {:ok, payload} = ExLibSRTP.unprotect_rtcp(state.srtp, buffer.payload)
     {{:ok, buffer: {:output, %Buffer{buffer | payload: payload}}}, state}
   end
+
+  @impl true
+  def handle_event(_pad, %{handshake_data: handshake_data}, _ctx, %{policies: []} = state) do
+    {_local_keying_material, remote_keying_material, protection_profile} = handshake_data
+
+    {:ok, crypto_profile} =
+      ExLibSRTP.Policy.crypto_profile_from_dtls_srtp_protection_profile(protection_profile)
+
+    policy = %ExLibSRTP.Policy{
+      ssrc: :any_inbound,
+      key: remote_keying_material,
+      rtp: crypto_profile,
+      rtcp: crypto_profile
+    }
+
+    :ok = ExLibSRTP.add_stream(state.srtp, policy)
+    {{:ok, redemand: :output}, Map.put(state, :policies, [policy])}
+  end
+
+  @impl true
+  def handle_event(pad, event, ctx, state), do: super(pad, event, ctx, state)
 end

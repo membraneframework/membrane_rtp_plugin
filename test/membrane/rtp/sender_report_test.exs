@@ -25,7 +25,7 @@ defmodule Membrane.RTP.SenderReportTest do
       timestamp: test_wallclock_time
     }
 
-    assert {{:report, %Packet{packets: [sender_report | _]}}, _report_data} =
+    assert {{:report, [sender_report | _]}, _report_data} =
              SenderReport.handle_stats(mock_serializer_stats, @ssrc_1, report_data)
 
     report_wallclock_timestamp = sender_report.sender_info.wallclock_timestamp

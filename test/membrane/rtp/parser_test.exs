@@ -6,7 +6,7 @@ defmodule Membrane.RTP.ParserTest do
 
   describe "Parser" do
     test "parse a packet" do
-      state = %{}
+      state = %{secure?: false}
       packet = Fixtures.sample_packet_binary()
 
       assert Parser.handle_process(:input, %Buffer{payload: packet}, nil, state) ==
@@ -22,11 +22,13 @@ defmodule Membrane.RTP.ParserTest do
                           ssrc: 3_919_876_492,
                           csrcs: [],
                           extension: nil,
-                          marker: false
+                          marker: false,
+                          has_padding?: false,
+                          total_header_size: 96
                         }
                       },
                       payload: Fixtures.sample_packet_payload()
-                    }}}, %{}}
+                    }}}, state}
     end
   end
 end

@@ -242,83 +242,60 @@ defmodule Membrane.RTP.SessionBin do
 
   @impl true
   def handle_pad_added(Pad.ref(:rtp_input, ref) = pad, ctx, %{secure?: true} = state) do
-    %{packet_filters: packet_filters, use_header_parser?: use_header_parser?} =
-      ctx.pads[pad].options
+    rtp_parser_ref = {:rtp_parser, ref}
 
-    parser_ref = {:rtp_parser, ref}
-    decryptor_ref = {:srtp_decryptor, ref}
-    encryptor_ref = {:srtcp_encryptor, ref}
     rtcp_output = Pad.ref(:rtcp_output, ref)
     rtcp? = Map.has_key?(ctx.pads, rtcp_output)
 
-    children =
-      %{
-        parser_ref => RTP.Parser,
-        decryptor_ref => %SRTP.Decryptor{
-          policies: state.srtp_policies
-        }
-      }
-      |> Map.merge(
-        if rtcp? do
-          %{encryptor_ref => %SRTP.Encryptor{policies: state.receiver_srtp_policies}}
-        else
-          %{}
-        end
-      )
-      |> Map.merge(packet_filters_children(ref, packet_filters, use_header_parser?))
-
-    links = [
-      link_bin_input(pad, buffer: @rtp_input_buffer_params)
-      |> link_packet_filters(ref, packet_filters, use_header_parser?)
-      |> to(decryptor_ref)
-      |> to(parser_ref)
-      |> to(:ssrc_router)
-    ]
-
     links =
-      links ++
+      [
+        link_bin_input(pad, buffer: @rtp_input_buffer_params)
+        |> to(rtp_parser_ref, %RTP.Parser{secure?: true})
+        |> via_out(:output)
+        |> to(:ssrc_router)
+      ] ++
         if rtcp? do
           [
-            link(parser_ref)
+            link(rtp_parser_ref)
             |> via_out(:rtcp_output)
-            |> to(encryptor_ref)
-            |> to_bin_output(rtcp_output)
+            |> to({:rtcp_decryptor, ref}, %Membrane.SRTCP.Decryptor{policies: state.srtp_policies})
+            |> to({:rtcp_parser, ref}, RTCP.Parser)
+            |> via_out(:rtcp_output)
+            |> to({:srtcp_encryptor, ref}, %SRTP.Encryptor{policies: state.receiver_srtp_policies})
+            |> to_bin_output(rtcp_output),
+            link({:rtcp_parser, ref})
+            # is :output a default? If so then why parser to ssrc_router uses via_out(:output)
+            # EDIT: I guess when an element has more than just a single output pad then it has to be explicit
+            |> via_out(:output)
+            |> to(:ssrc_router)
           ]
         else
           []
         end
 
-    new_spec = %ParentSpec{children: children, links: links}
+    new_spec = %ParentSpec{children: %{}, links: links}
 
     {{:ok, spec: new_spec}, state}
   end
 
+  # TODO: handle insecure rtp flow just like with delayed decryption (but this time more optimal I guess?)
   @impl true
   def handle_pad_added(Pad.ref(:rtp_input, ref) = pad, ctx, state) do
-    %{packet_filters: packet_filters, use_header_parser?: use_header_parser?} =
-      ctx.pads[pad].options
-
     parser_ref = {:rtp_parser, ref}
     rtcp_output = Pad.ref(:rtcp_output, ref)
     rtcp? = Map.has_key?(ctx.pads, rtcp_output)
 
-    children =
-      ref
-      |> packet_filters_children(packet_filters, use_header_parser?)
-      |> Map.merge(%{parser_ref => RTP.Parser})
-
-    links = [
-      link_bin_input(pad, buffer: @rtp_input_buffer_params)
-      |> link_packet_filters(ref, packet_filters, use_header_parser?)
-      |> to(parser_ref)
-      |> to(:ssrc_router)
-    ]
-
     links =
-      links ++
+      [
+        link_bin_input(pad, buffer: @rtp_input_buffer_params)
+        |> to(parser_ref, RTP.Parser)
+        |> to(:ssrc_router)
+      ] ++
         if rtcp? do
           [
             link(parser_ref)
+            |> via_out(:rtcp_output)
+            |> to({:rtcp_parser, ref}, RTCP.Parser)
             |> via_out(:rtcp_output)
             |> to_bin_output(rtcp_output)
           ]
@@ -326,7 +303,7 @@ defmodule Membrane.RTP.SessionBin do
           []
         end
 
-    new_spec = %ParentSpec{children: children, links: links}
+    new_spec = %ParentSpec{children: [], links: links}
 
     {{:ok, spec: new_spec}, state}
   end
@@ -371,6 +348,12 @@ defmodule Membrane.RTP.SessionBin do
 
     new_children = %{
       rtp_stream_name => %RTP.StreamReceiveBin{
+        filters:
+          if(encoding_name == :OPUS,
+            do: [{:silence_discarder, Membrane.RTP.SilenceDiscarder}],
+            else: []
+          ),
+        srtp_policies: state.srtp_policies,
         depayloader: depayloader,
         local_ssrc: local_ssrc,
         remote_ssrc: ssrc,
@@ -539,40 +522,6 @@ defmodule Membrane.RTP.SessionBin do
     %{ssrcs: ssrcs, receiver_ssrc_generator: generator} = state
     local_ssrc = generator.([remote_ssrc | Map.keys(ssrcs)], Map.values(ssrcs))
     {local_ssrc, put_in(state, [:ssrcs, remote_ssrc], local_ssrc)}
-  end
-
-  defp packet_filters_children(ref, packet_filters, use_header_parser?) do
-    if use_header_parser? do
-      [RTP.HeaderParser | packet_filters]
-    else
-      packet_filters
-    end
-    |> Enum.map(fn
-      module when is_atom(module) ->
-        {{module, ref}, module}
-
-      %module{} = struct ->
-        {{module, ref}, struct}
-    end)
-    |> Map.new()
-  end
-
-  defp link_packet_filters(link_builder, ref, packet_filters, use_header_parser?) do
-    link_builder =
-      if use_header_parser? do
-        to(link_builder, {RTP.HeaderParser, ref})
-      else
-        link_builder
-      end
-
-    packet_filters
-    |> Enum.reduce(link_builder, fn
-      filter, builder when is_atom(filter) ->
-        to(builder, {filter, ref})
-
-      %module{} = _filter, builder ->
-        to(builder, {module, ref})
-    end)
   end
 
   defp get_from_register!(field, pt, state) do

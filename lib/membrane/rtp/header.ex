@@ -53,7 +53,9 @@ defmodule Membrane.RTP.Header do
           timestamp: timestamp_t(),
           sequence_number: sequence_number_t(),
           csrcs: [RTP.ssrc_t()],
-          extension: __MODULE__.Extension.t() | nil
+          extension: __MODULE__.Extension.t() | nil,
+          has_padding?: boolean(),
+          total_header_size: non_neg_integer()
         }
 
   @enforce_keys [
@@ -62,5 +64,13 @@ defmodule Membrane.RTP.Header do
     :timestamp,
     :sequence_number
   ]
-  defstruct @enforce_keys ++ [version: 2, marker: false, csrcs: [], extension: nil]
+  defstruct @enforce_keys ++
+              [
+                version: 2,
+                marker: false,
+                csrcs: [],
+                extension: nil,
+                has_padding?: false,
+                total_header_size: 0
+              ]
 end

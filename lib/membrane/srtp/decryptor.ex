@@ -9,7 +9,7 @@ defmodule Membrane.SRTP.Decryptor do
   require Membrane.Logger
 
   alias Membrane.Buffer
-  alias Membrane.{Buffer, RTP}
+  alias Membrane.RTP.Utils
 
   def_input_pad :input, caps: :any, demand_unit: :buffers
   def_output_pad :output, caps: :any
@@ -67,10 +67,7 @@ defmodule Membrane.SRTP.Decryptor do
   end
 
   @impl true
-  def handle_event(_pad, other, _ctx, state) do
-    Membrane.Logger.warn("Got unexpected event: #{inspect(other)}. Ignoring.")
-    {:ok, state}
-  end
+  def handle_event(pad, other, ctx, state), do: super(pad, other, ctx, state)
 
   @impl true
   def handle_demand(:output, _size, :buffers, _ctx, %{policies: []} = state) do
@@ -84,20 +81,26 @@ defmodule Membrane.SRTP.Decryptor do
 
   @impl true
   def handle_process(:input, buffer, _ctx, state) do
-    %Buffer{payload: payload} = buffer
-    packet_type = RTP.Packet.identify(payload)
+    %Buffer{payload: payload, metadata: %{rtp: header}} = buffer
 
-    case packet_type do
-      :rtp -> ExLibSRTP.unprotect(state.srtp, payload)
-      :rtcp -> ExLibSRTP.unprotect_rtcp(state.srtp, payload)
-    end
+    %{has_padding?: has_padding?, total_header_size: total_header_size} = header
+
+    state.srtp
+    |> ExLibSRTP.unprotect(payload)
     |> case do
       {:ok, payload} ->
+        # TODO: check if this is a valid approach? We are not modifying binaries, just stripping them (its more efficient that having to recreate header and append it once again to the payload)
+        # when using srtp the payload contains the whole header which has to be stripped after decryption,
+        # if the packet contains padding it also has to be stripped
+        <<_header::binary-size(total_header_size)-unit(1), payload::binary>> = payload
+
+        {:ok, {payload, _size}} = Utils.strip_padding(payload, has_padding?)
+
         {{:ok, buffer: {:output, %Buffer{buffer | payload: payload}}}, state}
 
       {:error, reason} ->
         Membrane.Logger.warn("""
-        Couldn't unprotect #{packet_type} packet:
+        Couldn't unprotect srtp packet:
         #{inspect(payload, limit: :infinity)}
         Reason: #{inspect(reason)}. Ignoring packet.
         """)

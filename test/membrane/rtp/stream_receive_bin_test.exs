@@ -41,7 +41,9 @@ defmodule Membrane.RTP.StreamReceiveBinTest do
         rtp_parser: RTP.Parser,
         rtp: %StreamReceiveBin{
           depayloader: H264.Depayloader,
-          ssrc: @ssrc,
+          rtcp_interval: 5 |> Membrane.Time.seconds(),
+          local_ssrc: @ssrc,
+          remote_ssrc: @ssrc,
           clock_rate: @h264_clock_rate
         },
         video_parser: %Membrane.H264.FFmpeg.Parser{framerate: {30, 1}},
@@ -79,8 +81,10 @@ defmodule Membrane.RTP.StreamReceiveBinTest do
         },
         rtp_parser: RTP.Parser,
         rtp: %StreamReceiveBin{
+          rtcp_interval: 5 |> Membrane.Time.seconds(),
           depayloader: H264.Depayloader,
-          ssrc: 4_194_443_425,
+          remote_ssrc: 4_194_443_425,
+          local_ssrc: 4_194_443_425,
           clock_rate: @h264_clock_rate
         },
         sink: Testing.Sink

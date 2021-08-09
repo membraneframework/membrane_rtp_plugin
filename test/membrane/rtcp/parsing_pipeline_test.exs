@@ -6,6 +6,7 @@ defmodule Membrane.RTCP.ParsingPipelineTest do
   alias Membrane.RTCP
   alias Membrane.RTCP.{Fixtures, Parser}
   alias Membrane.Testing.{Source, Pipeline}
+  alias Membrane.RemoteStream
 
   test "Pipeline with RTCP parser" do
     packets = Fixtures.packet_list()
@@ -13,7 +14,7 @@ defmodule Membrane.RTCP.ParsingPipelineTest do
     assert {:ok, pipeline} =
              Pipeline.start_link(%Pipeline.Options{
                elements: [
-                 source: %Source{output: packets},
+                 source: %Source{output: packets, caps: %RemoteStream{type: :packetized}},
                  parser: Parser
                ]
              })
@@ -26,7 +27,7 @@ defmodule Membrane.RTCP.ParsingPipelineTest do
     Fixtures.packet_list_contents()
     |> Enum.each(fn contents ->
       assert_pipeline_notified(pipeline, :parser, {:received_rtcp, report, _timestamp})
-      assert %RTCP.Packet{packets: packets} = report
+      assert packets = report
       assert [%RTCP.SenderReportPacket{} = sr, %RTCP.SdesPacket{} = sdes] = packets
 
       assert sr.ssrc == contents.ssrc

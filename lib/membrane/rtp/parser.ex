@@ -1,17 +1,25 @@
 defmodule Membrane.RTP.Parser do
   @moduledoc """
-  Parses RTP packets.
+  Identifies RTP/RTCP packets, then tries to parse RTP packet (parsing header and preparing payload)
+  and forwards RTCP packet to `:rtcp_output` pad unchanged.
 
-  Outputs each packet payload as a separate `Membrane.Buffer`.
-  Attaches the following metadata under `:rtp` key: `:timestamp`, `:sequence_number`,
-  `:ssrc`, `:payload_type`, `:marker`, `:extension`. See `Membrane.RTP.Header` for
-  their meaning and specifications.
+  ## Encrypted packets
+  In case of SRTP/SRTCP the parser tries to parse just the header of the RTP packet as the packet's payload
+  is encrypted and must be passed as a whole to the decryptor. The whole packet remains unchanged but
+  the parsed header gets  attached to `Membrane.Buffer`'s metadata.
+
+  SRTP is treated the same as RTCP and all packets gets forwarded to `:rtcp_output` pad.
+
+  ## Parsed packets
+  In both cases, encrypted and unencryptd, parsed header is put into the metadata field in `Membrane.Buffer` under `:rtp` key.
+  with the following metadata `:timestamp`, `:sequence_number`, `:ssrc`, `:payload_type`,
+  `:marker`, `:extension`. See `Membrane.RTP.Header` for their meaning and specifications.
   """
 
   use Membrane.Filter
 
   alias Membrane.Buffer
-  alias Membrane.{RTCP, RTCPEvent, RTP, RemoteStream}
+  alias Membrane.{RTCPEvent, RTP, RemoteStream}
 
   require Membrane.Logger
 
@@ -22,8 +30,19 @@ defmodule Membrane.RTP.Parser do
     :csrcs,
     :payload_type,
     :marker,
-    :extension
+    :extension,
+    :has_padding?,
+    :total_header_size
   ]
+
+  def_options secure?: [
+                type: :boolean,
+                default: false,
+                description: """
+                Specifies whether Parser should expect packets that are encrypted or not.
+                Requires adding [srtp](https://github.com/membraneframework/elixir_libsrtp) dependency to work.
+                """
+              ]
 
   def_input_pad :input,
     caps: {RemoteStream, type: :packetized, content_format: one_of([nil, RTP])},
@@ -31,11 +50,12 @@ defmodule Membrane.RTP.Parser do
 
   def_output_pad :output, caps: RTP
 
+  # for now the availability is always
   def_output_pad :rtcp_output, mode: :push, caps: :any, availability: :on_request
 
   @impl true
-  def handle_init(_opts) do
-    {:ok, %{}}
+  def handle_init(opts) do
+    {:ok, %{rtcp_output_pad: nil, secure?: opts.secure?}}
   end
 
   @impl true
@@ -44,22 +64,30 @@ defmodule Membrane.RTP.Parser do
   end
 
   @impl true
-  def handle_process(:input, buffer, _ctx, state) do
-    %Buffer{payload: payload} = buffer
-    packet_type = RTP.Packet.identify(payload)
+  def handle_pad_added(Pad.ref(:rtcp_output, _ref) = pad, _ctx, state) do
+    {:ok, %{state | rtcp_output_pad: pad}}
+  end
 
-    case packet_type do
-      :rtp -> RTP.Packet.parse(payload)
-      :rtcp -> RTCP.Packet.parse(payload)
-    end
-    |> case do
-      {:ok, packet} ->
-        actions = process_packet(packet, buffer.metadata)
-        {{:ok, actions}, state}
+  @impl true
+  def handle_process(:input, %Buffer{payload: payload, metadata: metadata} = buffer, _ctx, state) do
+    with :rtp <- RTP.Packet.identify(payload),
+         {:ok, packet} <- RTP.Packet.parse(payload, not state.secure?) do
+      actions = process_packet(packet, metadata)
+      {{:ok, actions}, state}
+    else
+      :rtcp ->
+        # do not parse rtcp packet as it has to be decrypted first if secure mode is enabled...
+        case state.rtcp_output_pad do
+          nil ->
+            {:ok, state}
+
+          pad ->
+            {{:ok, buffer: {pad, buffer}}, state}
+        end
 
       {:error, reason} ->
         Membrane.Logger.warn("""
-        Couldn't parse #{packet_type} packet:
+        Couldn't parse rtp packet:
         #{inspect(payload, limit: :infinity)}
         Reason: #{inspect(reason)}. Ignoring packet.
         """)
@@ -74,20 +102,13 @@ defmodule Membrane.RTP.Parser do
   end
 
   @impl true
-  def handle_event(:output, %RTCPEvent{} = event, ctx, state) do
-    ctx.pads
-    |> Map.keys()
-    |> Enum.find(fn
-      Pad.ref(:rtcp_output, _id) -> true
-      _pad -> false
-    end)
-    |> case do
+  def handle_event(:output, %RTCPEvent{} = event, _ctx, state) do
+    case state.rtcp_output_pad do
       nil ->
         {:ok, state}
 
       pad ->
-        buffer = %Buffer{payload: RTCP.Packet.serialize(event.rtcp)}
-        {{:ok, buffer: {pad, buffer}}, state}
+        {{:ok, event: {pad, event}}, state}
     end
   end
 
@@ -98,28 +119,5 @@ defmodule Membrane.RTP.Parser do
     extracted = Map.take(rtp.header, @metadata_fields)
     metadata = Map.put(metadata, :rtp, extracted)
     [buffer: {:output, %Buffer{payload: rtp.payload, metadata: metadata}}]
-  end
-
-  defp process_packet(rtcp, metadata) do
-    Enum.flat_map(rtcp, &process_rtcp(&1, metadata)) ++ [redemand: :output]
-  end
-
-  defp process_rtcp(%RTCP.FeedbackPacket{payload: %RTCP.FeedbackPacket.PLI{}}, _metadata) do
-    Membrane.Logger.warn("Received packet loss indicator RTCP packet")
-    []
-  end
-
-  defp process_rtcp(%RTCP.SenderReportPacket{ssrc: ssrc} = packet, metadata) do
-    event = %RTCPEvent{
-      rtcp: %{packet | reports: []},
-      ssrcs: [ssrc],
-      arrival_timestamp: Map.get(metadata, :arrival_ts, Membrane.Time.vm_time())
-    }
-
-    [event: {:output, event}]
-  end
-
-  defp process_rtcp(_unknown_rtcp_packet, _metadata) do
-    []
   end
 end

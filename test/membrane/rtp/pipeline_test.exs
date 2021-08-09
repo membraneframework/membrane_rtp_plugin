@@ -6,6 +6,7 @@ defmodule Membrane.RTP.PipelineTest do
   alias Membrane.Buffer
   alias Membrane.RTP.{Parser, Fixtures}
   alias Membrane.Testing.{Source, Pipeline, Sink}
+  alias Membrane.RemoteStream
 
   @buffer_receive_timeout 1000
 
@@ -16,7 +17,10 @@ defmodule Membrane.RTP.PipelineTest do
     {:ok, pipeline} =
       Pipeline.start_link(%Pipeline.Options{
         elements: [
-          source: %Source{output: test_data},
+          source: %Source{
+            output: test_data,
+            caps: %RemoteStream{type: :packetized, content_format: nil}
+          },
           parser: Parser,
           sink: %Sink{}
         ]
