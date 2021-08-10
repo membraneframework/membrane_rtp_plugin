@@ -4,7 +4,7 @@ defmodule Membrane.RTCP.SdesPacket do
   [RFC3550](https://tools.ietf.org/html/rfc3550#section-6.5)
   """
 
-  alias Membrane.RTCP.Packet
+  @behaviour Membrane.RTCP.Packet
 
   defmodule Chunk do
     @moduledoc false
@@ -39,8 +39,6 @@ defmodule Membrane.RTCP.SdesPacket do
           }
         }
 
-  @packet_type 202
-
   @sdes_type_atom %{
     1 => :cname,
     2 => :name,
@@ -62,8 +60,6 @@ defmodule Membrane.RTCP.SdesPacket do
     :note => 7,
     :priv => 8
   }
-
-  @behaviour Packet
 
   @impl true
   def decode(packet, ssrc_count) do
@@ -124,7 +120,7 @@ defmodule Membrane.RTCP.SdesPacket do
         <<ssrc::32, encode_chunk(chunk)::binary>>
       end)
 
-    {body, @packet_type, length(chunk_list)}
+    {body, length(chunk_list)}
   end
 
   @spec encode_chunk(chunk :: %__MODULE__.Chunk{}) :: binary()

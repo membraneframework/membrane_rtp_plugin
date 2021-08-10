@@ -1,4 +1,7 @@
 defmodule Membrane.RTCP.FeedbackPacket.FIR do
+  @moduledoc """
+  Encodes and decodes [Full Intra Request](https://datatracker.ietf.org/doc/html/rfc5104#section-4.3.1) packets.
+  """
   @behaviour Membrane.RTCP.FeedbackPacket
 
   @enforce_keys [:target_ssrc, :seq_num]

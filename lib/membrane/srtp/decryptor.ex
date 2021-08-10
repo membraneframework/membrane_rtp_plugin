@@ -2,14 +2,22 @@ defmodule Membrane.SRTP.Decryptor do
   @moduledoc """
   Converts SRTP packets to plain RTP.
 
+  Decryptor expects that buffers passed to `handle_process/4` have already parsed headers
+  in the metadata field as they contain information about header length. The header
+  length is needed to avoid parsing the header twice in case of any elements preceding
+  the decryptor needed the information to e.g. drop the packet before reaching the decryptor.
+  `ExLibSRTP` expects a valid SRTP packet containing the header, after decryption, the
+  payload binary again includes the header. The header's length simply allows stripping
+  the header without any additional parsing.
+
   Requires adding [srtp](https://github.com/membraneframework/elixir_libsrtp) dependency to work.
   """
   use Membrane.Filter
 
-  require Membrane.Logger
-
   alias Membrane.Buffer
   alias Membrane.RTP.Utils
+
+  require Membrane.Logger
 
   def_input_pad :input, caps: :any, demand_unit: :buffers
   def_output_pad :output, caps: :any
@@ -89,9 +97,7 @@ defmodule Membrane.SRTP.Decryptor do
     |> ExLibSRTP.unprotect(payload)
     |> case do
       {:ok, payload} ->
-        # TODO: check if this is a valid approach? We are not modifying binaries, just stripping them (its more efficient that having to recreate header and append it once again to the payload)
-        # when using srtp the payload contains the whole header which has to be stripped after decryption,
-        # if the packet contains padding it also has to be stripped
+        # decrypted payload contains the header that we can simply strip without any parsing as we know its length
         <<_header::binary-size(total_header_size)-unit(1), payload::binary>> = payload
 
         {:ok, {payload, _size}} = Utils.strip_padding(payload, has_padding?)

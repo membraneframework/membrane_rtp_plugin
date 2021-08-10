@@ -51,6 +51,9 @@ defmodule Membrane.RTP.SilenceDiscarder do
   end
 
   @impl true
+  def handle_event(pad, other, ctx, state), do: super(pad, other, ctx, state)
+
+  @impl true
   def handle_process(:input, _buffer, _ctx, %{max_consecutive_drops: :infinite} = state) do
     {:ok, state}
   end
@@ -84,7 +87,7 @@ defmodule Membrane.RTP.SilenceDiscarder do
             {{:ok, buffer: {:output, buffer}}, state}
         end
 
-      _ ->
+      _header ->
         {{:ok, buffer: {:output, buffer}}, state}
     end
   end

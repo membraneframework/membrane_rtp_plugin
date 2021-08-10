@@ -1,4 +1,10 @@
 defmodule Membrane.RTCP.FeedbackPacket do
+  @moduledoc """
+  Abstraction and generic encoding and decoding functionality for [RTCP feedback packets](https://datatracker.ietf.org/doc/html/rfc5104).
+  """
+
+  @behaviour Membrane.RTCP.Packet
+
   alias Membrane.RTP
 
   @enforce_keys [:origin_ssrc, :payload]
@@ -9,8 +15,6 @@ defmodule Membrane.RTCP.FeedbackPacket do
           target_ssrc: RTP.ssrc_t(),
           payload: struct
         }
-
-  @behaviour Membrane.RTCP.Packet
 
   @callback decode(binary()) :: {:ok, struct()} | {:error, any()}
 

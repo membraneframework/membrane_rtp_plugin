@@ -10,12 +10,14 @@ defmodule Membrane.RTCP.Fixtures do
   @spec sample_packet_binary() :: binary()
   def sample_packet_binary, do: hex_to_bin(@sample_rtcp_packet)
 
+  @spec packet_list() :: [binary()]
   def packet_list() do
     @sample_rtcp_communication
     |> String.split()
     |> Enum.map(&hex_to_bin/1)
   end
 
+  @spec packet_list_contents() :: [map()]
   def packet_list_contents() do
     ssrc = 0x62DBEFD0
     cname = "user2465330910@host-447eb16f"
@@ -28,7 +30,7 @@ defmodule Membrane.RTCP.Fixtures do
         rtp_timestamp: 309_557_624,
         wallclock_ts: to_membrane_time("2020-04-24T11:18:23.349522Z", 999),
         sender_packets: 66,
-        sender_octets: 11215,
+        sender_octets: 11_215,
         cname: cname,
         tool: tool
       },
@@ -37,7 +39,7 @@ defmodule Membrane.RTCP.Fixtures do
         rtp_timestamp: 309_797_521,
         wallclock_ts: to_membrane_time("2020-04-24T11:18:28.789375Z", 999),
         sender_packets: 300,
-        sender_octets: 54729,
+        sender_octets: 54_729,
         cname: cname,
         tool: tool
       },
@@ -81,6 +83,7 @@ defmodule Membrane.RTCP.Fixtures do
   end
 
   # iso8601 does not allow nanoseconds
+  @spec to_membrane_time(String.t(), non_neg_integer) :: Membrane.Time.t()
   def to_membrane_time(iso8601, nanoseconds) do
     Membrane.Time.from_iso8601!(iso8601) + Membrane.Time.nanoseconds(nanoseconds)
   end

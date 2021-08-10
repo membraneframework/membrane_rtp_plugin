@@ -9,7 +9,7 @@ defmodule Membrane.RTP.Serializer do
 
   alias Membrane.{Buffer, RTP, RemoteStream, Payload, Time}
 
-  @max_seq_num 65535
+  @max_seq_num 65_535
   @max_timestamp 0xFFFFFFFF
 
   def_input_pad :input, caps: RTP, demand_unit: :buffers

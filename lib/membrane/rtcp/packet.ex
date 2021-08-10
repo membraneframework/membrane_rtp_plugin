@@ -32,9 +32,7 @@ defmodule Membrane.RTCP.Packet do
   @doc """
   Encodes packet struct into the tuple used by `serialize/1`
   """
-  @callback encode(struct()) ::
-              {body :: binary(), packet_type :: Header.packet_type_t(),
-               packet_specific :: Header.packet_specific_t()}
+  @callback encode(struct()) :: {body :: binary(), packet_specific :: Header.packet_specific_t()}
 
   @packet_type_module BiMap.new(%{
                         200 => SenderReportPacket,

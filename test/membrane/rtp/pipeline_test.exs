@@ -4,6 +4,8 @@ defmodule Membrane.RTP.PipelineTest do
   import Membrane.Testing.Assertions
 
   alias Membrane.Buffer
+  alias Membrane.RemoteStream
+  alias Membrane.RTP
   alias Membrane.RTP.{Parser, Fixtures}
   alias Membrane.Testing.{Source, Pipeline, Sink}
   alias Membrane.RemoteStream
@@ -19,7 +21,7 @@ defmodule Membrane.RTP.PipelineTest do
         elements: [
           source: %Source{
             output: test_data,
-            caps: %RemoteStream{type: :packetized, content_format: nil}
+            caps: %RemoteStream{type: :packetized, content_format: RTP}
           },
           parser: Parser,
           sink: %Sink{}
@@ -28,8 +30,10 @@ defmodule Membrane.RTP.PipelineTest do
 
     Pipeline.play(pipeline)
 
-    Enum.each(test_data_base, fn _ ->
+    Enum.each(test_data_base, fn _test_data ->
       assert_sink_buffer(pipeline, :sink, %Buffer{}, @buffer_receive_timeout)
     end)
+
+    Pipeline.stop_and_terminate(pipeline, blocking?: true)
   end
 end

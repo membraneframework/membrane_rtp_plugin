@@ -1,7 +1,6 @@
 defmodule Membrane.RTP.SenderReportTest do
   use ExUnit.Case
 
-  alias Membrane.RTCP.Packet
   alias Membrane.RTP.Session.SenderReport
   alias Membrane.Time
 
@@ -9,7 +8,7 @@ defmodule Membrane.RTP.SenderReportTest do
   @ssrcs MapSet.new([@ssrc_1])
   @h264_clock_rate 90_000
   @packet_count 1038
-  @octet_count 17646
+  @octet_count 17_646
   @rtp_timestamp 1000
 
   test "rtp timestamp test" do

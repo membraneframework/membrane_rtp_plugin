@@ -1,12 +1,12 @@
 defmodule Membrane.RTP.StreamReceiveBinTest do
   use ExUnit.Case
-  alias Membrane.Testing
+
+  import Membrane.Testing.Assertions
 
   alias Membrane.RTP
   alias Membrane.RTP.StreamReceiveBin
   alias Membrane.RTP.H264
-
-  import Testing.Assertions
+  alias Membrane.Testing
 
   @pcap_file "test/fixtures/rtp/session/demo.pcap"
   @frames_count 1038
@@ -19,7 +19,7 @@ defmodule Membrane.RTP.StreamReceiveBinTest do
     def_input_pad :input, demand_unit: :buffers, caps: :any
 
     @impl true
-    def handle_init(_), do: {:ok, %{counter: 0}}
+    def handle_init(_opts), do: {:ok, %{counter: 0}}
 
     @impl true
     def handle_prepared_to_playing(_ctx, state),
@@ -41,10 +41,11 @@ defmodule Membrane.RTP.StreamReceiveBinTest do
         rtp_parser: RTP.Parser,
         rtp: %StreamReceiveBin{
           depayloader: H264.Depayloader,
-          rtcp_interval: 5 |> Membrane.Time.seconds(),
-          local_ssrc: @ssrc,
           remote_ssrc: @ssrc,
-          clock_rate: @h264_clock_rate
+          local_ssrc: 0,
+          clock_rate: @h264_clock_rate,
+          rtcp_report_interval: Membrane.Time.seconds(5),
+          rtcp_fir_interval: nil
         },
         video_parser: %Membrane.H264.FFmpeg.Parser{framerate: {30, 1}},
         frame_counter: FrameCounter
@@ -62,6 +63,8 @@ defmodule Membrane.RTP.StreamReceiveBinTest do
     assert_end_of_stream(pipeline, :frame_counter)
     assert_pipeline_notified(pipeline, :frame_counter, {:frame_count, count})
     assert count == @frames_count
+
+    Testing.Pipeline.stop_and_terminate(pipeline, blocking?: true)
   end
 
   test "RTCP reports are generated properly" do
@@ -81,11 +84,12 @@ defmodule Membrane.RTP.StreamReceiveBinTest do
         },
         rtp_parser: RTP.Parser,
         rtp: %StreamReceiveBin{
-          rtcp_interval: 5 |> Membrane.Time.seconds(),
           depayloader: H264.Depayloader,
+          local_ssrc: 0,
           remote_ssrc: 4_194_443_425,
-          local_ssrc: 4_194_443_425,
-          clock_rate: @h264_clock_rate
+          clock_rate: @h264_clock_rate,
+          rtcp_report_interval: Membrane.Time.seconds(5),
+          rtcp_fir_interval: nil
         },
         sink: Testing.Sink
       ]
@@ -100,5 +104,6 @@ defmodule Membrane.RTP.StreamReceiveBinTest do
     assert_start_of_stream(pipeline, :sink)
     assert_end_of_stream(pipeline, :rtp_parser, :input, 4000)
     assert_end_of_stream(pipeline, :sink)
+    Testing.Pipeline.stop_and_terminate(pipeline, blocking?: true)
   end
 end
