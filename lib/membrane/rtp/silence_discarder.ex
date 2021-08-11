@@ -6,9 +6,9 @@ defmodule Membrane.RTP.SilenceDiscarder do
   metadata under `:rtp` key. The header should contain information about audio level (VAD extension is required).
   The element will only drop packets whose audio level equals 127 meaning muted audio.
 
-  `#{__MODULE__}` will drop as many silent packets as possible and on reaching dropping limit it
-  will reset dropped packets counter, and send `Membrane.RTP.DroppedPacketEvent` with a number of packets that have been dropped.
-  The event gets sent either on reaching dropping limit or when a non-silent packet arrives.
+  `#{__MODULE__}` will drop as many silent packets as possible and on reaching dropping limit it will send the current buffer,
+  reset dropped packets counter and emit `Membrane.RTP.DroppedPacketEvent` with a number of packets that have been dropped until that point.
+  The event gets sent on both reaching dropping limit and when a non-silent packet arrives.
   """
   use Membrane.Filter
 

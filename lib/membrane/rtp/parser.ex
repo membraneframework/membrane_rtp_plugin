@@ -48,10 +48,8 @@ defmodule Membrane.RTP.Parser do
     caps: {RemoteStream, type: :packetized, content_format: one_of([nil, RTP])},
     demand_unit: :buffers
 
-  # TODO: why is availbility set to always?
-  def_output_pad :output, caps: RTP, availability: :always
+  def_output_pad :output, caps: RTP
 
-  # for now the availability is always
   def_output_pad :rtcp_output, mode: :push, caps: :any, availability: :on_request
 
   @impl true
@@ -77,7 +75,6 @@ defmodule Membrane.RTP.Parser do
       {{:ok, actions}, state}
     else
       :rtcp ->
-        # do not parse rtcp packet as it has to be decrypted first if secure mode is enabled...
         case state.rtcp_output_pad do
           nil ->
             {:ok, state}
