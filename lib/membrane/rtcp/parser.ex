@@ -81,7 +81,7 @@ defmodule Membrane.RTCP.Parser do
     Enum.flat_map(rtcp, &process_rtcp(&1, metadata)) ++ [redemand: :output]
   end
 
-  defp process_rtcp(%RTCP.FeedbackPacket{payload: %RTCP.FeedbackPacket.PLI{}} = packet, _metadata) do
+  defp process_rtcp(%RTCP.FeedbackPacket{payload: %RTCP.FeedbackPacket.PLI{}}, _metadata) do
     Membrane.Logger.warn("Received packet loss indicator RTCP packet")
     []
   end

@@ -329,7 +329,7 @@ defmodule Membrane.RTP.SessionBin do
       clock_rate: clock_rate,
       extensions: extensions,
       rtcp_fir_interval: fir_interval,
-      packet_filters: filters
+      packet_filters: _filters
     } = ctx.pads[pad].options
 
     ##########
