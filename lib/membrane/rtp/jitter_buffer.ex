@@ -135,6 +135,21 @@ defmodule Membrane.RTP.JitterBuffer do
   end
 
   @impl true
+  def handle_event(:input, %RTP.DroppedPacketsEvent{dropped: dropped}, _ctx, state) do
+    # some packets may be dropped before reaching jitter buffer therefore the stats will contain a large number
+    # of lost packets, if we know that a certain number has been dropped we can add them to received counter to ensure
+    # stats does not get broken
+    {:ok,
+     %State{
+       state
+       | store: %BufferStore{
+           state.store
+           | received: state.store.received + dropped
+         }
+     }}
+  end
+
+  @impl true
   def handle_event(pad, event, ctx, state), do: super(pad, event, ctx, state)
 
   @impl true

@@ -73,7 +73,7 @@ defmodule Membrane.RTP.SessionBin do
               ],
               rtcp_report_interval: [
                 spec: Membrane.Time.t() | nil,
-                default: 5 |> Membrane.Time.seconds(),
+                default: nil,
                 description: "Interval between sending subseqent RTCP receiver reports."
               ],
               receiver_ssrc_generator: [
@@ -173,7 +173,7 @@ defmodule Membrane.RTP.SessionBin do
       ],
       rtcp_fir_interval: [
         spec: Membrane.Time.t() | nil,
-        default: nil,
+        default: Membrane.Time.second(),
         description: "Interval between sending subseqent RTCP Full Intra Request packets."
       ]
     ]
@@ -330,8 +330,11 @@ defmodule Membrane.RTP.SessionBin do
 
     ##########
     # TODO: remove me please...
-    fir_interval = Membrane.Time.seconds(1)
-    filters = [{:silence_discarder, Membrane.RTP.SilenceDiscarder}]
+    filters =
+      if encoding_name == :OPUS,
+        do: [{:silence_discarder, Membrane.RTP.SilenceDiscarder}],
+        else: []
+
     ##########
 
     payload_type = Map.fetch!(state.ssrc_pt_mapping, ssrc)

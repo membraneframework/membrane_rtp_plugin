@@ -2,21 +2,18 @@ defmodule Membrane.RTP.SilenceDiscarder do
   @moduledoc """
   Element responsible for dropping silent audio packets.
 
-  For a packet to be discarded it needs to contain a `RTP.Header` struct in its
-  metadata (packet should be inspected by `RTP.PreParser` to parse the header
-  without changing the packet itself) and a vad extension must be enabled.
-  The element will drop every packet whose audio level equals 127 meaning synthetic silence.
+  For a packet to be discarded it needs to contain a `RTP.HeaderExtension` struct in its
+  metadata under `:rtp` key. The header should contain information about audio level (VAD extension is required).
+  The element will only drop packets whose audio level equals 127 meaning muted audio.
 
-  `#{__MODULE__}` does not know anything about incoming packets, it does not check for
-  their ssrcs (therefore just a single audio stream should be passed via single
-  SilenceDiscarder instance), it just checks for the header and if the vad
-  extension is present it will drop as many consecutive silence packets as possible
-  (until reaching max_consecutive_drops, then it will pass a single packet
-  and reset the counter).
+  `#{__MODULE__}` will drop as many silent packets as possible and on reaching dropping limit it
+  will reset dropped packets counter, and send `Membrane.RTP.DroppedPacketEvent` with a number of packets that have been dropped.
+  The event gets sent either on reaching dropping limit or when a non-silent packet arrives.
   """
   use Membrane.Filter
 
   alias Membrane.RTP.Header
+  alias Membrane.RTP.DroppedPacketsEvent
 
   require Membrane.Logger
 
@@ -34,9 +31,10 @@ defmodule Membrane.RTP.SilenceDiscarder do
                 default: @max_silent_drops,
                 description: """
                 A number indicating how many consecutive silent packets can be dropped before
-                a single packet will be passed.
+                a single packet will be passed and dropped packet event will we emitted.
 
-                Passing single packets is beneficial for element such as jitter buffer or encryptor as they can update their ROCs.
+                Passing a single packets once in a while is necessary for element such as jitter buffer or encryptor as they can update their ROCs
+                based on sequence numbers and when we drop to many packets we may roll it over.
                 """
               ]
 
@@ -75,13 +73,14 @@ defmodule Membrane.RTP.SilenceDiscarder do
         }
       } ->
         cond do
-          audio_level == @vad_silence_level and dropped + 1 < max_consecutive_drops ->
+          audio_level == @vad_silence_level and dropped + 1 <= max_consecutive_drops ->
             {{:ok, redemand: :output}, %{state | dropped: dropped + 1}}
 
-          # packet is silent but we exceeded max_consecutive_drops
-          audio_level == @vad_silence_level ->
-            Membrane.Logger.debug("Resetting dropped packets counter")
-            {{:ok, buffer: {:output, buffer}}, %{state | dropped: 0}}
+          # packet can be silent but reached dropping limit so send the event and reset counter
+          dropped > 0 ->
+            {{:ok,
+              buffer: {:output, buffer}, event: {:output, %DroppedPacketsEvent{dropped: dropped}}},
+             %{state | dropped: 0}}
 
           true ->
             {{:ok, buffer: {:output, buffer}}, state}
