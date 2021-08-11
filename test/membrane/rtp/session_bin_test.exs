@@ -144,7 +144,9 @@ defmodule Membrane.RTP.Session.BinTest do
           {{:sink, ssrc}, Testing.Sink}
         ],
         links: [
-          link(:rtp) |> via_out(Pad.ref(:output, ssrc)) |> to({:sink, ssrc})
+          link(:rtp)
+          |> via_out(Pad.ref(:output, ssrc), options: [rtcp_fir_interval: nil])
+          |> to({:sink, ssrc})
         ]
       }
 
@@ -208,10 +210,10 @@ defmodule Membrane.RTP.Session.BinTest do
 
     %{audio: %{ssrc: audio_ssrc}, video: %{ssrc: video_ssrc}} = input
 
-    # assert_start_of_stream(pipeline, {:sink, ^video_ssrc})
-    # assert_start_of_stream(pipeline, {:sink, ^audio_ssrc})
-    # assert_start_of_stream(pipeline, :rtp_sink)
-    # assert_start_of_stream(pipeline, :rtcp_sink)
+    assert_start_of_stream(pipeline, {:sink, ^video_ssrc})
+    assert_start_of_stream(pipeline, {:sink, ^audio_ssrc})
+    assert_start_of_stream(pipeline, :rtp_sink)
+    assert_start_of_stream(pipeline, :rtcp_sink)
 
     rr_match_funs =
       Enum.map(

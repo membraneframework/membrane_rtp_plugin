@@ -11,8 +11,12 @@ defmodule Membrane.RTP.StreamReceiveBin do
 
   def_options clock_rate: [type: :integer, spec: Membrane.RTP.clock_rate_t()],
               srtp_policies: [
-                spec: [ExLibSRTP.Policy.t()] | nil,
-                default: nil
+                spec: [ExLibSRTP.Policy.t()],
+                default: []
+              ],
+              secure?: [
+                type: :boolean,
+                default: false
               ],
               filters: [
                 spec: {atom(), :struct | :module},
@@ -46,7 +50,7 @@ defmodule Membrane.RTP.StreamReceiveBin do
     links = [
       link_bin_input()
       |> to_filters(opts.filters)
-      |> then(if opts.srtp_policies != nil, do: maybe_link_decryptor, else: & &1)
+      |> then(if opts.secure?, do: maybe_link_decryptor, else: & &1)
       |> to(:rtcp_receiver)
       |> to(:jitter_buffer)
       |> to(:depayloader)

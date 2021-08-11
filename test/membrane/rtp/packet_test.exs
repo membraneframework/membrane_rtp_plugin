@@ -4,7 +4,6 @@ defmodule Membrane.RTP.PacketTest do
   alias Membrane.RTP.{Header, Packet, Fixtures}
 
   @parse_payload true
-  @do_not_parse_payload false
 
   test "parses and serializes valid packets" do
     assert Packet.parse(Fixtures.sample_packet_binary(), @parse_payload) ==

@@ -291,23 +291,27 @@ defmodule Membrane.RTP.SessionBin do
   # TODO: handle insecure rtp flow just like with delayed decryption (but this time more optimal I guess?)
   @impl true
   def handle_pad_added(Pad.ref(:rtp_input, ref) = pad, ctx, state) do
-    parser_ref = {:rtp_parser, ref}
+    rtp_parser_ref = {:rtp_parser, ref}
     rtcp_output = Pad.ref(:rtcp_output, ref)
     rtcp? = Map.has_key?(ctx.pads, rtcp_output)
 
     links =
       [
         link_bin_input(pad, buffer: @rtp_input_buffer_params)
-        |> to(parser_ref, RTP.Parser)
+        |> to(rtp_parser_ref, RTP.Parser)
+        |> via_out(:output)
         |> to(:ssrc_router)
       ] ++
         if rtcp? do
           [
-            link(parser_ref)
+            link(rtp_parser_ref)
             |> via_out(:rtcp_output)
             |> to({:rtcp_parser, ref}, RTCP.Parser)
             |> via_out(:rtcp_output)
-            |> to_bin_output(rtcp_output)
+            |> to_bin_output(rtcp_output),
+            link({:rtcp_parser, ref})
+            |> via_out(:output)
+            |> to(:ssrc_router)
           ]
         else
           []
@@ -350,6 +354,7 @@ defmodule Membrane.RTP.SessionBin do
       rtp_stream_name => %RTP.StreamReceiveBin{
         filters: filters,
         srtp_policies: state.srtp_policies,
+        secure?: state.secure?,
         depayloader: depayloader,
         local_ssrc: local_ssrc,
         remote_ssrc: ssrc,
