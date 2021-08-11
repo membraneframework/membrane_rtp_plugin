@@ -1,11 +1,7 @@
 defmodule Membrane.RTCP.FeedbackPacket.PLI do
   @moduledoc """
-  TODO: MOCK MODULE, TO BE IMPLEMENTED
-
-  For now, ignores [Picture Loss Indication](https://datatracker.ietf.org/doc/html/rfc4585#section-6.3.1) packets.
+  Encodes and decodes [Picture Loss Indication](https://datatracker.ietf.org/doc/html/rfc4585#section-6.3.1) packets.
   """
-
-  # TODO: mock module, to be implemented
 
   @behaviour Membrane.RTCP.FeedbackPacket
 

@@ -56,10 +56,15 @@ defmodule Membrane.RTCP.Receiver do
 
   @impl true
   def handle_event(:input, %RTCPEvent{rtcp: %SenderReportPacket{} = rtcp} = event, _ctx, state) do
-    <<_::16, cut_wallclock_ts::32, _::16>> =
+    <<_wallclock_ts_upper_16_bits::16, wallclock_ts_middle_32_bits::32,
+      _wallclock_ts_lower_16_bits::16>> =
       Time.to_ntp_timestamp(rtcp.sender_info.wallclock_timestamp)
 
-    sr_info = %{cut_wallclock_ts: cut_wallclock_ts, arrival_ts: event.arrival_timestamp}
+    sr_info = %{
+      cut_wallclock_ts: wallclock_ts_middle_32_bits,
+      arrival_ts: event.arrival_timestamp
+    }
+
     {:ok, %{state | sr_info: sr_info}}
   end
 

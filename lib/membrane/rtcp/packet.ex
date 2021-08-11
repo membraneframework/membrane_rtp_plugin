@@ -53,7 +53,7 @@ defmodule Membrane.RTCP.Packet do
 
     header =
       %Header{packet_type: packet_type, packet_specific: packet_specific}
-      |> Header.serialize(length: byte_size(body))
+      |> Header.serialize(body_size: byte_size(body))
 
     header <> body
   end
@@ -70,7 +70,8 @@ defmodule Membrane.RTCP.Packet do
   defp do_parse(<<>>, acc), do: {:ok, Enum.reverse(acc)}
 
   defp do_parse(<<raw_header::binary-size(4), body_and_rest::binary>>, acc) do
-    with {:ok, %{header: header, length: length, padding?: padding?}} <- Header.parse(raw_header),
+    with {:ok, %{header: header, body_size: length, padding?: padding?}} <-
+           Header.parse(raw_header),
          <<body::binary-size(length), rest::binary>> <- body_and_rest,
          {:ok, {body, _padding}} <- RTP.Utils.strip_padding(body, padding?),
          {:ok, packet_module} <- BiMap.fetch(@packet_type_module, header.packet_type),

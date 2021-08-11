@@ -16,7 +16,7 @@ defmodule Membrane.RTCP.Header do
         }
 
   @spec parse(binary()) ::
-          {:ok, %{header: t(), padding?: boolean, length: pos_integer}}
+          {:ok, %{header: t(), padding?: boolean, body_size: pos_integer}}
           | :error
   def parse(<<2::2, padding::1, packet_specific::5, pt::8, length::16>>) do
     {:ok,
@@ -26,7 +26,7 @@ defmodule Membrane.RTCP.Header do
          packet_type: pt
        },
        padding?: padding == 1,
-       length: length * 4
+       body_size: length * 4
      }}
   end
 
@@ -34,11 +34,15 @@ defmodule Membrane.RTCP.Header do
     :error
   end
 
-  @spec serialize(t(), length: pos_integer(), padding?: boolean()) :: binary()
+  @spec serialize(t(), body_size: pos_integer(), padding?: boolean()) :: binary()
   def serialize(%__MODULE__{} = header, opts) do
     padding = if Keyword.get(opts, :padding?), do: 1, else: 0
-    length = Keyword.fetch!(opts, :length)
-    0 = rem(length, 4)
-    <<2::2, padding::1, header.packet_specific::5, header.packet_type::8, div(length, 4)::16>>
+    size = Keyword.fetch!(opts, :body_size)
+
+    unless rem(size, 4) == 0 do
+      raise "RTCP packet body size must be divisible by 4, got: #{size}"
+    end
+
+    <<2::2, padding::1, header.packet_specific::5, header.packet_type::8, div(size, 4)::16>>
   end
 end
