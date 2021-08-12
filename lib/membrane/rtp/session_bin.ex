@@ -281,9 +281,7 @@ defmodule Membrane.RTP.SessionBin do
           []
         end
 
-    new_spec = %ParentSpec{children: %{}, links: links}
-
-    {{:ok, spec: new_spec}, state}
+    {{:ok, spec: %ParentSpec{links: links}}, state}
   end
 
   @impl true
@@ -313,9 +311,7 @@ defmodule Membrane.RTP.SessionBin do
           []
         end
 
-    new_spec = %ParentSpec{links: links}
-
-    {{:ok, spec: new_spec}, state}
+    {{:ok, spec: %ParentSpec{links: links}}, state}
   end
 
   @impl true

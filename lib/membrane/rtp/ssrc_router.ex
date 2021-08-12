@@ -23,12 +23,12 @@ defmodule Membrane.RTP.SSRCRouter do
     @type t() :: %__MODULE__{
             pads: %{RTP.ssrc_t() => [input_pad :: Pad.ref_t()]},
             linking_buffers: %{RTP.ssrc_t() => [Membrane.Buffer.t()]},
-            cached_events: [any()]
+            handshake_event: struct() | nil
           }
 
     defstruct pads: %{},
               linking_buffers: %{},
-              cached_events: []
+              handshake_event: nil
   end
 
   @typedoc """
@@ -46,7 +46,12 @@ defmodule Membrane.RTP.SSRCRouter do
   def handle_pad_added(Pad.ref(:output, ssrc) = pad, _ctx, state) do
     {buffered_actions, state} = pop_in(state, [:linking_buffers, ssrc])
 
-    events = Enum.map(state.cached_events, &{:event, {pad, &1}})
+    events =
+      if state.handshake_event do
+        [{:event, {pad, state.handshake_event}}]
+      else
+        []
+      end
 
     {{:ok, [caps: {pad, %RTP{}}] ++ Enum.reverse(buffered_actions ++ events)}, state}
   end
@@ -115,7 +120,7 @@ defmodule Membrane.RTP.SSRCRouter do
         maybe_add_to_linking_buffer(:event, event, ssrc, state)
       end)
 
-    {{:ok, actions}, %{state | cached_events: [event | state.cached_events]}}
+    {{:ok, actions}, %{state | handshake_event: event}}
   end
 
   @impl true

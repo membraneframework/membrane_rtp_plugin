@@ -16,9 +16,6 @@ defmodule Membrane.RTP.SilenceDiscarder do
 
   require Membrane.Logger
 
-  @max_silent_drops 1000
-
-  @vad_id 6
   @vad_len 0
   @vad_silence_level 127
 
@@ -27,7 +24,7 @@ defmodule Membrane.RTP.SilenceDiscarder do
 
   def_options max_consecutive_drops: [
                 spec: non_neg_integer() | :infinity,
-                default: @max_silent_drops,
+                default: 1000,
                 description: """
                 A number indicating how many consecutive silent packets can be dropped before
                 a single packet will be passed and dropped packet event will we emitted.
