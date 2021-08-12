@@ -15,26 +15,16 @@ defmodule Membrane.RTCP.Parser do
     demand_unit: :buffers
 
   def_output_pad :output, caps: RTCP
-  def_output_pad :rtcp_output, mode: :push, caps: :any, availability: :on_request
+  def_output_pad :rtcp_output, mode: :push, caps: :any
 
   @impl true
   def handle_init(_opts) do
-    {:ok, %{rtcp_output_pad: nil}}
+    {:ok, %{}}
   end
 
   @impl true
   def handle_caps(:input, _caps, _ctx, state) do
     {{:ok, caps: {:output, %RTCP{}}}, state}
-  end
-
-  @impl true
-  def handle_pad_added(Pad.ref(:rtcp_output, _ref) = pad, _ctx, state) do
-    {:ok, %{state | rtcp_output_pad: pad}}
-  end
-
-  @impl true
-  def handle_pad_removed(Pad.ref(:rtcp_output, _ref), _ctx, state) do
-    {:ok, %{state | rtcp_output_pad: nil}}
   end
 
   @impl true
@@ -64,14 +54,8 @@ defmodule Membrane.RTCP.Parser do
 
   @impl true
   def handle_event(:input, %RTCPEvent{} = event, _ctx, state) do
-    case state.rtcp_output_pad do
-      nil ->
-        {:ok, state}
-
-      pad ->
-        buffer = %Buffer{payload: RTCP.Packet.serialize(event.rtcp)}
-        {{:ok, buffer: {pad, buffer}}, state}
-    end
+    buffer = %Buffer{payload: RTCP.Packet.serialize(event.rtcp)}
+    {{:ok, buffer: {:rtcp_output, buffer}}, state}
   end
 
   @impl true

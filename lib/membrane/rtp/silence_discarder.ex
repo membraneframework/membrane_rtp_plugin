@@ -4,7 +4,7 @@ defmodule Membrane.RTP.SilenceDiscarder do
 
   For a packet to be discarded it needs to contain a `RTP.HeaderExtension` struct in its
   metadata under `:rtp` key. The header should contain information about audio level (VAD extension is required).
-  The element will only drop packets whose audio level equals 127 meaning muted audio.
+  The element will only drop packets whose audio level is above given silence threshold (muted audio is of value 127).
 
   `#{__MODULE__}` will drop as many silent packets as possible and on reaching dropping limit it will send the current buffer,
   reset dropped packets counter and emit `Membrane.RTP.DroppedPacketEvent` with a number of packets that have been dropped until that point.
@@ -18,7 +18,6 @@ defmodule Membrane.RTP.SilenceDiscarder do
   require Membrane.Logger
 
   @vad_len 0
-  @vad_silence_level 127
 
   def_input_pad :input, caps: :any, demand_unit: :buffers
   def_output_pad :output, caps: :any
@@ -34,6 +33,14 @@ defmodule Membrane.RTP.SilenceDiscarder do
                 based on sequence numbers and when we drop to many packets we may roll it over.
                 """
               ],
+              silence_threshold: [
+                spec: 1..127,
+                default: 127,
+                description: """
+                Audio level threshold that will be compared against incoming packets. Packet will be dropped if its audio level
+                is above or equal to the given threshold.
+                """
+              ],
               vad_id: [
                 spec: 1..14,
                 default: 6,
@@ -44,7 +51,7 @@ defmodule Membrane.RTP.SilenceDiscarder do
 
   @impl true
   def handle_init(opts) do
-    {:ok, %{id: opts.vad_id, dropped: 0, max_consecutive_drops: opts.max_consecutive_drops}}
+    {:ok, Map.from_struct(opts) |> Map.put(:dropped, 0)}
   end
 
   @impl true
@@ -73,7 +80,7 @@ defmodule Membrane.RTP.SilenceDiscarder do
 
   @impl true
   def handle_process(:input, buffer, _ctx, state) do
-    %{dropped: dropped, id: id} = state
+    %{dropped: dropped, vad_id: vad_id, silence_threshold: silence_threshold} = state
 
     case buffer.metadata.rtp do
       %{
@@ -83,7 +90,7 @@ defmodule Membrane.RTP.SilenceDiscarder do
           data: data
         }
       } ->
-        silent? = is_silent_packet(id, data)
+        silent? = is_silent_packet(vad_id, silence_threshold, data)
 
         cond do
           silent? ->
@@ -107,20 +114,26 @@ defmodule Membrane.RTP.SilenceDiscarder do
      %{state | dropped: 0}}
   end
 
-  defp is_silent_packet(_vad_id, <<>>), do: false
+  defp is_silent_packet(_vad_id, _threshold, <<>>), do: false
 
   # vad extension
-  defp is_silent_packet(vad_id, <<vad_id::4, @vad_len::4, _v::1, audio_level::7, _rest::binary>>) do
-    audio_level == @vad_silence_level
+  defp is_silent_packet(
+         vad_id,
+         threshold,
+         <<vad_id::4, @vad_len::4, _v::1, audio_level::7, _rest::binary>>
+       ) do
+    audio_level >= threshold
   end
 
   # extension padding
-  defp is_silent_packet(vad_id, <<0::8, rest::binary>>), do: is_silent_packet(vad_id, rest)
+  defp is_silent_packet(vad_id, threshold, <<0::8, rest::binary>>),
+    do: is_silent_packet(vad_id, threshold, rest)
 
   # unknown extension
   defp is_silent_packet(
          vad_id,
+         threshold,
          <<_id::4, len::4, _data0::8, _data1::binary-size(len), rest::binary>>
        ),
-       do: is_silent_packet(vad_id, rest)
+       do: is_silent_packet(vad_id, threshold, rest)
 end
