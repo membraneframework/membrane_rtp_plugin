@@ -1,7 +1,6 @@
 defmodule Membrane.RTP.SenderReportTest do
   use ExUnit.Case
 
-  alias Membrane.RTCP.CompoundPacket
   alias Membrane.RTP.Session.SenderReport
   alias Membrane.Time
 
@@ -9,7 +8,7 @@ defmodule Membrane.RTP.SenderReportTest do
   @ssrcs MapSet.new([@ssrc_1])
   @h264_clock_rate 90_000
   @packet_count 1038
-  @octet_count 17646
+  @octet_count 17_646
   @rtp_timestamp 1000
 
   test "rtp timestamp test" do
@@ -25,7 +24,7 @@ defmodule Membrane.RTP.SenderReportTest do
       timestamp: test_wallclock_time
     }
 
-    assert {{:report, %CompoundPacket{packets: [sender_report | _]}}, _report_data} =
+    assert {{:report, [sender_report | _]}, _report_data} =
              SenderReport.handle_stats(mock_serializer_stats, @ssrc_1, report_data)
 
     report_wallclock_timestamp = sender_report.sender_info.wallclock_timestamp

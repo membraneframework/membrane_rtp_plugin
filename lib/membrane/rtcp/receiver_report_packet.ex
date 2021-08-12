@@ -4,7 +4,9 @@ defmodule Membrane.RTCP.ReceiverReportPacket do
   [RFC3550](https://tools.ietf.org/html/rfc3550#section-6.4.2)
   """
 
-  alias Membrane.RTCP.{Packet, ReportPacketBlock}
+  @behaviour Membrane.RTCP.Packet
+
+  alias Membrane.RTCP.ReportPacketBlock
 
   defstruct [:ssrc, :reports]
 
@@ -13,16 +15,12 @@ defmodule Membrane.RTCP.ReceiverReportPacket do
           reports: [ReportPacketBlock.t()]
         }
 
-  @behaviour Packet
-
-  @packet_type 201
-
   @impl true
   def encode(report) do
     blocks = report.reports |> Enum.map_join(&ReportPacketBlock.encode/1)
     body = <<report.ssrc::32>> <> blocks
     reports_count = report.reports |> length()
-    {body, @packet_type, reports_count}
+    {body, reports_count}
   end
 
   @impl true

@@ -1,12 +1,9 @@
-defmodule Membrane.RTP.Session.ReceiveBinTest do
+defmodule Membrane.RTP.Session.BinTest do
   use ExUnit.Case
 
   import Membrane.Testing.Assertions
 
-  alias Membrane.RemoteStream
-  alias Membrane.RTCP
-  alias Membrane.RTCP.{Header, Packet}
-  alias Membrane.RTP
+  alias Membrane.{RemoteStream, RTP, RTCP}
   alias Membrane.Testing
 
   @rtp_input %{
@@ -31,30 +28,19 @@ defmodule Membrane.RTP.Session.ReceiveBinTest do
 
   @fmt_mapping %{96 => {:H264, 90_000}, 127 => {:MPA, 90_000}}
 
-  @spec match_packet(Packet.t(), %{}) :: boolean()
-  defp match_packet(packet, fields_values), do: compare_common_fields(packet, fields_values)
-
-  @spec compare_common_fields(any(), any()) :: boolean()
-  defp compare_common_fields(left, right) when is_map(left) and is_map(right) do
-    Enum.all?(right, fn {k, v} ->
-      Map.has_key?(left, k) and compare_common_fields(Map.get(left, k), v)
-    end)
-  end
-
-  defp compare_common_fields(left, right), do: left == right
-
-  # asserts all specified buffers were received by the sink
+  # asserts all specified buffers were received by a sink in any order
   defp assert_specified_buffers(_pipeline, _sink, []), do: :ok
 
-  defp assert_specified_buffers(pipeline, sink, field_specifications) do
+  defp assert_specified_buffers(pipeline, sink, match_funs) do
     assert_sink_buffer(pipeline, sink, buffer)
-    %Membrane.Buffer{payload: <<head::binary-size(4), body_and_rest::binary>>} = buffer
-    {:ok, %{header: header, length: len}} = Header.parse(head)
-    body_size = len - 4
-    <<body::binary-size(body_size), _rest::binary>> = body_and_rest
-    {:ok, packet} = Packet.parse_body(body, header)
-    field_specifications = field_specifications |> Enum.reject(&match_packet(packet, &1))
-    assert_specified_buffers(pipeline, sink, field_specifications)
+
+    case Enum.split_with(match_funs, & &1.(buffer)) do
+      {[_matching_funs], match_funs} ->
+        assert_specified_buffers(pipeline, sink, match_funs)
+
+      {matching_funs, match_funs} ->
+        raise "Expected the buffer #{inspect(buffer)} to match exactly one match function, while it matched #{inspect(matching_funs)}. Remaining funs: #{inspect(match_funs)}."
+    end
   end
 
   defmodule Pauser do
@@ -104,16 +90,20 @@ defmodule Membrane.RTP.Session.ReceiveBinTest do
 
     @impl true
     def handle_init(options) do
+      rtp_input_ref = make_ref()
+
       spec = %ParentSpec{
         children: [
           pcap: %Membrane.Element.Pcap.Source{path: options.input.pcap},
           pauser: %Pauser{pause_after: [15]},
           rtp: %RTP.SessionBin{
             fmt_mapping: options.fmt_mapping,
-            rtcp_interval: options.rtcp_interval,
+            rtcp_report_interval: options.rtcp_interval,
             secure?: Map.has_key?(options.input, :srtp_policies),
             srtp_policies: Map.get(options.input, :srtp_policies, []),
-            receiver_ssrc_generator: fn [sender_ssrc | _], _ -> sender_ssrc end
+            receiver_ssrc_generator: fn [sender_ssrc | _local_ssrcs], _remote_ssrcs ->
+              sender_ssrc
+            end
           },
           hackney: %Membrane.Hackney.Source{
             location: "https://membraneframework.github.io/static/video-samples/test-video.h264"
@@ -127,21 +117,20 @@ defmodule Membrane.RTP.Session.ReceiveBinTest do
           rtcp_sink: Testing.Sink
         ],
         links: [
+          link(:rtcp_source)
+          |> to(:rtp)
+          |> via_out(Pad.ref(:rtcp_output, rtp_input_ref))
+          |> to(:rtcp_sink),
           link(:pcap)
           |> to(:pauser)
-          |> via_in(:rtp_input)
+          |> via_in(Pad.ref(:rtp_input, rtp_input_ref))
           |> to(:rtp),
           link(:hackney)
           |> to(:parser)
           |> via_in(Pad.ref(:input, options.output.video.ssrc))
           |> to(:rtp)
           |> via_out(Pad.ref(:rtp_output, options.output.video.ssrc), options: [encoding: :H264])
-          |> to(:rtp_sink),
-          link(:rtcp_source)
-          |> via_in(:rtcp_input)
-          |> to(:rtp)
-          |> via_out(:rtcp_output)
-          |> to(:rtcp_sink)
+          |> to(:rtp_sink)
         ]
       }
 
@@ -174,7 +163,7 @@ defmodule Membrane.RTP.Session.ReceiveBinTest do
         reports: [],
         sender_info: %{
           rtp_timestamp: 555_689_664,
-          sender_octet_count: 27843,
+          sender_octet_count: 27_843,
           sender_packet_count: 158,
           wallclock_timestamp: 1_582_306_181_225_999_999
         },
@@ -186,8 +175,8 @@ defmodule Membrane.RTP.Session.ReceiveBinTest do
       @rtp_input,
       @rtp_output,
       sender_report,
-      [%{:ssrc => @rtp_input.video.ssrc}, %{:ssrc => @rtp_input.audio.ssrc}],
-      [%{:ssrc => @rtp_output.video.ssrc, :sender_info => %{:sender_packet_count => 313}}]
+      [@rtp_input.video.ssrc, @rtp_input.audio.ssrc],
+      [@rtp_output.video.ssrc]
     )
   end
 
@@ -197,16 +186,10 @@ defmodule Membrane.RTP.Session.ReceiveBinTest do
         33, 116, 108, 233, 19, 36, 26, 247, 128, 0, 0, 1, 255, 96, 51, 225, 176, 61, 171, 239, 14,
         63>>
 
-    test_stream(
-      @srtp_input,
-      @rtp_output,
-      encrypted_sender_report,
-      [%{:ssrc => @srtp_input.audio.ssrc}, %{:ssrc => @srtp_input.video.ssrc}],
-      [%{:ssrc => @rtp_output.video.ssrc}]
-    )
+    test_stream(@srtp_input, @rtp_output, encrypted_sender_report, [], [])
   end
 
-  defp test_stream(input, output, sender_report, rr_senders_ssrcs, sr_senders_ssrcs) do
+  defp test_stream(input, output, sender_report, rr_senders_ssrcs, _sr_senders_ssrcs) do
     {:ok, pipeline} =
       %Testing.Pipeline.Options{
         module: DynamicPipeline,
@@ -230,7 +213,21 @@ defmodule Membrane.RTP.Session.ReceiveBinTest do
     assert_start_of_stream(pipeline, :rtp_sink)
     assert_start_of_stream(pipeline, :rtcp_sink)
 
-    assert_specified_buffers(pipeline, :rtcp_sink, sr_senders_ssrcs ++ rr_senders_ssrcs)
+    rr_match_funs =
+      Enum.map(
+        rr_senders_ssrcs,
+        &fn buffer ->
+          case RTCP.Packet.parse(buffer.payload) do
+            {:ok, [%RTCP.ReceiverReportPacket{reports: [%RTCP.ReportPacketBlock{ssrc: ^&1}]}]} ->
+              true
+
+            _result ->
+              false
+          end
+        end
+      )
+
+    assert_specified_buffers(pipeline, :rtcp_sink, rr_match_funs)
 
     Testing.Pipeline.message_child(pipeline, :pauser, :continue)
 
@@ -250,7 +247,7 @@ defmodule Membrane.RTP.Session.ReceiveBinTest do
     end)
 
     assert_end_of_stream(pipeline, {:sink, ^video_ssrc})
-    Testing.Pipeline.stop_and_terminate(pipeline, blcoking?: true)
+    Testing.Pipeline.stop_and_terminate(pipeline, blocking?: true)
     assert_pipeline_playback_changed(pipeline, _, :stopped)
   end
 end

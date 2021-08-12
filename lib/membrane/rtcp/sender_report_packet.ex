@@ -3,8 +3,11 @@ defmodule Membrane.RTCP.SenderReportPacket do
   Parses and constructs RTCP Sender Report defined in
   [RFC3550](https://tools.ietf.org/html/rfc3550#section-6.4.1)
   """
+
+  @behaviour Membrane.RTCP.Packet
+
   alias Membrane.RTP
-  alias Membrane.RTCP.{Packet, ReportPacketBlock}
+  alias Membrane.RTCP.ReportPacketBlock
 
   defstruct [:ssrc, :reports, :sender_info]
 
@@ -21,10 +24,6 @@ defmodule Membrane.RTCP.SenderReportPacket do
           sender_info: sender_info_t()
         }
 
-  @behaviour Packet
-
-  @packet_type 200
-
   @impl true
   def encode(report) do
     sender_info = encode_sender_info(report.sender_info)
@@ -34,7 +33,7 @@ defmodule Membrane.RTCP.SenderReportPacket do
 
     body = <<report.ssrc::32>> <> sender_info <> blocks
 
-    {body, @packet_type, reports_count}
+    {body, reports_count}
   end
 
   defp encode_sender_info(sender_info) do
