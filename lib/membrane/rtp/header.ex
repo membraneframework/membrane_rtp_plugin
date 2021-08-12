@@ -53,9 +53,7 @@ defmodule Membrane.RTP.Header do
           timestamp: timestamp_t(),
           sequence_number: sequence_number_t(),
           csrcs: [RTP.ssrc_t()],
-          extension: __MODULE__.Extension.t() | nil,
-          has_padding?: boolean(),
-          total_header_size: non_neg_integer()
+          extension: __MODULE__.Extension.t() | nil
         }
 
   @enforce_keys [
@@ -69,8 +67,6 @@ defmodule Membrane.RTP.Header do
                 version: 2,
                 marker: false,
                 csrcs: [],
-                extension: nil,
-                has_padding?: false,
-                total_header_size: 0
+                extension: nil
               ]
 end

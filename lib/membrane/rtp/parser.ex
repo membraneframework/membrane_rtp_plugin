@@ -30,9 +30,7 @@ defmodule Membrane.RTP.Parser do
     :csrcs,
     :payload_type,
     :marker,
-    :extension,
-    :has_padding?,
-    :total_header_size
+    :extension
   ]
 
   def_options secure?: [
@@ -70,7 +68,12 @@ defmodule Membrane.RTP.Parser do
   @impl true
   def handle_process(:input, %Buffer{payload: payload, metadata: metadata} = buffer, _ctx, state) do
     with :rtp <- RTP.Packet.identify(payload),
-         {:ok, packet} <- RTP.Packet.parse(payload, not state.secure?) do
+         {:ok,
+          %{packet: packet, has_padding?: has_padding?, total_header_size: total_header_size}} <-
+           RTP.Packet.parse(payload, not state.secure?) do
+      metadata =
+        Map.merge(metadata, %{has_padding?: has_padding?, total_header_size: total_header_size})
+
       actions = process_packet(packet, metadata)
       {{:ok, actions}, state}
     else

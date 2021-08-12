@@ -6,8 +6,10 @@ defmodule Membrane.RTP.PacketTest do
   @parse_payload true
 
   test "parses and serializes valid packets" do
-    assert Packet.parse(Fixtures.sample_packet_binary(), @parse_payload) ==
-             {:ok, Fixtures.sample_packet()}
+    packet = Fixtures.sample_packet()
+
+    assert {:ok, %{packet: ^packet}} =
+             Packet.parse(Fixtures.sample_packet_binary(), @parse_payload)
 
     assert Packet.serialize(Fixtures.sample_packet()) == Fixtures.sample_packet_binary()
   end
@@ -26,10 +28,10 @@ defmodule Membrane.RTP.PacketTest do
 
     packet = %Packet{
       Fixtures.sample_packet()
-      | header: %Header{Fixtures.sample_header() | csrcs: [12, 21], total_header_size: 20}
+      | header: %Header{Fixtures.sample_header() | csrcs: [12, 21]}
     }
 
-    assert Packet.parse(packet_binary, @parse_payload) == {:ok, packet}
+    assert {:ok, %{packet: ^packet}} = Packet.parse(packet_binary, @parse_payload)
     assert Packet.serialize(packet) == packet_binary
   end
 
@@ -42,8 +44,7 @@ defmodule Membrane.RTP.PacketTest do
 
     sample_packet = Fixtures.sample_packet()
 
-    assert Packet.parse(test_packet, @parse_payload) ==
-             {:ok, %{sample_packet | header: %{sample_packet.header | has_padding?: true}}}
+    assert {:ok, %{packet: ^sample_packet}} = Packet.parse(test_packet, @parse_payload)
 
     assert Packet.serialize(Fixtures.sample_packet(), align_to: 4) == test_packet
   end
@@ -65,14 +66,10 @@ defmodule Membrane.RTP.PacketTest do
 
     packet = %Packet{
       Fixtures.sample_packet()
-      | header: %Header{
-          Fixtures.sample_header()
-          | extension: expected_parsed_extension,
-            total_header_size: 32
-        }
+      | header: %Header{Fixtures.sample_header() | extension: expected_parsed_extension}
     }
 
-    assert Packet.parse(packet_binary, @parse_payload) == {:ok, packet}
+    assert {:ok, %{packet: ^packet}} = Packet.parse(packet_binary, @parse_payload)
     assert Packet.serialize(packet) == packet_binary
   end
 end

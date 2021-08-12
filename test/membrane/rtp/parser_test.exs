@@ -27,10 +27,10 @@ defmodule Membrane.RTP.ParserTest do
                           ssrc: 3_919_876_492,
                           csrcs: [],
                           extension: nil,
-                          marker: false,
-                          has_padding?: false,
-                          total_header_size: 12
-                        }
+                          marker: false
+                        },
+                        has_padding?: false,
+                        total_header_size: 12
                       },
                       payload: Fixtures.sample_packet_payload()
                     }}}, state}

@@ -54,7 +54,9 @@ defmodule Membrane.RTP.Packet do
     <<extension.profile_specific::bitstring, byte_size(data) |> div(4)::16, data::binary>>
   end
 
-  @spec parse(binary(), boolean()) :: {:ok, t()} | {:error, :wrong_version | :malformed_packet}
+  @spec parse(binary(), boolean()) ::
+          {:ok, %{packet: t(), has_padding?: boolean(), total_header_size: non_neg_integer()}}
+          | {:error, :wrong_version | :malformed_packet}
   def parse(packet, encrypted?)
 
   def parse(<<version::2, _::bitstring>>, _encrypted?) when version != 2,
@@ -77,15 +79,17 @@ defmodule Membrane.RTP.Packet do
         payload_type: payload_type,
         timestamp: timestamp,
         csrcs: for(<<csrc::32 <- csrcs>>, do: csrc),
-        extension: extension,
-        has_padding?: has_padding == 1,
-        total_header_size: byte_size(original_packet) - byte_size(payload) - padding
+        extension: extension
       }
 
       {:ok,
-       %__MODULE__{
-         header: header,
-         payload: if(encrypted?, do: payload, else: original_packet)
+       %{
+         packet: %__MODULE__{
+           header: header,
+           payload: if(encrypted?, do: payload, else: original_packet)
+         },
+         has_padding?: has_padding == 1,
+         total_header_size: byte_size(original_packet) - byte_size(payload) - padding
        }}
     else
       :error -> {:error, :malformed_packet}
