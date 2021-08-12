@@ -98,7 +98,7 @@ defmodule Membrane.SRTP.Decryptor do
     |> case do
       {:ok, payload} ->
         # decrypted payload contains the header that we can simply strip without any parsing as we know its length
-        <<_header::binary-size(total_header_size)-unit(1), payload::binary>> = payload
+        <<_header::binary-size(total_header_size), payload::binary>> = payload
 
         {:ok, {payload, _size}} = Utils.strip_padding(payload, has_padding?)
 

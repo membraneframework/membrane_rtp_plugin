@@ -254,21 +254,19 @@ defmodule Membrane.RTP.SessionBin do
 
   @impl true
   def handle_pad_added(Pad.ref(:rtp_input, ref) = pad, ctx, %{secure?: true} = state) do
-    rtp_parser_ref = {:rtp_parser, ref}
-
     rtcp_output = Pad.ref(:rtcp_output, ref)
     rtcp? = Map.has_key?(ctx.pads, rtcp_output)
 
     links =
       [
         link_bin_input(pad, buffer: @rtp_input_buffer_params)
-        |> to(rtp_parser_ref, %RTP.Parser{secure?: true})
+        |> to({:rtp_parser, ref}, %RTP.Parser{secure?: true})
         |> via_out(:output)
         |> to(:ssrc_router)
       ] ++
         if rtcp? do
           [
-            link(rtp_parser_ref)
+            link({:rtp_parser, ref})
             |> via_out(:rtcp_output)
             |> to({:rtcp_decryptor, ref}, %Membrane.SRTCP.Decryptor{policies: state.srtp_policies})
             |> to({:rtcp_parser, ref}, RTCP.Parser)
@@ -288,23 +286,21 @@ defmodule Membrane.RTP.SessionBin do
     {{:ok, spec: new_spec}, state}
   end
 
-  # TODO: handle insecure rtp flow just like with delayed decryption (but this time more optimal I guess?)
   @impl true
   def handle_pad_added(Pad.ref(:rtp_input, ref) = pad, ctx, state) do
-    rtp_parser_ref = {:rtp_parser, ref}
     rtcp_output = Pad.ref(:rtcp_output, ref)
     rtcp? = Map.has_key?(ctx.pads, rtcp_output)
 
     links =
       [
         link_bin_input(pad, buffer: @rtp_input_buffer_params)
-        |> to(rtp_parser_ref, RTP.Parser)
+        |> to({:rtp_parser, ref}, RTP.Parser)
         |> via_out(:output)
         |> to(:ssrc_router)
       ] ++
         if rtcp? do
           [
-            link(rtp_parser_ref)
+            link({:rtp_parser, ref})
             |> via_out(:rtcp_output)
             |> to({:rtcp_parser, ref}, RTCP.Parser)
             |> via_out(:rtcp_output)
@@ -317,7 +313,7 @@ defmodule Membrane.RTP.SessionBin do
           []
         end
 
-    new_spec = %ParentSpec{children: [], links: links}
+    new_spec = %ParentSpec{links: links}
 
     {{:ok, spec: new_spec}, state}
   end
@@ -329,17 +325,8 @@ defmodule Membrane.RTP.SessionBin do
       clock_rate: clock_rate,
       extensions: extensions,
       rtcp_fir_interval: fir_interval,
-      packet_filters: _filters
+      packet_filters: filters
     } = ctx.pads[pad].options
-
-    ##########
-    # TODO: remove me please...
-    filters =
-      if encoding_name == :OPUS,
-        do: [{:silence_discarder, Membrane.RTP.SilenceDiscarder}],
-        else: []
-
-    ##########
 
     payload_type = Map.fetch!(state.ssrc_pt_mapping, ssrc)
 

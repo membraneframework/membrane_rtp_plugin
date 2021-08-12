@@ -13,7 +13,6 @@ defmodule Membrane.RTP.SilenceDiscarder do
   use Membrane.Filter
 
   alias Membrane.RTP.Header
-  alias Membrane.RTP.DroppedPacketsEvent
 
   require Membrane.Logger
 
@@ -36,11 +35,18 @@ defmodule Membrane.RTP.SilenceDiscarder do
                 Passing a single packets once in a while is necessary for element such as jitter buffer or encryptor as they can update their ROCs
                 based on sequence numbers and when we drop to many packets we may roll it over.
                 """
+              ],
+              vad_id: [
+                spec: 1..14,
+                default: 6,
+                description: """
+                ID of a VAD extension.
+                """
               ]
 
   @impl true
   def handle_init(opts) do
-    {:ok, %{dropped: 0, max_consecutive_drops: opts.max_consecutive_drops}}
+    {:ok, %{id: opts.vad_id, dropped: 0, max_consecutive_drops: opts.max_consecutive_drops}}
   end
 
   @impl true
@@ -61,26 +67,32 @@ defmodule Membrane.RTP.SilenceDiscarder do
         :input,
         buffer,
         _ctx,
-        %{dropped: dropped, max_consecutive_drops: max_consecutive_drops} = state
-      ) do
+        %{dropped: dropped, max_consecutive_drops: max_drops} = state
+      )
+      when dropped == max_drops do
+    stop_dropping(buffer, state)
+  end
+
+  @impl true
+  def handle_process(:input, buffer, _ctx, state) do
+    %{dropped: dropped, id: id} = state
+
     case buffer.metadata.rtp do
       %{
         extension: %Header.Extension{
           # profile specific for one-byte extensions
           profile_specific: <<0xBE, 0xDE>>,
-          # vad extension
-          data: <<@vad_id::4, @vad_len::4, _v::1, audio_level::7, 0::16>>
+          data: data
         }
       } ->
+        silent? = is_silent_packet(id, data)
+
         cond do
-          audio_level == @vad_silence_level and dropped + 1 <= max_consecutive_drops ->
+          silent? ->
             {{:ok, redemand: :output}, %{state | dropped: dropped + 1}}
 
-          # packet can be silent but reached dropping limit so send the event and reset counter
           dropped > 0 ->
-            {{:ok,
-              buffer: {:output, buffer}, event: {:output, %DroppedPacketsEvent{dropped: dropped}}},
-             %{state | dropped: 0}}
+            stop_dropping(buffer, state)
 
           true ->
             {{:ok, buffer: {:output, buffer}}, state}
@@ -90,4 +102,25 @@ defmodule Membrane.RTP.SilenceDiscarder do
         {{:ok, buffer: {:output, buffer}}, state}
     end
   end
+
+  defp stop_dropping(buffer, state) do
+    {{:ok, buffer: {:output, buffer}}, %{state | dropped: 0}}
+  end
+
+  defp is_silent_packet(_vad_id, <<>>), do: false
+
+  # vad extension
+  defp is_silent_packet(vad_id, <<vad_id::4, @vad_len::4, _v::1, audio_level::7, _rest::binary>>) do
+    audio_level == @vad_silence_level
+  end
+
+  # extension padding
+  defp is_silent_packet(vad_id, <<0::8, rest::binary>>), do: is_silent_packet(vad_id, rest)
+
+  # unknown extension
+  defp is_silent_packet(
+         vad_id,
+         <<_id::4, len::4, _data0::8, _data1::binary-size(len), rest::binary>>
+       ),
+       do: is_silent_packet(vad_id, rest)
 end

@@ -66,7 +66,7 @@ defmodule Membrane.SRTCP.Decryptor do
     }
 
     :ok = ExLibSRTP.add_stream(state.srtp, policy)
-    {{:ok, redemand: :output}, Map.put(state, :policies, [policy])}
+    {{:ok, redemand: :output}, %{state | policies: [policy]}}
   end
 
   @impl true

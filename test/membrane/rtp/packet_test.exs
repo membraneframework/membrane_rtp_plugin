@@ -26,7 +26,7 @@ defmodule Membrane.RTP.PacketTest do
 
     packet = %Packet{
       Fixtures.sample_packet()
-      | header: %Header{Fixtures.sample_header() | csrcs: [12, 21], total_header_size: 160}
+      | header: %Header{Fixtures.sample_header() | csrcs: [12, 21], total_header_size: 20}
     }
 
     assert Packet.parse(packet_binary, @parse_payload) == {:ok, packet}
@@ -68,7 +68,7 @@ defmodule Membrane.RTP.PacketTest do
       | header: %Header{
           Fixtures.sample_header()
           | extension: expected_parsed_extension,
-            total_header_size: 256
+            total_header_size: 32
         }
     }
 

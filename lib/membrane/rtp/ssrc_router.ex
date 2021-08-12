@@ -88,12 +88,9 @@ defmodule Membrane.RTP.SSRCRouter do
   end
 
   @impl true
-  def handle_process(
-        Pad.ref(:input, _id) = pad,
-        %Membrane.Buffer{metadata: %{rtp: %{ssrc: ssrc, payload_type: payload_type}}} = buffer,
-        _ctx,
-        state
-      ) do
+  def handle_process(Pad.ref(:input, _id) = pad, buffer, _ctx, state) do
+    %Membrane.Buffer{metadata: %{rtp: %{ssrc: ssrc, payload_type: payload_type}}} = buffer
+
     {new_stream_actions, state} = maybe_handle_new_stream(pad, ssrc, payload_type, state)
     {actions, state} = maybe_add_to_linking_buffer(:buffer, buffer, ssrc, state)
     {{:ok, new_stream_actions ++ actions}, state}

@@ -29,7 +29,7 @@ defmodule Membrane.RTP.ParserTest do
                           extension: nil,
                           marker: false,
                           has_padding?: false,
-                          total_header_size: 96
+                          total_header_size: 12
                         }
                       },
                       payload: Fixtures.sample_packet_payload()

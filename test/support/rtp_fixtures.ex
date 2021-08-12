@@ -32,7 +32,7 @@ defmodule Membrane.RTP.Fixtures do
       sequence_number: 3983,
       ssrc: 3_919_876_492,
       timestamp: 1_653_702_647,
-      total_header_size: 96
+      total_header_size: 12
     }
 
   @spec fake_packet_list(Range.t()) :: [binary()]
