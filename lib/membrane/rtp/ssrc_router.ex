@@ -53,7 +53,7 @@ defmodule Membrane.RTP.SSRCRouter do
         []
       end
 
-    {{:ok, [caps: {pad, %RTP{}}] ++ Enum.reverse(buffered_actions ++ events)}, state}
+    {{:ok, [caps: {pad, %RTP{}}] ++ events ++ Enum.reverse(buffered_actions)}, state}
   end
 
   @impl true

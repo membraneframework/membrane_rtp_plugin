@@ -135,6 +135,11 @@ defmodule Membrane.RTP.JitterBuffer do
   end
 
   @impl true
+  def handle_event(:input, %RTP.PacketsDroppedEvent{dropped: dropped}, _ctx, state) do
+    {:ok, update_in(state, [:store, :received], &(&1 + dropped))}
+  end
+
+  @impl true
   def handle_event(pad, event, ctx, state), do: super(pad, event, ctx, state)
 
   @impl true

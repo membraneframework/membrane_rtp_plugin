@@ -49,9 +49,9 @@ defmodule Membrane.RTP.StreamReceiveBin do
 
     links = [
       link_bin_input()
+      |> to_filters(opts.filters)
       |> to(:rtcp_receiver)
       |> to(:jitter_buffer)
-      |> to_filters(opts.filters)
       |> then(if opts.secure?, do: maybe_link_decryptor, else: & &1)
       |> to(:depayloader)
       |> to_bin_output()
