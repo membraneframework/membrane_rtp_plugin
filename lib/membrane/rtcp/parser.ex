@@ -53,7 +53,7 @@ defmodule Membrane.RTCP.Parser do
   end
 
   @impl true
-  def handle_event(:input, %RTCPEvent{} = event, _ctx, state) do
+  def handle_event(:output, %RTCPEvent{} = event, _ctx, state) do
     buffer = %Buffer{payload: RTCP.Packet.serialize(event.rtcp)}
     {{:ok, buffer: {:rtcp_output, buffer}}, state}
   end

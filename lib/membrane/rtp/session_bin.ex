@@ -262,6 +262,7 @@ defmodule Membrane.RTP.SessionBin do
         link_bin_input(pad, buffer: @rtp_input_buffer_params)
         |> to({:rtp_parser, ref}, %RTP.Parser{secure?: true})
         |> via_out(:output)
+        |> via_in(Pad.ref(:input, ref))
         |> to(:ssrc_router)
       ] ++
         if rtcp? do
@@ -275,6 +276,7 @@ defmodule Membrane.RTP.SessionBin do
             |> to_bin_output(rtcp_output),
             link({:rtcp_parser, ref})
             |> via_out(:output)
+            |> via_in(Pad.ref(:input, {:rtcp, ref}))
             |> to(:ssrc_router)
           ]
         else
@@ -294,6 +296,7 @@ defmodule Membrane.RTP.SessionBin do
         link_bin_input(pad, buffer: @rtp_input_buffer_params)
         |> to({:rtp_parser, ref}, RTP.Parser)
         |> via_out(:output)
+        |> via_in(Pad.ref(:input, ref))
         |> to(:ssrc_router)
       ] ++
         if rtcp? do
@@ -305,6 +308,7 @@ defmodule Membrane.RTP.SessionBin do
             |> to_bin_output(rtcp_output),
             link({:rtcp_parser, ref})
             |> via_out(:output)
+            |> via_in(Pad.ref(:input, {:rtcp, ref}))
             |> to(:ssrc_router)
           ]
         else
