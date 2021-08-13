@@ -73,7 +73,7 @@ defmodule Membrane.RTP.SessionBin do
               ],
               rtcp_report_interval: [
                 spec: Membrane.Time.t() | nil,
-                default: 5 |> Membrane.Time.seconds(),
+                default: nil,
                 description: "Interval between sending subseqent RTCP receiver reports."
               ],
               receiver_ssrc_generator: [
@@ -160,9 +160,20 @@ defmodule Membrane.RTP.SessionBin do
         Extensions are applied in the same order as passed to the pad options.
         """
       ],
+      packet_filters: [
+        spec: [module() | struct()],
+        default: [],
+        description: """
+        A list of filter elements that will be attached to the packets flow (added inside `StreamReceiveBin`).
+        In case of SRTP filters are placed before the Decryptor.
+
+        A filter can be responsible e.g. for dropping silent audio packets when encountered VAD extension data in the
+        packet header.
+        """
+      ],
       rtcp_fir_interval: [
         spec: Membrane.Time.t() | nil,
-        default: nil,
+        default: Membrane.Time.second(),
         description: "Interval between sending subseqent RTCP Full Intra Request packets."
       ]
     ]
@@ -242,80 +253,43 @@ defmodule Membrane.RTP.SessionBin do
   end
 
   @impl true
-  def handle_pad_added(Pad.ref(:rtp_input, ref) = pad, ctx, %{secure?: true} = state) do
-    parser_ref = {:rtp_parser, ref}
-    decryptor_ref = {:srtp_decryptor, ref}
-    encryptor_ref = {:srtcp_encryptor, ref}
+  def handle_pad_added(Pad.ref(:rtp_input, ref) = pad, ctx, %{secure?: secure?} = state) do
     rtcp_output = Pad.ref(:rtcp_output, ref)
     rtcp? = Map.has_key?(ctx.pads, rtcp_output)
 
-    children =
-      %{
-        parser_ref => RTP.Parser,
-        decryptor_ref => %SRTP.Decryptor{policies: state.srtp_policies}
-      }
-      |> Map.merge(
-        if rtcp? do
-          %{encryptor_ref => %SRTP.Encryptor{policies: state.receiver_srtp_policies}}
-        else
-          %{}
-        end
-      )
+    maybe_link_srtcp_decryptor =
+      &to(&1, {:srtcp_decryptor, ref}, %Membrane.SRTCP.Decryptor{policies: state.srtp_policies})
 
-    links = [
-      link_bin_input(pad, buffer: @rtp_input_buffer_params)
-      |> to(decryptor_ref)
-      |> to(parser_ref)
-      |> to(:ssrc_router)
-    ]
+    maybe_link_srtcp_encryptor =
+      &to(&1, {:srtcp_encryptor, ref}, %Membrane.SRTP.Encryptor{
+        policies: state.receiver_srtp_policies
+      })
 
     links =
-      links ++
+      [
+        link_bin_input(pad, buffer: @rtp_input_buffer_params)
+        |> to({:rtp_parser, ref}, %RTP.Parser{secure?: secure?})
+        |> via_in(Pad.ref(:input, ref))
+        |> to(:ssrc_router)
+      ] ++
         if rtcp? do
           [
-            link(parser_ref)
+            link({:rtp_parser, ref})
             |> via_out(:rtcp_output)
-            |> to(encryptor_ref)
-            |> to_bin_output(rtcp_output)
+            |> then(if secure?, do: maybe_link_srtcp_decryptor, else: & &1)
+            |> to({:rtcp_parser, ref}, RTCP.Parser)
+            |> via_out(:rtcp_output)
+            |> then(if secure?, do: maybe_link_srtcp_encryptor, else: & &1)
+            |> to_bin_output(rtcp_output),
+            link({:rtcp_parser, ref})
+            |> via_in(Pad.ref(:input, {:rtcp, ref}))
+            |> to(:ssrc_router)
           ]
         else
           []
         end
 
-    new_spec = %ParentSpec{children: children, links: links}
-
-    {{:ok, spec: new_spec}, state}
-  end
-
-  @impl true
-  def handle_pad_added(Pad.ref(:rtp_input, ref) = pad, ctx, state) do
-    parser_ref = {:rtp_parser, ref}
-    rtcp_output = Pad.ref(:rtcp_output, ref)
-    rtcp? = Map.has_key?(ctx.pads, rtcp_output)
-
-    children = %{parser_ref => RTP.Parser}
-
-    links = [
-      link_bin_input(pad, buffer: @rtp_input_buffer_params)
-      |> to(parser_ref)
-      |> to(:ssrc_router)
-    ]
-
-    links =
-      links ++
-        if rtcp? do
-          [
-            link(parser_ref)
-            |> via_out(:rtcp_output)
-            |> to_bin_output(rtcp_output)
-          ]
-        else
-          []
-        end
-
-    new_spec = %ParentSpec{children: children, links: links}
-
-    {{:ok, spec: new_spec}, state}
+    {{:ok, spec: %ParentSpec{links: links}}, state}
   end
 
   @impl true
@@ -324,7 +298,8 @@ defmodule Membrane.RTP.SessionBin do
       encoding: encoding_name,
       clock_rate: clock_rate,
       extensions: extensions,
-      rtcp_fir_interval: fir_interval
+      rtcp_fir_interval: fir_interval,
+      packet_filters: filters
     } = ctx.pads[pad].options
 
     payload_type = Map.fetch!(state.ssrc_pt_mapping, ssrc)
@@ -338,6 +313,9 @@ defmodule Membrane.RTP.SessionBin do
 
     new_children = %{
       rtp_stream_name => %RTP.StreamReceiveBin{
+        filters: filters,
+        srtp_policies: state.srtp_policies,
+        secure?: state.secure?,
         depayloader: depayloader,
         local_ssrc: local_ssrc,
         remote_ssrc: ssrc,
@@ -447,8 +425,17 @@ defmodule Membrane.RTP.SessionBin do
   end
 
   @impl true
-  def handle_pad_removed(Pad.ref(:rtp_input, ref), _ctx, state) do
-    children = [rtp_parser: ref] ++ if state.secure?, do: [srtp_decryptor: ref], else: []
+  def handle_pad_removed(Pad.ref(:rtp_input, ref), ctx, state) do
+    children =
+      [
+        :rtp_parser,
+        :rtcp_parser,
+        :srtcp_decryptor,
+        :srtcp_encryptor
+      ]
+      |> Enum.map(&{&1, ref})
+      |> Enum.filter(&Map.has_key?(ctx.children, &1))
+
     {{:ok, remove_child: children}, state}
   end
 
@@ -470,11 +457,6 @@ defmodule Membrane.RTP.SessionBin do
       _result ->
         {:ok, state}
     end
-  end
-
-  @impl true
-  def handle_pad_removed(Pad.ref(:rtcp_output, ref), _ctx, %{secure?: true} = state) do
-    {{:ok, remove_child: {:srtcp_encryptor, ref}}, state}
   end
 
   @impl true

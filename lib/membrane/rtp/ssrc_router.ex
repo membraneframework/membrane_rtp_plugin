@@ -4,6 +4,11 @@ defmodule Membrane.RTP.SSRCRouter do
 
   When receiving a new SSRC, it creates a new pad and notifies its parent (`t:new_stream_notification_t/0`) that should link
   the new output pad.
+
+  When an RTCP event arrives from some output pad the router tries to forward it do a proper input pad.
+  The input pad gets chosen by the source input pad from which packets with given ssrc were previously sent,
+  the source pad's id gets extracted and the router tries to send the event to an input
+  pad of id `{:rtcp, id}`, if no such pad exists the router simply drops the event.
   """
 
   use Membrane.Filter
@@ -22,11 +27,13 @@ defmodule Membrane.RTP.SSRCRouter do
 
     @type t() :: %__MODULE__{
             pads: %{RTP.ssrc_t() => [input_pad :: Pad.ref_t()]},
-            linking_buffers: %{RTP.ssrc_t() => [Membrane.Buffer.t()]}
+            linking_buffers: %{RTP.ssrc_t() => [Membrane.Buffer.t()]},
+            handshake_event: struct() | nil
           }
 
     defstruct pads: %{},
-              linking_buffers: %{}
+              linking_buffers: %{},
+              handshake_event: nil
   end
 
   @typedoc """
@@ -36,12 +43,22 @@ defmodule Membrane.RTP.SSRCRouter do
           {:new_rtp_stream, RTP.ssrc_t(), RTP.payload_type_t()}
 
   @impl true
-  def handle_init(_opts), do: {:ok, %State{}}
+  def handle_init(_opts) do
+    {:ok, %State{}}
+  end
 
   @impl true
   def handle_pad_added(Pad.ref(:output, ssrc) = pad, _ctx, state) do
     {buffered_actions, state} = pop_in(state, [:linking_buffers, ssrc])
-    {{:ok, [caps: {pad, %RTP{}}] ++ Enum.reverse(buffered_actions)}, state}
+
+    events =
+      if state.handshake_event do
+        [{:event, {pad, state.handshake_event}}]
+      else
+        []
+      end
+
+    {{:ok, [caps: {pad, %RTP{}}] ++ events ++ Enum.reverse(buffered_actions)}, state}
   end
 
   @impl true
@@ -75,11 +92,6 @@ defmodule Membrane.RTP.SSRCRouter do
   end
 
   @impl true
-  def handle_caps(Pad.ref(:input, _ref), _caps, _ctx, state) do
-    {:ok, state}
-  end
-
-  @impl true
   def handle_demand(Pad.ref(:output, ssrc), _size, _unit, ctx, state) do
     input_pad = state.pads[ssrc]
     {{:ok, demand: {input_pad, &(&1 + ctx.incoming_demand)}}, state}
@@ -87,7 +99,8 @@ defmodule Membrane.RTP.SSRCRouter do
 
   @impl true
   def handle_process(Pad.ref(:input, _id) = pad, buffer, _ctx, state) do
-    %{ssrc: ssrc, payload_type: payload_type} = buffer.metadata.rtp
+    %Membrane.Buffer{metadata: %{rtp: %{ssrc: ssrc, payload_type: payload_type}}} = buffer
+
     {new_stream_actions, state} = maybe_handle_new_stream(pad, ssrc, payload_type, state)
     {actions, state} = maybe_add_to_linking_buffer(:buffer, buffer, ssrc, state)
     {{:ok, new_stream_actions ++ actions}, state}
@@ -106,6 +119,16 @@ defmodule Membrane.RTP.SSRCRouter do
   end
 
   @impl true
+  def handle_event(_pad, %{handshake_data: _data} = event, _ctx, state) do
+    {actions, state} =
+      Enum.flat_map_reduce(state.pads, state, fn {ssrc, _input}, state ->
+        maybe_add_to_linking_buffer(:event, event, ssrc, state)
+      end)
+
+    {{:ok, actions}, %{state | handshake_event: event}}
+  end
+
+  @impl true
   def handle_event(Pad.ref(:input, _id), event, _ctx, state) do
     {actions, state} =
       Enum.flat_map_reduce(state.pads, state, fn {ssrc, _input}, state ->
@@ -116,10 +139,18 @@ defmodule Membrane.RTP.SSRCRouter do
   end
 
   @impl true
-  def handle_event(Pad.ref(:output, ssrc), %RTCPEvent{} = event, _ctx, state) do
-    case Map.fetch(state.pads, ssrc) do
-      {:ok, input} -> {{:ok, event: {input, event}}, state}
-      :error -> {:ok, state}
+  def handle_event(Pad.ref(:output, ssrc), %RTCPEvent{} = event, ctx, state) do
+    with {:ok, Pad.ref(:input, id)} <- Map.fetch(state.pads, ssrc),
+         rtcp_pad = Pad.ref(:input, {:rtcp, id}),
+         true <- Map.has_key?(ctx.pads, rtcp_pad) do
+      {{:ok, event: {rtcp_pad, event}}, state}
+    else
+      :error ->
+        {:ok, state}
+
+      # rtcp pad not found
+      false ->
+        {:ok, state}
     end
   end
 

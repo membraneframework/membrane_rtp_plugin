@@ -62,5 +62,11 @@ defmodule Membrane.RTP.Header do
     :timestamp,
     :sequence_number
   ]
-  defstruct @enforce_keys ++ [version: 2, marker: false, csrcs: [], extension: nil]
+  defstruct @enforce_keys ++
+              [
+                version: 2,
+                marker: false,
+                csrcs: [],
+                extension: nil
+              ]
 end

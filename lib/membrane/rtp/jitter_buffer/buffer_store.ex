@@ -12,6 +12,7 @@ defmodule Membrane.RTP.JitterBuffer.BufferStore do
   #                   RTP packet placed in JitterBuffer
 
   use Bunch
+  use Bunch.Access
   alias Membrane.{Buffer, RTP}
   alias Membrane.RTP.JitterBuffer
   alias Membrane.RTP.JitterBuffer.Record

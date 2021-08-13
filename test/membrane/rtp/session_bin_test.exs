@@ -98,7 +98,7 @@ defmodule Membrane.RTP.Session.BinTest do
           pauser: %Pauser{pause_after: [15]},
           rtp: %RTP.SessionBin{
             fmt_mapping: options.fmt_mapping,
-            rtcp_report_interval: options.rtcp_interval,
+            rtcp_report_interval: options.rtcp_report_interval,
             secure?: Map.has_key?(options.input, :srtp_policies),
             srtp_policies: Map.get(options.input, :srtp_policies, []),
             receiver_ssrc_generator: fn [sender_ssrc | _local_ssrcs], _remote_ssrcs ->
@@ -144,7 +144,9 @@ defmodule Membrane.RTP.Session.BinTest do
           {{:sink, ssrc}, Testing.Sink}
         ],
         links: [
-          link(:rtp) |> via_out(Pad.ref(:output, ssrc)) |> to({:sink, ssrc})
+          link(:rtp)
+          |> via_out(Pad.ref(:output, ssrc), options: [rtcp_fir_interval: nil])
+          |> to({:sink, ssrc})
         ]
       }
 
@@ -198,7 +200,7 @@ defmodule Membrane.RTP.Session.BinTest do
           output: output,
           fmt_mapping: @fmt_mapping,
           rtcp_input: [sender_report],
-          rtcp_interval: Membrane.Time.second()
+          rtcp_report_interval: Membrane.Time.second()
         }
       }
       |> Testing.Pipeline.start_link()

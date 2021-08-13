@@ -2,12 +2,20 @@ defmodule Membrane.SRTP.Decryptor do
   @moduledoc """
   Converts SRTP packets to plain RTP.
 
+  Decryptor expects that buffers passed to `handle_process/4` have already parsed headers
+  in the metadata field as they contain information about header length. The header
+  length is needed to avoid parsing the header twice in case of any elements preceding
+  the decryptor needed the information to e.g. drop the packet before reaching the decryptor.
+  `ExLibSRTP` expects a valid SRTP packet containing the header, after decryption, the
+  payload binary again includes the header. The header's length simply allows stripping
+  the header without any additional parsing.
+
   Requires adding [srtp](https://github.com/membraneframework/elixir_libsrtp) dependency to work.
   """
   use Membrane.Filter
 
   alias Membrane.Buffer
-  alias Membrane.{Buffer, RTP}
+  alias Membrane.RTP.Utils
 
   require Membrane.Logger
 
@@ -67,10 +75,7 @@ defmodule Membrane.SRTP.Decryptor do
   end
 
   @impl true
-  def handle_event(_pad, other, _ctx, state) do
-    Membrane.Logger.warn("Got unexpected event: #{inspect(other)}. Ignoring.")
-    {:ok, state}
-  end
+  def handle_event(pad, other, ctx, state), do: super(pad, other, ctx, state)
 
   @impl true
   def handle_demand(:output, _size, :buffers, _ctx, %{policies: []} = state) do
@@ -84,20 +89,30 @@ defmodule Membrane.SRTP.Decryptor do
 
   @impl true
   def handle_process(:input, buffer, _ctx, state) do
-    %Buffer{payload: payload} = buffer
-    packet_type = RTP.Packet.identify(payload)
+    %Buffer{
+      payload: payload,
+      metadata: %{
+        rtp: %{
+          has_padding?: has_padding?,
+          total_header_size: total_header_size
+        }
+      }
+    } = buffer
 
-    case packet_type do
-      :rtp -> ExLibSRTP.unprotect(state.srtp, payload)
-      :rtcp -> ExLibSRTP.unprotect_rtcp(state.srtp, payload)
-    end
+    state.srtp
+    |> ExLibSRTP.unprotect(payload)
     |> case do
       {:ok, payload} ->
+        # decrypted payload contains the header that we can simply strip without any parsing as we know its length
+        <<_header::binary-size(total_header_size), payload::binary>> = payload
+
+        {:ok, {payload, _size}} = Utils.strip_padding(payload, has_padding?)
+
         {{:ok, buffer: {:output, %Buffer{buffer | payload: payload}}}, state}
 
       {:error, reason} ->
         Membrane.Logger.warn("""
-        Couldn't unprotect #{packet_type} packet:
+        Couldn't unprotect srtp packet:
         #{inspect(payload, limit: :infinity)}
         Reason: #{inspect(reason)}. Ignoring packet.
         """)

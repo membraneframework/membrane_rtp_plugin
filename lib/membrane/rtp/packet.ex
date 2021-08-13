@@ -51,20 +51,27 @@ defmodule Membrane.RTP.Packet do
 
   defp serialize_header_extension(%Header.Extension{data: data} = extension)
        when byte_size(data) |> rem(4) == 0 do
-    <<extension.profile_specific::16, byte_size(data) |> div(4)::16, data::binary>>
+    <<extension.profile_specific::bitstring, byte_size(data) |> div(4)::16, data::binary>>
   end
 
-  @spec parse(binary()) :: {:ok, t()} | {:error, :wrong_version | :malformed_packet}
-  def parse(<<version::2, _::bitstring>>) when version != 2,
+  @spec parse(binary(), boolean()) ::
+          {:ok, %{packet: t(), has_padding?: boolean(), total_header_size: non_neg_integer()}}
+          | {:error, :wrong_version | :malformed_packet}
+  def parse(packet, encrypted?)
+
+  def parse(<<version::2, _::bitstring>>, _encrypted?) when version != 2,
     do: {:error, :wrong_version}
 
   def parse(
         <<version::2, has_padding::1, has_extension::1, csrcs_cnt::4, marker::1, payload_type::7,
           sequence_number::16, timestamp::32, ssrc::32, csrcs::binary-size(csrcs_cnt)-unit(32),
-          rest::binary>>
+          rest::binary>> = original_packet,
+        encrypted?
       ) do
-    with {:ok, {extension, payload}} <- parse_header_extension(rest, has_extension == 1),
-         {:ok, {payload, _padding}} = Utils.strip_padding(payload, has_padding == 1) do
+    with {:ok, {extension, payload}} <-
+           parse_header_extension(rest, has_extension == 1),
+         {:ok, {payload, padding}} =
+           Utils.strip_padding(payload, not encrypted? and has_padding == 1) do
       header = %Header{
         version: version,
         marker: marker == 1,
@@ -76,23 +83,32 @@ defmodule Membrane.RTP.Packet do
         extension: extension
       }
 
-      {:ok, %__MODULE__{header: header, payload: payload}}
+      {:ok,
+       %{
+         packet: %__MODULE__{
+           header: header,
+           payload: if(encrypted?, do: original_packet, else: payload)
+         },
+         has_padding?: has_padding == 1,
+         total_header_size: byte_size(original_packet) - byte_size(payload) - padding
+       }}
     else
       :error -> {:error, :malformed_packet}
     end
   end
 
-  def parse(_binary), do: {:error, :malformed_packet}
+  def parse(_binary, _parse_payload?), do: {:error, :malformed_packet}
 
   defp parse_header_extension(binary, header_present?)
   defp parse_header_extension(binary, false), do: {:ok, {nil, binary}}
 
   defp parse_header_extension(
-         <<profile_specific::16, data_len::16, data::binary-size(data_len)-unit(32),
+         <<profile_specific::binary-size(2), data_len::16, data::binary-size(data_len)-unit(32),
            rest::binary>>,
          true
        ) do
     extension = %Header.Extension{profile_specific: profile_specific, data: data}
+
     {:ok, {extension, rest}}
   end
 
