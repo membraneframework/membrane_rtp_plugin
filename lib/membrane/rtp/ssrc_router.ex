@@ -4,26 +4,16 @@ defmodule Membrane.RTP.SSRCRouter do
 
   When receiving a new SSRC, it creates a new pad and notifies its parent (`t:new_stream_notification_t/0`) that should link
   the new output pad.
+
+  When an RTCP event arrives from some output pad the router tries to forward it do a proper input pad.
+  The input pad gets chosen by the source input pad from which packets with given ssrc were previously sent,
+  the source pad's id gets extracted and the router tries to send the event to an input
+  pad of id `{:rtcp, id}`, if no such pad exists the router simply drops the event.
   """
 
   use Membrane.Filter
 
   alias Membrane.{RTP, RTCPEvent}
-
-  def_options rtcp_pad_mapper: [
-                type: :function,
-                spec:
-                  (rtp_pad_id :: any() ->
-                     rtcp_pad_id :: any()),
-                default: &__MODULE__.default_rtcp_pad_mapper/1,
-                description: """
-                A function that given an id of RTP's input pad from which came packets with certain ssrcs returns
-                an id of an input pad to which RTCP events with mentioned ssrcs should be forwarded.
-
-                By default incoming RTCP events wil be forwarded to an input pad of id `{:rtcp, id}` where id
-                belongs to an original RTP input pad from which packets with RTCP event's ssrc came.
-                """
-              ]
 
   def_input_pad :input, demand_unit: :buffers, caps: RTP, availability: :on_request
 
@@ -38,14 +28,12 @@ defmodule Membrane.RTP.SSRCRouter do
     @type t() :: %__MODULE__{
             pads: %{RTP.ssrc_t() => [input_pad :: Pad.ref_t()]},
             linking_buffers: %{RTP.ssrc_t() => [Membrane.Buffer.t()]},
-            handshake_event: struct() | nil,
-            pad_mapper: function()
+            handshake_event: struct() | nil
           }
 
     defstruct pads: %{},
               linking_buffers: %{},
-              handshake_event: nil,
-              pad_mapper: nil
+              handshake_event: nil
   end
 
   @typedoc """
@@ -54,15 +42,9 @@ defmodule Membrane.RTP.SSRCRouter do
   @type new_stream_notification_t ::
           {:new_rtp_stream, RTP.ssrc_t(), RTP.payload_type_t()}
 
-  @doc """
-  Default rtp to rtcp pad's id mapper.
-  """
-  @spec default_rtcp_pad_mapper(id :: any()) :: any()
-  def default_rtcp_pad_mapper(id), do: {:rtcp, id}
-
   @impl true
-  def handle_init(opts) do
-    {:ok, %State{pad_mapper: opts.rtcp_pad_mapper}}
+  def handle_init(_opts) do
+    {:ok, %State{}}
   end
 
   @impl true
@@ -159,7 +141,7 @@ defmodule Membrane.RTP.SSRCRouter do
   @impl true
   def handle_event(Pad.ref(:output, ssrc), %RTCPEvent{} = event, ctx, state) do
     with {:ok, Pad.ref(:input, id)} <- Map.fetch(state.pads, ssrc),
-         rtcp_pad = Pad.ref(:input, state.pad_mapper.(id)),
+         rtcp_pad = Pad.ref(:input, {:rtcp, id}),
          true <- Map.has_key?(ctx.pads, rtcp_pad) do
       {{:ok, event: {rtcp_pad, event}}, state}
     else

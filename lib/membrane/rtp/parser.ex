@@ -72,7 +72,13 @@ defmodule Membrane.RTP.Parser do
           %{packet: packet, has_padding?: has_padding?, total_header_size: total_header_size}} <-
            RTP.Packet.parse(payload, not state.secure?) do
       metadata =
-        Map.merge(metadata, %{has_padding?: has_padding?, total_header_size: total_header_size})
+        metadata
+        |> Map.merge(%{
+          rtp: %{
+            has_padding?: has_padding?,
+            total_header_size: total_header_size
+          }
+        })
 
       actions = process_packet(packet, metadata)
       {{:ok, actions}, state}
@@ -118,7 +124,7 @@ defmodule Membrane.RTP.Parser do
 
   defp process_packet(%RTP.Packet{} = rtp, metadata) do
     extracted = Map.take(rtp.header, @metadata_fields)
-    metadata = Map.put(metadata, :rtp, extracted)
+    metadata = Map.update!(metadata, :rtp, &Map.merge(&1, extracted))
     [buffer: {:output, %Buffer{payload: rtp.payload, metadata: metadata}}]
   end
 end

@@ -91,7 +91,12 @@ defmodule Membrane.SRTP.Decryptor do
   def handle_process(:input, buffer, _ctx, state) do
     %Buffer{
       payload: payload,
-      metadata: %{has_padding?: has_padding?, total_header_size: total_header_size}
+      metadata: %{
+        rtp: %{
+          has_padding?: has_padding?,
+          total_header_size: total_header_size
+        }
+      }
     } = buffer
 
     state.srtp
