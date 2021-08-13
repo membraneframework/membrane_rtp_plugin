@@ -257,10 +257,10 @@ defmodule Membrane.RTP.SessionBin do
     rtcp_output = Pad.ref(:rtcp_output, ref)
     rtcp? = Map.has_key?(ctx.pads, rtcp_output)
 
-    maybe_link_rtcp_decryptor =
-      &to(&1, {:rtcp_decryptor, ref}, %Membrane.SRTCP.Decryptor{policies: state.srtp_policies})
+    maybe_link_srtcp_decryptor =
+      &to(&1, {:srtcp_decryptor, ref}, %Membrane.SRTCP.Decryptor{policies: state.srtp_policies})
 
-    maybe_link_rtcp_encryptor =
+    maybe_link_srtcp_encryptor =
       &to(&1, {:srtcp_encryptor, ref}, %Membrane.SRTP.Encryptor{
         policies: state.receiver_srtp_policies
       })
@@ -276,10 +276,10 @@ defmodule Membrane.RTP.SessionBin do
           [
             link({:rtp_parser, ref})
             |> via_out(:rtcp_output)
-            |> then(if secure?, do: maybe_link_rtcp_decryptor, else: & &1)
+            |> then(if secure?, do: maybe_link_srtcp_decryptor, else: & &1)
             |> to({:rtcp_parser, ref}, RTCP.Parser)
             |> via_out(:rtcp_output)
-            |> then(if secure?, do: maybe_link_rtcp_encryptor, else: & &1)
+            |> then(if secure?, do: maybe_link_srtcp_encryptor, else: & &1)
             |> to_bin_output(rtcp_output),
             link({:rtcp_parser, ref})
             |> via_in(Pad.ref(:input, {:rtcp, ref}))

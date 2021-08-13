@@ -70,7 +70,8 @@ defmodule Membrane.RTP.Packet do
       ) do
     with {:ok, {extension, payload}} <-
            parse_header_extension(rest, has_extension == 1),
-         {:ok, {payload, padding}} = Utils.strip_padding(payload, encrypted? and has_padding == 1) do
+         {:ok, {payload, padding}} =
+           Utils.strip_padding(payload, not encrypted? and has_padding == 1) do
       header = %Header{
         version: version,
         marker: marker == 1,
@@ -86,7 +87,7 @@ defmodule Membrane.RTP.Packet do
        %{
          packet: %__MODULE__{
            header: header,
-           payload: if(encrypted?, do: payload, else: original_packet)
+           payload: if(encrypted?, do: original_packet, else: payload)
          },
          has_padding?: has_padding == 1,
          total_header_size: byte_size(original_packet) - byte_size(payload) - padding

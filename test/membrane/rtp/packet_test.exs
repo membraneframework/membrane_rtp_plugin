@@ -3,23 +3,22 @@ defmodule Membrane.RTP.PacketTest do
 
   alias Membrane.RTP.{Header, Packet, Fixtures}
 
-  @parse_payload true
+  @encrypted? false
 
   test "parses and serializes valid packets" do
     packet = Fixtures.sample_packet()
 
-    assert {:ok, %{packet: ^packet}} =
-             Packet.parse(Fixtures.sample_packet_binary(), @parse_payload)
+    assert {:ok, %{packet: ^packet}} = Packet.parse(Fixtures.sample_packet_binary(), @encrypted?)
 
     assert Packet.serialize(Fixtures.sample_packet()) == Fixtures.sample_packet_binary()
   end
 
   test "returns error when version is not supported" do
-    assert Packet.parse(<<1::2, 1233::1022>>, @parse_payload) == {:error, :wrong_version}
+    assert Packet.parse(<<1::2, 1233::1022>>, @encrypted?) == {:error, :wrong_version}
   end
 
   test "returns error when packet is too short" do
-    assert Packet.parse(<<128, 127, 0, 0, 1>>, @parse_payload) == {:error, :malformed_packet}
+    assert Packet.parse(<<128, 127, 0, 0, 1>>, @encrypted?) == {:error, :malformed_packet}
   end
 
   test "parses and serializes csrcs correctly" do
@@ -31,7 +30,7 @@ defmodule Membrane.RTP.PacketTest do
       | header: %Header{Fixtures.sample_header() | csrcs: [12, 21]}
     }
 
-    assert {:ok, %{packet: ^packet}} = Packet.parse(packet_binary, @parse_payload)
+    assert {:ok, %{packet: ^packet}} = Packet.parse(packet_binary, @encrypted?)
     assert Packet.serialize(packet) == packet_binary
   end
 
@@ -44,7 +43,7 @@ defmodule Membrane.RTP.PacketTest do
 
     sample_packet = Fixtures.sample_packet()
 
-    assert {:ok, %{packet: ^sample_packet}} = Packet.parse(test_packet, @parse_payload)
+    assert {:ok, %{packet: ^sample_packet}} = Packet.parse(test_packet, @encrypted?)
 
     assert Packet.serialize(Fixtures.sample_packet(), align_to: 4) == test_packet
   end
@@ -69,7 +68,7 @@ defmodule Membrane.RTP.PacketTest do
       | header: %Header{Fixtures.sample_header() | extension: expected_parsed_extension}
     }
 
-    assert {:ok, %{packet: ^packet}} = Packet.parse(packet_binary, @parse_payload)
+    assert {:ok, %{packet: ^packet}} = Packet.parse(packet_binary, @encrypted?)
     assert Packet.serialize(packet) == packet_binary
   end
 end

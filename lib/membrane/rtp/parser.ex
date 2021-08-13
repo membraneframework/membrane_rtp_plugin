@@ -70,7 +70,7 @@ defmodule Membrane.RTP.Parser do
     with :rtp <- RTP.Packet.identify(payload),
          {:ok,
           %{packet: packet, has_padding?: has_padding?, total_header_size: total_header_size}} <-
-           RTP.Packet.parse(payload, not state.secure?) do
+           RTP.Packet.parse(payload, state.secure?) do
       metadata =
         metadata
         |> Map.merge(%{
