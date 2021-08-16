@@ -52,6 +52,15 @@ defmodule Membrane.RTP.SessionBin do
   @type extension_t ::
           {extension_name :: atom(), extension_config :: Membrane.ParentSpec.child_spec_t()}
 
+  @typedoc """
+  A tuple with a name and element's module/struct that will be responsible for arbitrary packet filtering
+  inside `Membrane.RTP.StreamReceiveBin`.
+
+  A filter can be responsible e.g. for dropping silent audio packets when encountered VAD extension data in the
+  packet header.
+  """
+  @type packet_filter_t :: {name :: atom(), element :: module() | struct()}
+
   @ssrc_boundaries 2..(Bitwise.bsl(1, 32) - 1)
 
   @rtp_input_buffer_params [warn_size: 250, fail_size: 500]
@@ -161,11 +170,12 @@ defmodule Membrane.RTP.SessionBin do
         """
       ],
       packet_filters: [
-        spec: [module() | struct()],
+        spec: [packet_filter_t()],
         default: [],
         description: """
-        A list of filter elements that will be attached to the packets flow (added inside `StreamReceiveBin`).
-        In case of SRTP filters are placed before the Decryptor.
+        A list of filter elements that will be attached to the packets flow (added inside `Membrane.RTP.StreamReceiveBin`).
+        In case of SRTP filters are placed before the Decryptor. The order of provided elements is important
+        as the filters are applied in FIFO order.
 
         A filter can be responsible e.g. for dropping silent audio packets when encountered VAD extension data in the
         packet header.

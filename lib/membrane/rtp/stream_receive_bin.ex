@@ -19,7 +19,7 @@ defmodule Membrane.RTP.StreamReceiveBin do
                 default: false
               ],
               filters: [
-                spec: {name :: atom(), :struct | :module},
+                spec: [Membrane.RTP.SessionBin.packet_filter_t()],
                 default: []
               ],
               depayloader: [type: :module],
