@@ -53,13 +53,14 @@ defmodule Membrane.RTP.SessionBin do
           {extension_name :: atom(), extension_config :: Membrane.ParentSpec.child_spec_t()}
 
   @typedoc """
-  A tuple with a name and element's module/struct that will be responsible for arbitrary packet filtering
-  inside `Membrane.RTP.StreamReceiveBin`.
+  A definition of a child that will be responsible for arbitrary packet filtering
+  inside `Membrane.RTP.StreamReceiveBin`. Each filter should have just a single input and output
+  pad named accordingly.
 
   A filter can be responsible e.g. for dropping silent audio packets when encountered VAD extension data in the
   packet header.
   """
-  @type packet_filter_t :: {name :: atom(), element :: module() | struct()}
+  @type packet_filter_t :: {Membrane.Child.name_t(), Membrane.ParentSpec.child_spec_t()}
 
   @ssrc_boundaries 2..(Bitwise.bsl(1, 32) - 1)
 
