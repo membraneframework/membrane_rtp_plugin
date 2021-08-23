@@ -196,8 +196,8 @@ defmodule Membrane.RTP.JitterBuffer do
     timestamp_base = state.timestamp_base || rtp_timestamp
 
     # timestamps in RTP don't have to be monotonic therefore there can be
-    # a situation where in 2 consecutive packets with the latter packet has smaller timestamp
-    # then the previous one while not overflowing the timestamp number
+    # a situation where in 2 consecutive packets the latter packet will have smaller timestamp
+    # than the previous one while not overflowing the timestamp number
     # https://datatracker.ietf.org/doc/html/rfc3550#section-5.1
 
     # a) both timestamps within the same timestamp's cycle
