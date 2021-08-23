@@ -191,17 +191,37 @@ defmodule Membrane.RTP.JitterBuffer do
   end
 
   defp record_to_action(%Record{buffer: buffer}, state) do
+    %{previous_timestamp: previous_timestamp} = state
     %{timestamp: rtp_timestamp} = buffer.metadata.rtp
     timestamp_base = state.timestamp_base || rtp_timestamp
 
     # timestamps in RTP don't have to be monotonic therefore there can be
-    # a situation where in 2 consecutive packets the latter smaller timestamp
-    # then the previous packet while not overflowing timestamp number
+    # a situation where in 2 consecutive packets with the latter packet has smaller timestamp
+    # then the previous one while not overflowing the timestamp number
     # https://datatracker.ietf.org/doc/html/rfc3550#section-5.1
+
+    # a) both timestamps within the same timestamp's cycle
+    distance_if_current = abs(previous_timestamp - rtp_timestamp)
+    # b) current timestamp from previous timestamp's  cycle
+    distance_if_prev = abs(previous_timestamp - (rtp_timestamp - @max_timestamp))
+    # c) current timestamp from new cycle
+    distance_if_next = abs(previous_timestamp - (rtp_timestamp + @max_timestamp))
+
+    cycle =
+      [
+        {:current, distance_if_current},
+        {:next, distance_if_next},
+        {:prev, distance_if_prev}
+      ]
+      |> Enum.min_by(fn {_atom, distance} -> distance end)
+      |> then(fn {result, _value} -> result end)
+
     timestamp_base =
-      if rtp_timestamp - state.previous_timestamp < -@max_timestamp / 2,
-        do: timestamp_base - @max_timestamp - 1,
-        else: timestamp_base
+      case cycle do
+        :next -> timestamp_base - @max_timestamp - 1
+        :prev -> timestamp_base + @max_timestamp + 1
+        :current -> timestamp_base
+      end
 
     timestamp = Ratio.div((rtp_timestamp - timestamp_base) * Time.second(), state.clock_rate)
     buffer = Bunch.Struct.put_in(buffer, [:metadata, :timestamp], timestamp)
