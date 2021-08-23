@@ -194,8 +194,12 @@ defmodule Membrane.RTP.JitterBuffer do
     %{timestamp: rtp_timestamp} = buffer.metadata.rtp
     timestamp_base = state.timestamp_base || rtp_timestamp
 
+    # timestamps in RTP don't have to be monotonic therefore there can be
+    # a situation where in 2 consecutive packets the latter smaller timestamp
+    # then the previous packet while not overflowing timestamp number
+    # https://datatracker.ietf.org/doc/html/rfc3550#section-5.1
     timestamp_base =
-      if rtp_timestamp < state.previous_timestamp,
+      if rtp_timestamp - state.previous_timestamp < -@max_timestamp / 2,
         do: timestamp_base - @max_timestamp - 1,
         else: timestamp_base
 
