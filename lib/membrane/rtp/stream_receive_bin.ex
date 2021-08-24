@@ -1,6 +1,9 @@
 defmodule Membrane.RTP.StreamReceiveBin do
   @moduledoc """
   This bin gets a parsed RTP stream on input and outputs raw media stream.
+
+  If
+
   Its responsibility is to depayload the RTP stream and compensate the
   jitter.
   """
@@ -22,7 +25,14 @@ defmodule Membrane.RTP.StreamReceiveBin do
                 spec: [Membrane.RTP.SessionBin.packet_filter_t()],
                 default: []
               ],
-              depayloader: [type: :module],
+              use_jitter_buffer?: [
+                type: :boolean,
+                default: false
+              ],
+              depayloader: [
+                spec: module() | nil,
+                default: nil
+              ],
               local_ssrc: [spec: Membrane.RTP.ssrc_t()],
               remote_ssrc: [spec: Membrane.RTP.ssrc_t()],
               rtcp_report_interval: [spec: Membrane.Time.t() | nil],
@@ -33,32 +43,30 @@ defmodule Membrane.RTP.StreamReceiveBin do
 
   @impl true
   def handle_init(opts) do
-    children = %{
-      rtcp_receiver: %Membrane.RTCP.Receiver{
-        local_ssrc: opts.local_ssrc,
-        remote_ssrc: opts.remote_ssrc,
-        report_interval: opts.rtcp_report_interval,
-        fir_interval: opts.rtcp_fir_interval
-      },
-      jitter_buffer: %Membrane.RTP.JitterBuffer{clock_rate: opts.clock_rate},
-      depayloader: opts.depayloader
-    }
-
     maybe_link_decryptor =
       &to(&1, :decryptor, %Membrane.SRTP.Decryptor{policies: opts.srtp_policies})
+
+    maybe_link_jitter_buffer =
+      &to(&1, :jitter_buffer, %Membrane.RTP.JitterBuffer{clock_rate: opts.clock_rate})
+
+    maybe_link_depayloader = &to(&1, :depayloader, opts.depayloader)
 
     links = [
       link_bin_input()
       |> to_filters(opts.filters)
-      |> to(:rtcp_receiver)
-      |> to(:jitter_buffer)
+      |> to(:rtcp_receiver, %Membrane.RTCP.Receiver{
+        local_ssrc: opts.local_ssrc,
+        remote_ssrc: opts.remote_ssrc,
+        report_interval: opts.rtcp_report_interval,
+        fir_interval: opts.rtcp_fir_interval
+      })
+      |> then(if opts.use_jitter_buffer?, do: maybe_link_jitter_buffer, else: & &1)
       |> then(if opts.secure?, do: maybe_link_decryptor, else: & &1)
-      |> to(:depayloader)
+      |> then(if opts.depayloader != nil, do: maybe_link_depayloader, else: & &1)
       |> to_bin_output()
     ]
 
     spec = %ParentSpec{
-      children: children,
       links: links
     }
 

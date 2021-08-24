@@ -25,6 +25,17 @@ defmodule Membrane.RTP.Serializer do
                 Number of bytes that each packet should be aligned to.
                 Alignment is achieved by adding RTP padding.
                 """
+              ],
+              rewrite_rtp_header?: [
+                spec: boolean(),
+                default: true,
+                describer: """
+                Determines whether packet's header should get rewritten or stay unchanged. 
+
+                One may need to rewrite packet'ss header to adjust packet's timestamp
+                and sequence number so that when previously combined with jitter buffer the outgoing 
+                RTP stream will seem to be continuous.
+                """
               ]
 
   defmodule State do
@@ -34,6 +45,7 @@ defmodule Membrane.RTP.Serializer do
     defstruct sequence_number: 0,
               init_timestamp: 0,
               any_buffer_sent?: false,
+              rewrite_rtp_header?: true,
               stats_acc: %{
                 clock_rate: 0,
                 timestamp: 0,
@@ -46,6 +58,7 @@ defmodule Membrane.RTP.Serializer do
             sequence_number: non_neg_integer(),
             init_timestamp: non_neg_integer(),
             any_buffer_sent?: boolean(),
+            rewrite_rtp_header?: boolean(),
             stats_acc: %{}
           }
   end
@@ -54,7 +67,8 @@ defmodule Membrane.RTP.Serializer do
   def handle_init(options) do
     state = %State{
       sequence_number: Enum.random(0..@max_seq_num),
-      init_timestamp: Enum.random(0..@max_timestamp)
+      init_timestamp: Enum.random(0..@max_timestamp),
+      rewrite_rtp_header?: options.rewrite_rtp_header?
     }
 
     state = state |> put_in([:stats_acc, :clock_rate], options.clock_rate)
@@ -77,16 +91,15 @@ defmodule Membrane.RTP.Serializer do
     state = update_counters(buffer, state)
 
     {rtp_metadata, metadata} = Map.pop(metadata, :rtp, %{})
-    %{timestamp: timestamp} = metadata
-    rtp_offset = timestamp |> Ratio.mult(state.clock_rate) |> Membrane.Time.to_seconds()
-    rtp_timestamp = rem(state.init_timestamp + rtp_offset, @max_timestamp + 1)
+
+    {rtp_timestamp, sequence_number, state} = maybe_rewrite_params(rtp_metadata, state)
 
     header = %RTP.Header{
       ssrc: state.ssrc,
       marker: Map.get(rtp_metadata, :marker, false),
       payload_type: state.payload_type,
       timestamp: rtp_timestamp,
-      sequence_number: state.sequence_number,
+      sequence_number: sequence_number,
       csrcs: Map.get(rtp_metadata, :csrcs, []),
       extension: Map.get(rtp_metadata, :extension)
     }
@@ -124,5 +137,21 @@ defmodule Membrane.RTP.Serializer do
       &(&1 + Payload.size(payload))
     )
     |> update_in([:stats_acc, :sender_packet_count], &(&1 + 1))
+  end
+
+  defp maybe_rewrite_params(
+         %{timestamp: timestamp, sequence_number: sequence_number},
+         %{rewrite_rtp_header?: false} = state
+       ) do
+    {timestamp, sequence_number, state}
+  end
+
+  defp maybe_rewrite_params(%{timestamp: timestamp}, %{rewrite_rtp_header?: true} = state) do
+    rtp_offset = timestamp |> Ratio.mult(state.clock_rate) |> Membrane.Time.to_seconds()
+    rtp_timestamp = rem(state.init_timestamp + rtp_offset, @max_timestamp + 1)
+
+    state = Map.update!(state, :sequence_number, &rem(&1 + 1, @max_seq_num + 1))
+
+    {rtp_timestamp, state.sequence_number, state}
   end
 end

@@ -9,24 +9,28 @@ defmodule Membrane.RTP.StreamSendBin do
 
   def_output_pad :output, caps: :any, demand_unit: :buffers
 
-  def_options payloader: [spec: module],
+  def_options payloader: [default: nil, spec: module],
               payload_type: [spec: RTP.payload_type_t()],
               ssrc: [spec: RTP.ssrc_t()],
               clock_rate: [spec: RTP.clock_rate_t()]
 
   @impl true
   def handle_init(opts) do
-    children = [
-      payloader: opts.payloader,
-      serializer: %RTP.Serializer{
+    maybe_link_payloader = &to(&1, :payloader, opts.payloader)
+
+    links = [
+      link_bin_input()
+      |> then(if opts.payloader != nil, do: maybe_link_payloader, else: & &1)
+      |> to(:serializer, %RTP.Serializer{
         ssrc: opts.ssrc,
         payload_type: opts.payload_type,
-        clock_rate: opts.clock_rate
-      }
+        clock_rate: opts.clock_rate,
+        rewrite_rtp_header?: opts.payloader != nil
+      })
+      |> to_bin_output()
     ]
 
-    links = [link_bin_input() |> to(:payloader) |> to(:serializer) |> to_bin_output()]
-    spec = %ParentSpec{children: children, links: links}
+    spec = %ParentSpec{links: links}
     {{:ok, spec: spec}, %{}}
   end
 

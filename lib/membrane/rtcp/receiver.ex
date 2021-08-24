@@ -46,7 +46,9 @@ defmodule Membrane.RTCP.Receiver do
 
   @impl true
   def handle_tick(:report_timer, _ctx, state) do
-    {{:ok, event: {:output, %RTP.JitterBuffer.StatsRequestEvent{}}}, state}
+    # TODO: do something with me....
+    # {{:ok, event: {:output, %RTP.JitterBuffer.StatsRequestEvent{}}}, state}
+    {:ok, state}
   end
 
   @impl true
