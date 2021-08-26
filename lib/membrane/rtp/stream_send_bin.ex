@@ -25,7 +25,7 @@ defmodule Membrane.RTP.StreamSendBin do
         ssrc: opts.ssrc,
         payload_type: opts.payload_type,
         clock_rate: opts.clock_rate,
-        rewrite_rtp_header?: opts.payloader != nil
+        generate_seq_num_and_timestamp?: opts.payloader != nil
       })
       |> to_bin_output()
     ]

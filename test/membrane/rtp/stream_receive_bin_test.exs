@@ -41,9 +41,9 @@ defmodule Membrane.RTP.StreamReceiveBinTest do
         rtp_parser: RTP.Parser,
         rtp: %StreamReceiveBin{
           depayloader: H264.Depayloader,
+          jitter_buffer: %Membrane.RTP.JitterBuffer{clock_rate: @h264_clock_rate},
           remote_ssrc: @ssrc,
           local_ssrc: 0,
-          clock_rate: @h264_clock_rate,
           rtcp_report_interval: Membrane.Time.seconds(5),
           rtcp_fir_interval: nil
         },
@@ -85,9 +85,9 @@ defmodule Membrane.RTP.StreamReceiveBinTest do
         rtp_parser: RTP.Parser,
         rtp: %StreamReceiveBin{
           depayloader: H264.Depayloader,
+          jitter_buffer: %Membrane.RTP.JitterBuffer{clock_rate: @h264_clock_rate},
           local_ssrc: 0,
           remote_ssrc: 4_194_443_425,
-          clock_rate: @h264_clock_rate,
           rtcp_report_interval: Membrane.Time.seconds(5),
           rtcp_fir_interval: nil
         },

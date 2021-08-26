@@ -127,9 +127,11 @@ defmodule Membrane.RTP.Session.BinTest do
           |> to(:rtp),
           link(:hackney)
           |> to(:parser)
-          |> via_in(Pad.ref(:input, options.output.video.ssrc))
+          |> via_in(Pad.ref(:input, options.output.video.ssrc), options: [use_payloader?: true])
           |> to(:rtp)
-          |> via_out(Pad.ref(:rtp_output, options.output.video.ssrc), options: [encoding: :H264])
+          |> via_out(Pad.ref(:rtp_output, options.output.video.ssrc),
+            options: [encoding: :H264, use_payloader?: true]
+          )
           |> to(:rtp_sink)
         ]
       }
@@ -145,7 +147,9 @@ defmodule Membrane.RTP.Session.BinTest do
         ],
         links: [
           link(:rtp)
-          |> via_out(Pad.ref(:output, ssrc), options: [rtcp_fir_interval: nil])
+          |> via_out(Pad.ref(:output, ssrc),
+            options: [use_jitter_buffer?: true, use_depayloader?: true, rtcp_fir_interval: nil]
+          )
           |> to({:sink, ssrc})
         ]
       }

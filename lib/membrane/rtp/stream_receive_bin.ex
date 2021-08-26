@@ -2,8 +2,6 @@ defmodule Membrane.RTP.StreamReceiveBin do
   @moduledoc """
   This bin gets a parsed RTP stream on input and outputs raw media stream.
 
-  If
-
   Its responsibility is to depayload the RTP stream and compensate the
   jitter.
   """
@@ -12,8 +10,7 @@ defmodule Membrane.RTP.StreamReceiveBin do
 
   alias Membrane.ParentSpec
 
-  def_options clock_rate: [type: :integer, spec: Membrane.RTP.clock_rate_t()],
-              srtp_policies: [
+  def_options srtp_policies: [
                 spec: [ExLibSRTP.Policy.t()],
                 default: []
               ],
@@ -25,9 +22,9 @@ defmodule Membrane.RTP.StreamReceiveBin do
                 spec: [Membrane.RTP.SessionBin.packet_filter_t()],
                 default: []
               ],
-              use_jitter_buffer?: [
-                type: :boolean,
-                default: false
+              jitter_buffer: [
+                spec: module() | struct() | nil,
+                default: nil
               ],
               depayloader: [
                 spec: module() | nil,
@@ -46,8 +43,7 @@ defmodule Membrane.RTP.StreamReceiveBin do
     maybe_link_decryptor =
       &to(&1, :decryptor, %Membrane.SRTP.Decryptor{policies: opts.srtp_policies})
 
-    maybe_link_jitter_buffer =
-      &to(&1, :jitter_buffer, %Membrane.RTP.JitterBuffer{clock_rate: opts.clock_rate})
+    maybe_link_jitter_buffer = &to(&1, :jitter_buffer, opts.jitter_buffer)
 
     maybe_link_depayloader = &to(&1, :depayloader, opts.depayloader)
 
@@ -60,7 +56,7 @@ defmodule Membrane.RTP.StreamReceiveBin do
         report_interval: opts.rtcp_report_interval,
         fir_interval: opts.rtcp_fir_interval
       })
-      |> then(if opts.use_jitter_buffer?, do: maybe_link_jitter_buffer, else: & &1)
+      |> then(if opts.jitter_buffer != nil, do: maybe_link_jitter_buffer, else: & &1)
       |> then(if opts.secure?, do: maybe_link_decryptor, else: & &1)
       |> then(if opts.depayloader != nil, do: maybe_link_depayloader, else: & &1)
       |> to_bin_output()

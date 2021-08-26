@@ -33,9 +33,6 @@ defmodule Membrane.RTP.SessionBin do
   require Bitwise
   require Membrane.Logger
 
-  # TODO: remove me, just for testing...
-  @use_jitter_buffer true
-
   @type new_stream_notification_t :: Membrane.RTP.SSRCRouter.new_stream_notification_t()
 
   @typedoc """
@@ -142,7 +139,7 @@ defmodule Membrane.RTP.SessionBin do
     options: [
       use_payloader?: [
         spec: boolean(),
-        default: @use_jitter_buffer,
+        default: true,
         description: """
         Defines whether paylaoder should be used for incoming stream.
         """
@@ -168,16 +165,16 @@ defmodule Membrane.RTP.SessionBin do
       ],
       use_depayloader?: [
         spec: boolean(),
-        default: @use_jitter_buffer,
+        default: true,
         description: """
         Defines whether the incoming stream should be depayloaded from RTP stream.
         """
       ],
       use_jitter_buffer?: [
         spec: boolean(),
-        default: @use_jitter_buffer,
+        default: true,
         description: """
-        Defines whether jitter buffer should be used for the incoming RTP stream. 
+        Defines whether jitter buffer should be used for the incoming RTP stream.
         """
       ],
       clock_rate: [
@@ -246,7 +243,7 @@ defmodule Membrane.RTP.SessionBin do
       ],
       use_payloader?: [
         spec: boolean(),
-        default: @use_jitter_buffer,
+        default: true,
         description: """
         Defines whether paylaoder should be used for incoming stream.
         """
@@ -362,16 +359,16 @@ defmodule Membrane.RTP.SessionBin do
 
     new_children = %{
       rtp_stream_name => %RTP.StreamReceiveBin{
-        clock_rate: clock_rate,
         depayloader: depayloader,
+        jitter_buffer:
+          if(use_jitter_buffer?, do: %Membrane.RTP.JitterBuffer{clock_rate: clock_rate}, else: nil),
         filters: filters,
         local_ssrc: local_ssrc,
         remote_ssrc: ssrc,
         rtcp_fir_interval: fir_interval,
         rtcp_report_interval: state.rtcp_report_interval,
         secure?: state.secure?,
-        srtp_policies: state.srtp_policies,
-        use_jitter_buffer?: use_jitter_buffer?
+        srtp_policies: state.srtp_policies
       }
     }
 
@@ -427,7 +424,6 @@ defmodule Membrane.RTP.SessionBin do
       encoding_name = encoding_name || get_from_register!(:encoding_name, payload_type, state)
       clock_rate = clock_rate || get_from_register!(:clock_rate, payload_type, state)
       payloader = if use_payloader?, do: get_payloader!(encoding_name, state), else: nil
-      IO.inspect("PAYLOADER #{inspect(payloader)}", label: :payloader)
 
       spec = sent_stream_spec(ssrc, payload_type, payloader, clock_rate, state)
       state = %{state | senders_ssrcs: MapSet.put(state.senders_ssrcs, ssrc)}
