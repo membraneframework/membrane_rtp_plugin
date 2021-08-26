@@ -44,7 +44,7 @@ defmodule Membrane.RTP.JitterBuffer do
               waiting?: true,
               max_latency_timer: nil,
               timestamp_base: nil,
-              previous_timestamp: -1,
+              previous_timestamp: nil,
               stats_acc: %{expected_prior: 0, received_prior: 0, last_transit: nil, jitter: 0.0}
 
     @type t :: %__MODULE__{
@@ -191,9 +191,9 @@ defmodule Membrane.RTP.JitterBuffer do
   end
 
   defp record_to_action(%Record{buffer: buffer}, state) do
-    %{previous_timestamp: previous_timestamp} = state
     %{timestamp: rtp_timestamp} = buffer.metadata.rtp
     timestamp_base = state.timestamp_base || rtp_timestamp
+    previous_timestamp = state.previous_timestamp || rtp_timestamp
 
     # timestamps in RTP don't have to be monotonic therefore there can be
     # a situation where in 2 consecutive packets the latter packet will have smaller timestamp

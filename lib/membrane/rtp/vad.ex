@@ -102,7 +102,7 @@ defmodule Membrane.RTP.VAD do
 
   defp filter_old_audio_levels(state) do
     Enum.reduce_while(state.audio_levels, state, fn {level, timestamp}, state ->
-      if state.current_timestamp - timestamp > state.time_window do
+      if Ratio.sub(state.current_timestamp, timestamp) |> Ratio.gt?(state.time_window) do
         {_level, audio_levels} = Qex.pop(state.audio_levels)
 
         state = %{
