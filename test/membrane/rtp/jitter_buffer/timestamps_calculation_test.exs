@@ -24,7 +24,7 @@ defmodule Membrane.RTP.JitterBuffer.TimestampsCalculationTest do
         state
       end)
 
-    {{:ok, actions}, state} = JitterBuffer.handle_other(:send_buffers, %{}, state)
+    {{:ok, actions}, _state} = JitterBuffer.handle_other(:send_buffers, %{}, state)
 
     actions
     |> action_buffers()
@@ -54,6 +54,17 @@ defmodule Membrane.RTP.JitterBuffer.TimestampsCalculationTest do
       buffer2 = BufferFactory.sample_buffer(seq_num + 2)
 
       [state: state, buffer1: buffer1, buffer2: buffer2]
+    end
+
+    test "come in first", ctx do
+      %{buffer1: buffer1, buffer2: buffer2} = ctx
+
+      [timestamp1, timestamp2] =
+        [buffer1, buffer2]
+        |> process_and_receive_buffer_timestamps(ctx.state)
+
+      assert Ratio.equal?(timestamp1, 0)
+      assert Ratio.gt?(timestamp2, 0)
     end
 
     test "have monotonic timestamps within proper range", ctx do
