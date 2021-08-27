@@ -20,6 +20,18 @@ defmodule Membrane.RTP.SessionBin do
   `membrane_rtp_X_plugin` packages, where X stands for codec name. It's enough when such plugin is added to
   dependencies.
 
+  #### Jitter Buffer
+  Some depayloaders may need the incoming packets to be in a correct order therefore one needs to not only
+  use depayloader but also include a jitter buffer. It can be specified as pad's option `use_jitter_buffer?` when
+  adding `Pad.ref(:output, ssrc)` pad, .
+
+
+  #### Important note
+  Payloaders and depayloaders are mostly needed when working with external media sources (in different formats than RTP).
+  For applications such an SFU it is not needed to either payload or depayload the RTP stream as we are always dealing with RTP format.
+  In such a case, SessionBin will receive payloaded packets and work as a simple proxy just forwarding the packets (and decrypting them if necessary).
+  Therefore it is possible to specify in newly added pads if payloaders/depayloaders should be used for the correlated stream.
+
   ## RTCP
   RTCP packets for inbound stream can be provided either in-band or via a separate `rtp_input` pad instance. Corresponding
   receiver report packets will be sent back through `rtcp_output` with the same id as `rtp_input` for the RTP stream.
@@ -240,13 +252,6 @@ defmodule Membrane.RTP.SessionBin do
         description: """
         Clock rate to use. If not provided, determined from `:payload_type`.
         """
-      ],
-      use_payloader?: [
-        spec: boolean(),
-        default: true,
-        description: """
-        Defines whether paylaoder should be used for incoming stream.
-        """
       ]
     ]
 
@@ -408,17 +413,19 @@ defmodule Membrane.RTP.SessionBin do
   @impl true
   def handle_pad_added(Pad.ref(name, ssrc), ctx, state)
       when name in [:input, :rtp_output] do
-    pads_present? =
-      Map.has_key?(ctx.pads, Pad.ref(:input, ssrc)) and
-        Map.has_key?(ctx.pads, Pad.ref(:rtp_output, ssrc))
+    input_pad = Pad.ref(:input, ssrc)
+    output_pad = Pad.ref(:rtp_output, ssrc)
+
+    pads_present? = Enum.all?([input_pad, output_pad], & Map.has_key?(ctx.pads, &1))
 
     if not pads_present? or Map.has_key?(ctx.children, {:stream_send_bin, ssrc}) do
       {:ok, state}
     else
-      pad = Pad.ref(:rtp_output, ssrc)
+      input_pad = Pad.ref(:input, ssrc)
+      output_pad = Pad.ref(:rtp_output, ssrc)
 
-      %{encoding: encoding_name, clock_rate: clock_rate, use_payloader?: use_payloader?} =
-        ctx.pads[pad].options
+      %{use_payloader?: use_payloader?} = ctx.pads[input_pad].options
+      %{encoding: encoding_name, clock_rate: clock_rate} = ctx.pads[output_pad].options
 
       payload_type = get_output_payload_type!(ctx, ssrc)
       encoding_name = encoding_name || get_from_register!(:encoding_name, payload_type, state)

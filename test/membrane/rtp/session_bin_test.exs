@@ -130,7 +130,7 @@ defmodule Membrane.RTP.Session.BinTest do
           |> via_in(Pad.ref(:input, options.output.video.ssrc), options: [use_payloader?: true])
           |> to(:rtp)
           |> via_out(Pad.ref(:rtp_output, options.output.video.ssrc),
-            options: [encoding: :H264, use_payloader?: true]
+            options: [encoding: :H264]
           )
           |> to(:rtp_sink)
         ]
