@@ -80,8 +80,8 @@ defmodule Membrane.RTCP.Packet do
           do_parse(rest, [packet | acc])
 
         {:error, :unknown_packet_type} = error ->
-          Membrane.Logger.warn("""
-          Error parsing rtcp packet:
+          Membrane.Logger.debug("""
+          Ignoring rtcp packet with packet type #{header.packet_type}:
           #{inspect(raw_header <> body_and_rest, limit: :infinity)}
           Reason: #{inspect(error)}
           """)
