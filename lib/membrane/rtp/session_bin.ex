@@ -353,6 +353,9 @@ defmodule Membrane.RTP.SessionBin do
       packet_filters: filters
     } = ctx.pads[pad].options
 
+    IO.inspect("USING DEPAYLOADER: #{use_depayloader?}")
+    IO.inspect("USING JITTER BUFFEr: #{use_jitter_buffer?}")
+
     payload_type = Map.fetch!(state.ssrc_pt_mapping, ssrc)
 
     encoding_name = encoding_name || get_from_register!(:encoding_name, payload_type, state)
@@ -364,6 +367,7 @@ defmodule Membrane.RTP.SessionBin do
 
     new_children = %{
       rtp_stream_name => %RTP.StreamReceiveBin{
+        clock_rate: clock_rate,
         depayloader: depayloader,
         jitter_buffer:
           if(use_jitter_buffer?, do: %Membrane.RTP.JitterBuffer{clock_rate: clock_rate}, else: nil),
@@ -371,7 +375,7 @@ defmodule Membrane.RTP.SessionBin do
         local_ssrc: local_ssrc,
         remote_ssrc: ssrc,
         rtcp_fir_interval: fir_interval,
-        rtcp_report_interval: state.rtcp_report_interval,
+        rtcp_report_interval: 5 * Membrane.Time.second() || state.rtcp_report_interval,
         secure?: state.secure?,
         srtp_policies: state.srtp_policies
       }
@@ -416,7 +420,7 @@ defmodule Membrane.RTP.SessionBin do
     input_pad = Pad.ref(:input, ssrc)
     output_pad = Pad.ref(:rtp_output, ssrc)
 
-    pads_present? = Enum.all?([input_pad, output_pad], & Map.has_key?(ctx.pads, &1))
+    pads_present? = Enum.all?([input_pad, output_pad], &Map.has_key?(ctx.pads, &1))
 
     if not pads_present? or Map.has_key?(ctx.children, {:stream_send_bin, ssrc}) do
       {:ok, state}
@@ -426,6 +430,8 @@ defmodule Membrane.RTP.SessionBin do
 
       %{use_payloader?: use_payloader?} = ctx.pads[input_pad].options
       %{encoding: encoding_name, clock_rate: clock_rate} = ctx.pads[output_pad].options
+
+      IO.inspect("USING PAYLOADER: #{use_payloader?}")
 
       payload_type = get_output_payload_type!(ctx, ssrc)
       encoding_name = encoding_name || get_from_register!(:encoding_name, payload_type, state)

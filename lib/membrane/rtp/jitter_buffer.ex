@@ -131,6 +131,7 @@ defmodule Membrane.RTP.JitterBuffer do
   @impl true
   def handle_event(:input, %__MODULE__.StatsRequestEvent{}, _ctx, state) do
     {stats, state} = get_updated_stats(state)
+    IO.inspect(stats)
     {{:ok, event: {:input, %__MODULE__.StatsEvent{stats: stats}}}, state}
   end
 

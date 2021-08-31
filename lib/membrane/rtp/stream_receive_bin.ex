@@ -30,6 +30,10 @@ defmodule Membrane.RTP.StreamReceiveBin do
                 spec: module() | nil,
                 default: nil
               ],
+              clock_rate: [
+                type: :integer,
+                spec: RTP.clock_rate_t()
+              ],
               local_ssrc: [spec: Membrane.RTP.ssrc_t()],
               remote_ssrc: [spec: Membrane.RTP.ssrc_t()],
               rtcp_report_interval: [spec: Membrane.Time.t() | nil],
@@ -50,12 +54,14 @@ defmodule Membrane.RTP.StreamReceiveBin do
     links = [
       link_bin_input()
       |> to_filters(opts.filters)
+      |> to(:dropper, %Membrane.RTP.RandomDropper{drop_rate: 0.05})
       |> to(:rtcp_receiver, %Membrane.RTCP.Receiver{
         local_ssrc: opts.local_ssrc,
         remote_ssrc: opts.remote_ssrc,
         report_interval: opts.rtcp_report_interval,
         fir_interval: opts.rtcp_fir_interval
       })
+      |> to(:rtcp_stats, %Membrane.RTP.StatsAccumulator{clock_rate: opts.clock_rate})
       |> then(if opts.jitter_buffer != nil, do: maybe_link_jitter_buffer, else: & &1)
       |> then(if opts.secure?, do: maybe_link_decryptor, else: & &1)
       |> then(if opts.depayloader != nil, do: maybe_link_depayloader, else: & &1)
