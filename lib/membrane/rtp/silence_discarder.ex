@@ -13,7 +13,7 @@ defmodule Membrane.RTP.SilenceDiscarder do
   use Membrane.Filter
 
   alias Membrane.RTP.Header
-  alias Membrane.RTP.PacketsDroppedEvent
+  alias Membrane.RTP.PacketsDiscardedEvent
 
   require Membrane.Logger
 
@@ -110,8 +110,8 @@ defmodule Membrane.RTP.SilenceDiscarder do
 
   defp stop_dropping(buffer, state) do
     {{:ok,
-      event: {:output, %PacketsDroppedEvent{dropped: state.dropped}}, buffer: {:output, buffer}},
-     %{state | dropped: 0}}
+      event: {:output, %PacketsDiscardedEvent{discarded: state.dropped}},
+      buffer: {:output, buffer}}, %{state | dropped: 0}}
   end
 
   defp is_silent_packet(_vad_id, _threshold, <<>>), do: false

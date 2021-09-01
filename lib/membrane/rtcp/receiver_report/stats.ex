@@ -1,4 +1,4 @@
-defmodule Membrane.RTP.JitterBuffer.Stats do
+defmodule Membrane.RTCP.ReceiverReport.Stats do
   @moduledoc """
   JitterBuffer stats that can be used for Receiver report generation
   """

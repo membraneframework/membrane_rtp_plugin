@@ -1,10 +1,14 @@
-defmodule Membrane.RTP.StatsAccumulator do
-  # TODO: support for discarding packets and repairing their sequence numbers
+defmodule Membrane.RTP.PacketTracker do
+  @moduledoc """
+  Module responsible for tracking statistics of RTP packets for a single stream.
 
+  Tracker is capable of repairing packets' sequence numbers provided that it has information about how many packets has
+  been previously discarded. To updated number of discarded packets one should send an event `Membrane.RTP.PacketsDiscarded.t/0`.
+  """
   use Membrane.Filter
 
-  alias Membrane.Time
-  alias Membrane.Buffer
+  alias Membrane.{Buffer, RTP, Time}
+  alias Membrane.RTCP.ReceiverReport
 
   @max_seq_num 0xFFFF
   @max_dropout 3000
@@ -16,11 +20,20 @@ defmodule Membrane.RTP.StatsAccumulator do
   def_input_pad :input, demand_unit: :buffers, caps: :any
   def_output_pad :output, caps: :any
 
-  def_options clock_rate: [type: :integer, spec: Membrane.RTP.clock_rate_t()]
+  def_options clock_rate: [
+                type: :integer,
+                spec: Membrane.RTP.clock_rate_t()
+              ],
+              repair_sequence_numbers?: [
+                spec: boolean(),
+                default: false,
+                description: "Defines if tracker should try to repair packet's sequence number"
+              ]
 
   defmodule State do
     @type t :: %__MODULE__{
             clock_rate: non_neg_integer(),
+            repair_sequence_numbers?: boolean(),
             jitter: float(),
             transit: non_neg_integer() | nil,
             received: non_neg_integer(),
@@ -34,7 +47,7 @@ defmodule Membrane.RTP.StatsAccumulator do
             discarded: non_neg_integer()
           }
 
-    @enforce_keys [:clock_rate]
+    @enforce_keys [:clock_rate, :repair_sequence_numbers?]
     defstruct @enforce_keys ++
                 [
                   jitter: 0.0,
@@ -53,7 +66,8 @@ defmodule Membrane.RTP.StatsAccumulator do
 
   @impl true
   def handle_init(opts) do
-    {:ok, %State{clock_rate: opts.clock_rate}}
+    {:ok,
+     %State{clock_rate: opts.clock_rate, repair_sequence_numbers?: opts.repair_sequence_numbers?}}
   end
 
   @impl true
@@ -66,7 +80,7 @@ defmodule Membrane.RTP.StatsAccumulator do
     seq_num = buffer.metadata.rtp.sequence_number
     max_seq = max_seq || seq_num - 1
 
-    delta = rem(seq_num - max_seq + @max_seq_num, @max_seq_num)
+    delta = rem(seq_num - max_seq + @max_seq_num, @max_seq_num + 1)
 
     cond do
       # greater sequence number but within dropout to ensure that it is not from previous cycle
@@ -77,11 +91,12 @@ defmodule Membrane.RTP.StatsAccumulator do
           |> update_received()
           |> update_jitter(buffer)
 
-        {{:ok, buffer: {:output, buffer}}, state}
+        {{:ok, buffer: {:output, repair_sequence_number(buffer, state)}}, state}
 
       # the packets is either too old or too new
+      # TODO: decide if this type of incident should increment the discarded counter
       delta <= @max_seq_num - @max_unordered ->
-        {:ok, state}
+        {{:ok, redemand: :output}, state}
 
       # packet is old but within dropout threshold
       true ->
@@ -90,12 +105,12 @@ defmodule Membrane.RTP.StatsAccumulator do
           |> update_received()
           |> update_jitter(buffer)
 
-        {{:ok, buffer, {:output, buffer}}, update_received(state)}
+        {{:ok, buffer: {:output, repair_sequence_number(buffer, state)}}, update_received(state)}
     end
   end
 
   @impl true
-  def handle_event(:input, %Membrane.RTP.JitterBuffer.StatsRequestEvent{}, _ctx, state) do
+  def handle_event(:input, %ReceiverReport.StatsRequestEvent{}, _ctx, state) do
     %State{
       received: received,
       received_prior: received_prior,
@@ -126,10 +141,6 @@ defmodule Membrane.RTP.StatsAccumulator do
         lost_interval / expected_interval
       end
 
-    IO.inspect(
-      "Expected interval #{expected_interval}, Received interval: #{received_interval}, Fraction lost #{fraction_lost}"
-    )
-
     total_lost =
       cond do
         lost > @max_s24_val -> @max_s24_val
@@ -145,16 +156,25 @@ defmodule Membrane.RTP.StatsAccumulator do
         fraction_lost: fraction_lost
     }
 
-    stats =
-      %Membrane.RTP.JitterBuffer.Stats{
-        fraction_lost: fraction_lost,
-        total_lost: total_lost,
-        highest_seq_num: max_seq + cycles,
-        interarrival_jitter: jitter
-      }
-      |> IO.inspect()
+    stats = %ReceiverReport.Stats{
+      fraction_lost: fraction_lost,
+      total_lost: total_lost,
+      highest_seq_num: max_seq + cycles,
+      # interarrival_jitter: jitter
+      interarrival_jitter: 0.010
+    }
 
-    {{:ok, event: {:input, %Membrane.RTP.JitterBuffer.StatsEvent{stats: stats}}}, state}
+    {{:ok, event: {:input, %ReceiverReport.StatsEvent{stats: stats}}}, state}
+  end
+
+  @impl true
+  def handle_event(
+        :input,
+        %RTP.PacketsDiscardedEvent{discarded: packets_discarded},
+        _ctx,
+        %State{discarded: discarded} = state
+      ) do
+    {:ok, %State{state | discarded: discarded + packets_discarded}}
   end
 
   @impl true
@@ -199,5 +219,24 @@ defmodule Membrane.RTP.StatsAccumulator do
       end
 
     %State{state | jitter: jitter, transit: transit}
+  end
+
+  defp repair_sequence_number(%Buffer{} = buffer, %State{
+         discarded: discarded,
+         repair_sequence_numbers?: repair?
+       })
+       when not repair? or discarded == 0 do
+    buffer
+  end
+
+  # repairs sequence number if there have been any packets discarded by any of previous elements
+  defp repair_sequence_number(
+         %Buffer{metadata: %{rtp: %{sequence_number: seq_num}} = metadata} = buffer,
+         %State{discarded: discarded}
+       ) do
+    metadata =
+      put_in(metadata, [:rtp, :sequence_number], rem(seq_num - discarded, @max_seq_num + 1))
+
+    %Buffer{buffer | metadata: metadata}
   end
 end

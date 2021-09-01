@@ -353,9 +353,6 @@ defmodule Membrane.RTP.SessionBin do
       packet_filters: filters
     } = ctx.pads[pad].options
 
-    IO.inspect("USING DEPAYLOADER: #{use_depayloader?}")
-    IO.inspect("USING JITTER BUFFEr: #{use_jitter_buffer?}")
-
     payload_type = Map.fetch!(state.ssrc_pt_mapping, ssrc)
 
     encoding_name = encoding_name || get_from_register!(:encoding_name, payload_type, state)
@@ -375,7 +372,7 @@ defmodule Membrane.RTP.SessionBin do
         local_ssrc: local_ssrc,
         remote_ssrc: ssrc,
         rtcp_fir_interval: fir_interval,
-        rtcp_report_interval: 5 * Membrane.Time.second() || state.rtcp_report_interval,
+        rtcp_report_interval: state.rtcp_report_interval,
         secure?: state.secure?,
         srtp_policies: state.srtp_policies
       }
@@ -430,8 +427,6 @@ defmodule Membrane.RTP.SessionBin do
 
       %{use_payloader?: use_payloader?} = ctx.pads[input_pad].options
       %{encoding: encoding_name, clock_rate: clock_rate} = ctx.pads[output_pad].options
-
-      IO.inspect("USING PAYLOADER: #{use_payloader?}")
 
       payload_type = get_output_payload_type!(ctx, ssrc)
       encoding_name = encoding_name || get_from_register!(:encoding_name, payload_type, state)

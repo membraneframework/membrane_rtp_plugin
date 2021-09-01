@@ -1,4 +1,4 @@
-defmodule Membrane.RTP.JitterBuffer.StatsEvent do
+defmodule Membrane.RTCP.ReceiverReport.StatsEvent do
   @moduledoc """
   Event carrying jitter buffer statistics.
   """
@@ -8,6 +8,6 @@ defmodule Membrane.RTP.JitterBuffer.StatsEvent do
   defstruct @enforce_keys
 
   @type t :: %__MODULE__{
-          stats: Membrane.RTP.JitterBuffer.Stats.t()
+          stats: Membrane.RTCP.ReceierReport.Stats.t()
         }
 end

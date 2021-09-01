@@ -43,38 +43,39 @@ defmodule Membrane.RTP.JitterBufferTest do
       assert BufferStore.dump(new_store) == []
     end
 
-    test "jitter stats are updated", %{state: state, buffer: buffer} do
-      ts = ~U[2020-06-19 19:06:00Z] |> DateTime.to_unix() |> Membrane.Time.seconds()
+    # TODO: change that so that those tests are placed in PacketTracker instead of jitter buffer tests
+    # test "jitter stats are updated", %{state: state, buffer: buffer} do
+    #   ts = ~U[2020-06-19 19:06:00Z] |> DateTime.to_unix() |> Membrane.Time.seconds()
 
-      timestamped_buf = put_in(buffer.metadata[:arrival_ts], ts)
-      assert {:ok, state} = JitterBuffer.handle_process(:input, timestamped_buf, nil, state)
-      assert state.stats_acc.jitter == 0.0
+    #   timestamped_buf = put_in(buffer.metadata[:arrival_ts], ts)
+    #   assert {:ok, state} = JitterBuffer.handle_process(:input, timestamped_buf, nil, state)
+    #   assert state.stats_acc.jitter == 0.0
 
-      assert state.stats_acc.last_transit ==
-               Membrane.Time.to_seconds(ts) * state.clock_rate -
-                 timestamped_buf.metadata.rtp.timestamp
+    #   assert state.stats_acc.last_transit ==
+    #            Membrane.Time.to_seconds(ts) * state.clock_rate -
+    #              timestamped_buf.metadata.rtp.timestamp
 
-      buffer = BufferFactory.sample_buffer(@base_seq_number + 1)
+    #   buffer = BufferFactory.sample_buffer(@base_seq_number + 1)
 
-      arrival_ts_increment =
-        div(BufferFactory.timestamp_increment(), state.clock_rate) |> Membrane.Time.seconds()
+    #   arrival_ts_increment =
+    #     div(BufferFactory.timestamp_increment(), state.clock_rate) |> Membrane.Time.seconds()
 
-      packet_delay = 1 |> Membrane.Time.seconds()
+    #   packet_delay = 1 |> Membrane.Time.seconds()
 
-      timestamped_buf =
-        put_in(buffer.metadata[:arrival_ts], ts + arrival_ts_increment + packet_delay)
+    #   timestamped_buf =
+    #     put_in(buffer.metadata[:arrival_ts], ts + arrival_ts_increment + packet_delay)
 
-      assert {:ok, state} = JitterBuffer.handle_process(:input, timestamped_buf, nil, state)
+    #   assert {:ok, state} = JitterBuffer.handle_process(:input, timestamped_buf, nil, state)
 
-      # 16 is defined by RFC
-      assert state.stats_acc.jitter ==
-               Membrane.Time.to_seconds(packet_delay) * state.clock_rate / 16
+    #   # 16 is defined by RFC
+    #   assert state.stats_acc.jitter ==
+    #            Membrane.Time.to_seconds(packet_delay) * state.clock_rate / 16
 
-      assert state.stats_acc.last_transit ==
-               Membrane.Time.to_seconds(ts + arrival_ts_increment + packet_delay) *
-                 state.clock_rate -
-                 timestamped_buf.metadata.rtp.timestamp
-    end
+    #   assert state.stats_acc.last_transit ==
+    #            Membrane.Time.to_seconds(ts + arrival_ts_increment + packet_delay) *
+    #              state.clock_rate -
+    #              timestamped_buf.metadata.rtp.timestamp
+    # end
   end
 
   describe "When new buffer arrives when not waiting and already pushed some buffer" do
@@ -97,8 +98,7 @@ defmodule Membrane.RTP.JitterBufferTest do
       assert {{:ok, redemand: :output}, new_state} =
                JitterBuffer.handle_process(:input, late_buffer, nil, state)
 
-      # assert nothing changed except for stats
-      assert %{new_state | stats_acc: state.stats_acc} == state
+      assert new_state == state
     end
 
     test "adds it and when it fills the gap, returns all buffers in order", %{state: state} do
