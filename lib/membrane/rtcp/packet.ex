@@ -79,17 +79,17 @@ defmodule Membrane.RTCP.Packet do
         {:ok, packet} ->
           do_parse(rest, [packet | acc])
 
-        {:error, :unknown_packet_type} = error ->
+        {:error, :unknown_packet_type} ->
           Membrane.Logger.debug("""
           Ignoring rtcp packet with packet type #{header.packet_type}:
           #{inspect(raw_header <> body_and_rest, limit: :infinity)}
-          Reason: #{inspect(error)}
+          Reason: :unknown_packet_type
           """)
 
           do_parse(rest, acc)
 
-        _error ->
-          {:error, :malformed_packet}
+        error ->
+          error
       end
     else
       {:error, reason} -> {:error, reason}
