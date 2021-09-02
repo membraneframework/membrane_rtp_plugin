@@ -7,8 +7,20 @@ defmodule Membrane.RTCP.Fixtures do
   @external_resource "test/fixtures/rtcp/packets.hex"
   @sample_rtcp_communication File.read!("test/fixtures/rtcp/packets.hex")
 
+  @external_resource "test/fixtures/rtcp/with_unknown_pt.hex"
+  @with_unknown_pt File.read!("test/fixtures/rtcp/with_unknown_pt.hex")
+
+  @external_resource "test/fixtures/rtcp/malformed.hex"
+  @malformed_packet File.read!("test/fixtures/rtcp/malformed.hex")
+
   @spec sample_packet_binary() :: binary()
   def sample_packet_binary, do: hex_to_bin(@sample_rtcp_packet)
+
+  @spec malformed_packet_binary() :: binary()
+  def malformed_packet_binary, do: hex_to_bin(@malformed_packet)
+
+  @spec with_unknown_packet_type() :: binary()
+  def with_unknown_packet_type, do: hex_to_bin(@with_unknown_pt)
 
   @spec packet_list() :: [binary()]
   def packet_list() do

@@ -14,6 +14,7 @@ defmodule Membrane.RTCP.Packet do
   }
 
   alias Membrane.RTP
+  require Membrane.Logger
 
   @type t ::
           AppPacket.t()
@@ -73,10 +74,23 @@ defmodule Membrane.RTCP.Packet do
     with {:ok, %{header: header, body_size: length, padding?: padding?}} <-
            Header.parse(raw_header),
          <<body::binary-size(length), rest::binary>> <- body_and_rest,
-         {:ok, {body, _padding}} <- RTP.Utils.strip_padding(body, padding?),
-         {:ok, packet_module} <- BiMap.fetch(@packet_type_module, header.packet_type),
-         {:ok, packet} <- packet_module.decode(body, header.packet_specific) do
-      do_parse(rest, [packet | acc])
+         {:ok, {body, _padding}} <- RTP.Utils.strip_padding(body, padding?) do
+      case parse_packet(body, header) do
+        {:ok, packet} ->
+          do_parse(rest, [packet | acc])
+
+        {:error, :unknown_packet_type} ->
+          Membrane.Logger.warn("""
+          Ignoring rtcp packet with packet type #{header.packet_type}:
+          #{inspect(raw_header <> body_and_rest, limit: :infinity)}
+          Reason: :unknown_packet_type
+          """)
+
+          do_parse(rest, acc)
+
+        error ->
+          error
+      end
     else
       {:error, reason} -> {:error, reason}
       _error -> {:error, :malformed_packet}
@@ -84,4 +98,14 @@ defmodule Membrane.RTCP.Packet do
   end
 
   defp do_parse(_binary, _acc), do: {:error, :malformed_packet}
+
+  defp parse_packet(body, %Header{} = header) do
+    case BiMap.fetch(@packet_type_module, header.packet_type) do
+      {:ok, packet_module} ->
+        packet_module.decode(body, header.packet_specific)
+
+      :error ->
+        {:error, :unknown_packet_type}
+    end
+  end
 end
