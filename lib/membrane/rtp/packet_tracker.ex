@@ -1,9 +1,10 @@
 defmodule Membrane.RTP.PacketTracker do
   @moduledoc """
-  Module responsible for tracking statistics of RTP packets for a single stream.
+  Module responsible for tracking statistics of incoming RTP packets for a single stream.
 
   Tracker is capable of repairing packets' sequence numbers provided that it has information about how many packets has
-  been previously discarded. To updated number of discarded packets one should send an event `Membrane.RTP.PacketsDiscarded.t/0`.
+  been previously discarded. To updated number of discarded packets one should send an event `Membrane.RTP.PacketsDiscarded.t/0` that will accumulate
+  the total number of discarded packets and will subtract that number from the packet's sequence number.
   """
   use Membrane.Filter
 
@@ -37,14 +38,14 @@ defmodule Membrane.RTP.PacketTracker do
             jitter: float(),
             transit: non_neg_integer() | nil,
             received: non_neg_integer(),
+            discarded: non_neg_integer(),
             cycles: non_neg_integer(),
-            max_seq: non_neg_integer(),
             base_seq: non_neg_integer(),
+            max_seq: non_neg_integer(),
             received_prior: non_neg_integer(),
             expected_prior: non_neg_integer(),
             lost: non_neg_integer(),
-            fraction_lost: float(),
-            discarded: non_neg_integer()
+            fraction_lost: float()
           }
 
     @enforce_keys [:clock_rate, :repair_sequence_numbers?]
@@ -53,14 +54,14 @@ defmodule Membrane.RTP.PacketTracker do
                   jitter: 0.0,
                   transit: nil,
                   received: 0,
+                  discarded: 0,
                   cycles: 0,
-                  max_seq: nil,
                   base_seq: nil,
+                  max_seq: nil,
                   received_prior: 0,
                   expected_prior: 0,
                   lost: 0,
-                  fraction_lost: 0.0,
-                  discarded: 0
+                  fraction_lost: 0.0
                 ]
   end
 
@@ -80,7 +81,7 @@ defmodule Membrane.RTP.PacketTracker do
     seq_num = buffer.metadata.rtp.sequence_number
     max_seq = max_seq || seq_num - 1
 
-    delta = rem(seq_num - max_seq + @max_seq_num, @max_seq_num + 1)
+    delta = rem(seq_num - max_seq + @max_seq_num + 1, @max_seq_num + 1)
 
     cond do
       # greater sequence number but within dropout to ensure that it is not from previous cycle
@@ -122,12 +123,7 @@ defmodule Membrane.RTP.PacketTracker do
 
     expected = expected_packets(state)
 
-    lost =
-      if expected > received do
-        expected - received
-      else
-        0
-      end
+    lost = max(expected - received, 0)
 
     expected_interval = expected - expected_prior
     received_interval = received - received_prior
@@ -160,8 +156,7 @@ defmodule Membrane.RTP.PacketTracker do
       fraction_lost: fraction_lost,
       total_lost: total_lost,
       highest_seq_num: max_seq + cycles,
-      # interarrival_jitter: jitter
-      interarrival_jitter: 0.010
+      interarrival_jitter: jitter
     }
 
     {{:ok, event: {:input, %ReceiverReport.StatsEvent{stats: stats}}}, state}
@@ -235,7 +230,7 @@ defmodule Membrane.RTP.PacketTracker do
          %State{discarded: discarded}
        ) do
     metadata =
-      put_in(metadata, [:rtp, :sequence_number], rem(seq_num - discarded, @max_seq_num + 1))
+      put_in(metadata, [:rtp, :sequence_number], rem(seq_num - discarded + @max_seq_num + 1, @max_seq_num + 1))
 
     %Buffer{buffer | metadata: metadata}
   end

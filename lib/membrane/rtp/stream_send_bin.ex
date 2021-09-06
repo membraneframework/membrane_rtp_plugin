@@ -21,6 +21,9 @@ defmodule Membrane.RTP.StreamSendBin do
     links = [
       link_bin_input()
       |> then(if opts.payloader != nil, do: maybe_link_payloader, else: & &1)
+      # TODO: do we event need the serializer in case we don't provide the payloader?
+      # its main responsibility previously was to rewrite sequence numbers to match the outgoing packets
+      # and to generate some stats
       |> to(:serializer, %RTP.Serializer{
         ssrc: opts.ssrc,
         payload_type: opts.payload_type,

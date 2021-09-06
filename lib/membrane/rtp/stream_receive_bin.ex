@@ -58,7 +58,6 @@ defmodule Membrane.RTP.StreamReceiveBin do
         local_ssrc: opts.local_ssrc,
         remote_ssrc: opts.remote_ssrc,
         report_interval: opts.rtcp_report_interval,
-        # report_interval: 5 * Membrane.Time.second(),
         fir_interval: opts.rtcp_fir_interval
       })
       |> to(:tracker, %Membrane.RTP.PacketTracker{

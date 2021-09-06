@@ -9,7 +9,6 @@ defmodule Membrane.RTP.JitterBufferTest do
 
   setup_all do
     buffer = BufferFactory.sample_buffer(@base_seq_number)
-    # {:ok, store} = BufferStore.insert_buffer(%BufferStore{}, buffer)
     state = %State{
       clock_rate: BufferFactory.clock_rate(),
       store: %BufferStore{},
@@ -42,40 +41,6 @@ defmodule Membrane.RTP.JitterBufferTest do
       assert {%Record{buffer: ^buffer}, new_store} = BufferStore.shift(store)
       assert BufferStore.dump(new_store) == []
     end
-
-    # TODO: change that so that those tests are placed in PacketTracker instead of jitter buffer tests
-    # test "jitter stats are updated", %{state: state, buffer: buffer} do
-    #   ts = ~U[2020-06-19 19:06:00Z] |> DateTime.to_unix() |> Membrane.Time.seconds()
-
-    #   timestamped_buf = put_in(buffer.metadata[:arrival_ts], ts)
-    #   assert {:ok, state} = JitterBuffer.handle_process(:input, timestamped_buf, nil, state)
-    #   assert state.stats_acc.jitter == 0.0
-
-    #   assert state.stats_acc.last_transit ==
-    #            Membrane.Time.to_seconds(ts) * state.clock_rate -
-    #              timestamped_buf.metadata.rtp.timestamp
-
-    #   buffer = BufferFactory.sample_buffer(@base_seq_number + 1)
-
-    #   arrival_ts_increment =
-    #     div(BufferFactory.timestamp_increment(), state.clock_rate) |> Membrane.Time.seconds()
-
-    #   packet_delay = 1 |> Membrane.Time.seconds()
-
-    #   timestamped_buf =
-    #     put_in(buffer.metadata[:arrival_ts], ts + arrival_ts_increment + packet_delay)
-
-    #   assert {:ok, state} = JitterBuffer.handle_process(:input, timestamped_buf, nil, state)
-
-    #   # 16 is defined by RFC
-    #   assert state.stats_acc.jitter ==
-    #            Membrane.Time.to_seconds(packet_delay) * state.clock_rate / 16
-
-    #   assert state.stats_acc.last_transit ==
-    #            Membrane.Time.to_seconds(ts + arrival_ts_increment + packet_delay) *
-    #              state.clock_rate -
-    #              timestamped_buf.metadata.rtp.timestamp
-    # end
   end
 
   describe "When new buffer arrives when not waiting and already pushed some buffer" do
@@ -145,7 +110,7 @@ defmodule Membrane.RTP.JitterBufferTest do
 
   describe "When event arrives" do
     test "dumps store if event was end of stream", %{state: state, buffer: buffer} do
-      store = %BufferStore{state.store | prev_index: @base_seq_number - 2, base_index: 0}
+      store = %BufferStore{state.store | prev_index: @base_seq_number - 2}
       {:ok, store} = BufferStore.insert_buffer(store, buffer)
       state = %{state | store: store}
       assert {{:ok, actions}, _state} = JitterBuffer.handle_end_of_stream(:input, nil, state)

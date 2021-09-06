@@ -64,8 +64,7 @@ defmodule Membrane.RTP.JitterBuffer do
   @impl true
   def handle_start_of_stream(:input, _context, state) do
     Process.send_after(
-      self(),
-      :initial_latency_passed,
+      self(), :initial_latency_passed,
       state.latency |> Time.to_milliseconds()
     )
 

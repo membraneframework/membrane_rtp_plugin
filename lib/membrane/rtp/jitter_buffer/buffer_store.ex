@@ -19,15 +19,13 @@ defmodule Membrane.RTP.JitterBuffer.BufferStore do
 
   @seq_number_limit 65_536
 
-  defstruct base_index: nil,
-            prev_index: nil,
+  defstruct prev_index: nil,
             end_index: nil,
             heap: Heap.new(&Record.rtp_comparator/2),
             set: MapSet.new(),
             rollover_count: 0
 
   @type t :: %__MODULE__{
-          base_index: JitterBuffer.packet_index() | nil,
           prev_index: JitterBuffer.packet_index() | nil,
           end_index: JitterBuffer.packet_index() | nil,
           heap: Heap.t(),
@@ -61,12 +59,12 @@ defmodule Membrane.RTP.JitterBuffer.BufferStore do
           {:ok, t()} | {:error, insert_error()}
   defp do_insert_buffer(%__MODULE__{prev_index: nil} = store, buffer, 0) do
     store = add_record(store, Record.new(buffer, @seq_number_limit))
-    {:ok, %__MODULE__{store | prev_index: @seq_number_limit - 1, base_index: 0}}
+    {:ok, %__MODULE__{store | prev_index: @seq_number_limit - 1}}
   end
 
   defp do_insert_buffer(%__MODULE__{prev_index: nil} = store, buffer, seq_num) do
     store = add_record(store, Record.new(buffer, seq_num))
-    {:ok, %__MODULE__{store | prev_index: seq_num - 1, base_index: seq_num}}
+    {:ok, %__MODULE__{store | prev_index: seq_num - 1}}
   end
 
   defp do_insert_buffer(

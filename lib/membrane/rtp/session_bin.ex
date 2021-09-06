@@ -22,8 +22,8 @@ defmodule Membrane.RTP.SessionBin do
 
   #### Jitter Buffer
   Some depayloaders may need the incoming packets to be in a correct order therefore one needs to not only
-  use depayloader but also include a jitter buffer. It can be specified as pad's option `use_jitter_buffer?` when
-  adding `Pad.ref(:output, ssrc)` pad, .
+  use depayloader but also include a jitter buffer. It can be specified via pad's option `use_jitter_buffer?` when
+  adding `Pad.ref(:output, ssrc)` pad.
 
 
   #### Important note
@@ -419,12 +419,10 @@ defmodule Membrane.RTP.SessionBin do
 
     pads_present? = Enum.all?([input_pad, output_pad], &Map.has_key?(ctx.pads, &1))
 
+    # if one of the pads is missing do nothing and wait for the other pad to be added
     if not pads_present? or Map.has_key?(ctx.children, {:stream_send_bin, ssrc}) do
       {:ok, state}
     else
-      input_pad = Pad.ref(:input, ssrc)
-      output_pad = Pad.ref(:rtp_output, ssrc)
-
       %{use_payloader?: use_payloader?} = ctx.pads[input_pad].options
       %{encoding: encoding_name, clock_rate: clock_rate} = ctx.pads[output_pad].options
 
@@ -433,32 +431,26 @@ defmodule Membrane.RTP.SessionBin do
       clock_rate = clock_rate || get_from_register!(:clock_rate, payload_type, state)
       payloader = if use_payloader?, do: get_payloader!(encoding_name, state), else: nil
 
-      spec = sent_stream_spec(ssrc, payload_type, payloader, clock_rate, state)
+      maybe_link_encryptor =
+        &to(&1, {:srtp_encryptor, ssrc}, %SRTP.Encryptor{policies: state.srtp_policies})
+
+      links = [
+        link_bin_input(input_pad)
+        |> to({:stream_send_bin, ssrc}, %RTP.StreamSendBin{
+          ssrc: ssrc,
+          payload_type: payload_type,
+          payloader: payloader,
+          clock_rate: clock_rate
+        })
+        |> then(if state.secure?, do: maybe_link_encryptor, else: & &1)
+        |> to_bin_output(output_pad)
+      ]
+
+      spec = %ParentSpec{links: links}
       state = %{state | senders_ssrcs: MapSet.put(state.senders_ssrcs, ssrc)}
 
       {{:ok, spec: spec}, state}
     end
-  end
-
-  defp sent_stream_spec(ssrc, payload_type, payloader, clock_rate, %{
-         secure?: secure?,
-         srtp_policies: policies
-       }) do
-    maybe_link_encryptor = &to(&1, {:srtp_encryptor, ssrc}, %SRTP.Encryptor{policies: policies})
-
-    links = [
-      link_bin_input(Pad.ref(:input, ssrc))
-      |> to({:stream_send_bin, ssrc}, %RTP.StreamSendBin{
-        ssrc: ssrc,
-        payload_type: payload_type,
-        payloader: payloader,
-        clock_rate: clock_rate
-      })
-      |> then(if secure?, do: maybe_link_encryptor, else: & &1)
-      |> to_bin_output(Pad.ref(:rtp_output, ssrc))
-    ]
-
-    %ParentSpec{links: links}
   end
 
   @impl true
