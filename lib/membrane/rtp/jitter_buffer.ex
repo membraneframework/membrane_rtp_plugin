@@ -6,7 +6,7 @@ defmodule Membrane.RTP.JitterBuffer do
   use Membrane.Log
   use Bunch
 
-  alias Membrane.{Buffer, RTP, Time}
+  alias Membrane.{RTP, Time}
   alias __MODULE__.{BufferStore, Record}
 
   @type packet_index :: non_neg_integer()
@@ -64,7 +64,8 @@ defmodule Membrane.RTP.JitterBuffer do
   @impl true
   def handle_start_of_stream(:input, _context, state) do
     Process.send_after(
-      self(), :initial_latency_passed,
+      self(),
+      :initial_latency_passed,
       state.latency |> Time.to_milliseconds()
     )
 

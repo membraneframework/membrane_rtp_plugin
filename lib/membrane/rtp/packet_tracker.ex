@@ -32,6 +32,8 @@ defmodule Membrane.RTP.PacketTracker do
               ]
 
   defmodule State do
+    @moduledoc false
+
     @type t :: %__MODULE__{
             clock_rate: non_neg_integer(),
             repair_sequence_numbers?: boolean(),
@@ -230,7 +232,11 @@ defmodule Membrane.RTP.PacketTracker do
          %State{discarded: discarded}
        ) do
     metadata =
-      put_in(metadata, [:rtp, :sequence_number], rem(seq_num - discarded + @max_seq_num + 1, @max_seq_num + 1))
+      put_in(
+        metadata,
+        [:rtp, :sequence_number],
+        rem(seq_num - discarded + @max_seq_num + 1, @max_seq_num + 1)
+      )
 
     %Buffer{buffer | metadata: metadata}
   end

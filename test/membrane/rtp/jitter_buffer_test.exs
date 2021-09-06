@@ -9,6 +9,7 @@ defmodule Membrane.RTP.JitterBufferTest do
 
   setup_all do
     buffer = BufferFactory.sample_buffer(@base_seq_number)
+
     state = %State{
       clock_rate: BufferFactory.clock_rate(),
       store: %BufferStore{},

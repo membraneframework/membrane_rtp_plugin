@@ -13,11 +13,10 @@ defmodule Membrane.RTP.PacketTrackerTest do
 
   # TODO: write tests for the packet tracker gathering stats and repairing packets
 
-
-
   describe "PacketTracer should" do
     setup do
       buffer = BufferFactory.sample_buffer(@base_seq_number)
+
       state = %PacketTracker.State{
         clock_rate: BufferFactory.clock_rate(),
         repair_sequence_numbers?: true
@@ -30,7 +29,10 @@ defmodule Membrane.RTP.PacketTrackerTest do
       ts = ~U[2020-06-19 19:06:00Z] |> DateTime.to_unix() |> Membrane.Time.seconds()
 
       timestamped_buf = put_in(buffer.metadata[:arrival_ts], ts)
-      assert {{:ok, _actions}, state} = PacketTracker.handle_process(:input, timestamped_buf, nil, state)
+
+      assert {{:ok, _actions}, state} =
+               PacketTracker.handle_process(:input, timestamped_buf, nil, state)
+
       assert state.jitter == 0.0
 
       assert state.transit ==
@@ -47,7 +49,8 @@ defmodule Membrane.RTP.PacketTrackerTest do
       timestamped_buf =
         put_in(buffer.metadata[:arrival_ts], ts + arrival_ts_increment + packet_delay)
 
-      assert {{:ok, _actions}, state} = PacketTracker.handle_process(:input, timestamped_buf, nil, state)
+      assert {{:ok, _actions}, state} =
+               PacketTracker.handle_process(:input, timestamped_buf, nil, state)
 
       # 16 is defined by RFC
       assert state.jitter ==
@@ -64,17 +67,26 @@ defmodule Membrane.RTP.PacketTrackerTest do
 
       # in sequence number range
       buffer = BufferFactory.sample_buffer(100)
-      assert {{:ok, [buffer: {:output, buffer}]}, state} = PacketTracker.handle_process(:input, buffer, nil, state)
+
+      assert {{:ok, [buffer: {:output, buffer}]}, state} =
+               PacketTracker.handle_process(:input, buffer, nil, state)
+
       assert buffer.metadata.rtp.sequence_number == 90
 
       # border case where sequence number over rolled
       buffer = BufferFactory.sample_buffer(5)
-      assert {{:ok, [buffer: {:output, buffer}]}, state} = PacketTracker.handle_process(:input, buffer, nil, state)
+
+      assert {{:ok, [buffer: {:output, buffer}]}, state} =
+               PacketTracker.handle_process(:input, buffer, nil, state)
+
       assert buffer.metadata.rtp.sequence_number == @max_seq_number - 5 + 1
 
       state = %PacketTracker.State{state | repair_sequence_numbers?: false}
       buffer = BufferFactory.sample_buffer(100)
-      assert {{:ok, [buffer: {:output, buffer}]}, _state} = PacketTracker.handle_process(:input, buffer, nil, state)
+
+      assert {{:ok, [buffer: {:output, buffer}]}, _state} =
+               PacketTracker.handle_process(:input, buffer, nil, state)
+
       assert buffer.metadata.rtp.sequence_number == 100
     end
   end
