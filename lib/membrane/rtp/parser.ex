@@ -85,10 +85,10 @@ defmodule Membrane.RTP.Parser do
       :rtcp ->
         case state.rtcp_output_pad do
           nil ->
-            {:ok, state}
+            {{:ok, redemand: :output}, state}
 
           pad ->
-            {{:ok, buffer: {pad, buffer}}, state}
+            {{:ok, buffer: {pad, buffer}, redemand: :output}, state}
         end
 
       {:error, reason} ->
@@ -98,7 +98,7 @@ defmodule Membrane.RTP.Parser do
         Reason: #{inspect(reason)}. Ignoring packet.
         """)
 
-        {:ok, state}
+        {{:ok, redemand: :output}, state}
     end
   end
 
