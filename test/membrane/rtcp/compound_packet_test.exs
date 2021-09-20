@@ -28,4 +28,24 @@ defmodule Membrane.RTCP.PacketTest do
     # The least significant word of NTP timestamp (fractional part) might differ due to rounding errors
     assert_in_delta ntp_lsw, ref_ntp_lsw, 10
   end
+
+  describe "when a malformed packet is contained" do
+    test "returns an error" do
+      packet = Fixtures.malformed_packet_binary()
+      assert {:error, :malformed_packet} = RTCP.Packet.parse(packet)
+    end
+  end
+
+  describe "with unknown packet types" do
+    test "returns only the parsable packet types" do
+      packet = Fixtures.with_unknown_packet_type()
+      assert {:ok, packets} = RTCP.Packet.parse(packet)
+
+      assert [
+               %RTCP.SenderReportPacket{},
+               %RTCP.SdesPacket{},
+               %RTCP.FeedbackPacket{}
+             ] = packets
+    end
+  end
 end
