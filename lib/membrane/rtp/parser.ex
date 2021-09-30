@@ -30,7 +30,7 @@ defmodule Membrane.RTP.Parser do
     :csrcs,
     :payload_type,
     :marker,
-    :extension
+    :extensions
   ]
 
   def_options secure?: [
@@ -79,7 +79,6 @@ defmodule Membrane.RTP.Parser do
         |> Map.merge(%{has_padding?: has_padding?, total_header_size: total_header_size})
 
       metadata = Map.put(metadata, :rtp, rtp)
-
       {{:ok, buffer: {:output, %Buffer{payload: payload, metadata: metadata}}}, state}
     else
       :rtcp ->
