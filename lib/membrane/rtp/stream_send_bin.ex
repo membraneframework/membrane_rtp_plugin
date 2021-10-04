@@ -16,19 +16,21 @@ defmodule Membrane.RTP.StreamSendBin do
 
   @impl true
   def handle_init(opts) do
-    maybe_link_payloader = &to(&1, :payloader, opts.payloader)
+    maybe_link_payloader_bin =
+      &to(&1, :payloader, %RTP.PayloaderBin{
+        payloader: opts.payloader,
+        ssrc: opts.ssrc,
+        clock_rate: opts.clock_rate,
+        payload_type: opts.payload_type
+      })
 
     links = [
       link_bin_input()
-      |> then(if opts.payloader != nil, do: maybe_link_payloader, else: & &1)
-      # TODO: do we event need the serializer in case we don't provide the payloader?
-      # its main responsibility previously was to rewrite sequence numbers to match the outgoing packets
-      # and to generate some stats
-      |> to(:serializer, %RTP.Serializer{
+      |> then(if opts.payloader != nil, do: maybe_link_payloader_bin, else: & &1)
+      |> to(:packet_tracker, %RTP.OutbandPacketTracker{
         ssrc: opts.ssrc,
         payload_type: opts.payload_type,
-        clock_rate: opts.clock_rate,
-        generate_seq_num_and_timestamp?: opts.payloader != nil
+        clock_rate: opts.clock_rate
       })
       |> to_bin_output()
     ]
@@ -39,11 +41,11 @@ defmodule Membrane.RTP.StreamSendBin do
 
   @impl true
   def handle_other(:send_stats, _ctx, state) do
-    {{:ok, forward: {:serializer, :send_stats}}, state}
+    {{:ok, forward: {:packet_tracker, :send_stats}}, state}
   end
 
   @impl true
-  def handle_notification({:serializer_stats, stats}, :serializer, _ctx, state) do
-    {{:ok, notify: {:serializer_stats, stats}}, state}
+  def handle_notification({:outbound_stats, stats}, :packet_tracker, _ctx, state) do
+    {{:ok, notify: {:outbound_stats, stats}}, state}
   end
 end

@@ -1,4 +1,4 @@
-defmodule Membrane.RTP.PacketTracker do
+defmodule Membrane.RTP.InboundPacketTracker do
   @moduledoc """
   Module responsible for tracking statistics of incoming RTP packets for a single stream.
 

@@ -180,13 +180,9 @@ defmodule Membrane.RTP.SessionBin do
         default: true,
         description: """
         Defines whether the incoming stream should be depayloaded from RTP stream.
-        """
-      ],
-      use_jitter_buffer?: [
-        spec: boolean(),
-        default: true,
-        description: """
-        Defines whether jitter buffer should be used for the incoming RTP stream.
+
+        Depayloading stream goes through `Membrane.RTP.DepayloaderBin` which besides creating a depayloader instance will
+        also use a jitter buffer.
         """
       ],
       clock_rate: [
@@ -346,7 +342,6 @@ defmodule Membrane.RTP.SessionBin do
     %{
       encoding: encoding_name,
       use_depayloader?: use_depayloader?,
-      use_jitter_buffer?: use_jitter_buffer?,
       clock_rate: clock_rate,
       extensions: extensions,
       rtcp_fir_interval: fir_interval,
@@ -354,10 +349,11 @@ defmodule Membrane.RTP.SessionBin do
     } = ctx.pads[pad].options
 
     payload_type = Map.fetch!(state.ssrc_pt_mapping, ssrc)
-
     encoding_name = encoding_name || get_from_register!(:encoding_name, payload_type, state)
     clock_rate = clock_rate || get_from_register!(:clock_rate, payload_type, state)
+
     depayloader = if use_depayloader?, do: get_depayloader!(encoding_name, state), else: nil
+
     {local_ssrc, state} = add_ssrc(ssrc, state)
 
     rtp_stream_name = {:stream_receive_bin, ssrc}
@@ -366,8 +362,6 @@ defmodule Membrane.RTP.SessionBin do
       rtp_stream_name => %RTP.StreamReceiveBin{
         clock_rate: clock_rate,
         depayloader: depayloader,
-        jitter_buffer:
-          if(use_jitter_buffer?, do: %Membrane.RTP.JitterBuffer{clock_rate: clock_rate}, else: nil),
         filters: filters,
         local_ssrc: local_ssrc,
         remote_ssrc: ssrc,

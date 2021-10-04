@@ -22,18 +22,11 @@ defmodule Membrane.RTP.StreamReceiveBin do
                 spec: [Membrane.RTP.SessionBin.packet_filter_t()],
                 default: []
               ],
-              jitter_buffer: [
-                spec: module() | struct() | nil,
-                default: nil
-              ],
-              depayloader: [
-                spec: module() | nil,
-                default: nil
-              ],
               clock_rate: [
                 type: :integer,
                 spec: RTP.clock_rate_t()
               ],
+              depayloader: [spec: module() | nil],
               local_ssrc: [spec: Membrane.RTP.ssrc_t()],
               remote_ssrc: [spec: Membrane.RTP.ssrc_t()],
               rtcp_report_interval: [spec: Membrane.Time.t() | nil],
@@ -47,9 +40,11 @@ defmodule Membrane.RTP.StreamReceiveBin do
     maybe_link_decryptor =
       &to(&1, :decryptor, %Membrane.SRTP.Decryptor{policies: opts.srtp_policies})
 
-    maybe_link_jitter_buffer = &to(&1, :jitter_buffer, opts.jitter_buffer)
-
-    maybe_link_depayloader = &to(&1, :depayloader, opts.depayloader)
+    maybe_link_depayloader_bin =
+      &to(&1, :depayloader, %Membrane.RTP.DepayloaderBin{
+        depayloader: opts.depayloader,
+        clock_rate: opts.clock_rate
+      })
 
     links = [
       link_bin_input()
@@ -60,13 +55,12 @@ defmodule Membrane.RTP.StreamReceiveBin do
         report_interval: opts.rtcp_report_interval,
         fir_interval: opts.rtcp_fir_interval
       })
-      |> to(:tracker, %Membrane.RTP.PacketTracker{
+      |> to(:tracker, %Membrane.RTP.InboundPacketTracker{
         clock_rate: opts.clock_rate,
         repair_sequence_numbers?: true
       })
-      |> then(if opts.jitter_buffer != nil, do: maybe_link_jitter_buffer, else: & &1)
       |> then(if opts.secure?, do: maybe_link_decryptor, else: & &1)
-      |> then(if opts.depayloader != nil, do: maybe_link_depayloader, else: & &1)
+      |> then(if opts.depayloader, do: maybe_link_depayloader_bin, else: & &1)
       |> to_bin_output()
     ]
 
