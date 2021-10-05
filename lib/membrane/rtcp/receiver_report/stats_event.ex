@@ -1,6 +1,6 @@
 defmodule Membrane.RTCP.ReceiverReport.StatsEvent do
   @moduledoc """
-  Event carrying jitter buffer statistics.
+  Event carrying statistics for a receiver report.
   """
 
   @derive Membrane.EventProtocol
