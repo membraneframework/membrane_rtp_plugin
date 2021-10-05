@@ -80,8 +80,6 @@ defmodule Membrane.RTCP.Receiver do
     {:ok, state}
   end
 
-  # TODO: study why turning on receiver reports causes browsers (at least chrome) to start
-  # sending x4 more packets
   @impl true
   def handle_event(:output, %ReceiverReport.StatsEvent{stats: stats}, _ctx, state) do
     now = Time.vm_time()

@@ -5,15 +5,10 @@ defmodule Membrane.RTP.InboundPacketTrackerTest do
   alias Membrane.RTP.InboundPacketTracker
   alias Membrane.RTP.BufferFactory
 
-  # @seq_number_limit 65_536
-  # @base_index 65_505
-  # @next_index @base_index + 1
   @base_seq_number BufferFactory.base_seq_number()
   @max_seq_number 0xFFFF
 
-  # TODO: write tests for the packet tracker gathering stats and repairing packets
-
-  describe "PacketTracker should" do
+  describe "InboundPacketTracker should" do
     setup do
       buffer = BufferFactory.sample_buffer(@base_seq_number)
 
