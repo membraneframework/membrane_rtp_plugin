@@ -96,6 +96,6 @@ defmodule Membrane.RTP.Serializer do
     {{:ok, buffer: {:output, buffer}}, state}
   end
 
-  defp buffer_timestamp(%{rtp: %{timestamp: timestamp}}, _metadata), do: timestamp
+  defp buffer_timestamp(%{timestamp: timestamp}, _metadata), do: timestamp
   defp buffer_timestamp(_rtp_metadata, %{timestamp: timestamp}), do: timestamp
 end

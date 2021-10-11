@@ -1,21 +1,36 @@
-defmodule Membrane.RTP.OutbandPacketTracker do
+defmodule Membrane.RTP.OutboundPacketTracker do
   @moduledoc """
   Tracks statistics of outband packets.
+
+  Besides tracking statistics, tracker can also serialize packet's header and payload stored inside an incoming buffer into
+  a a proper RTP packet.
   """
   use Membrane.Filter
 
-  alias Membrane.{Buffer, RTP, RemoteStream, Payload, Time}
+  alias Membrane.{Buffer, RTP, Payload, Time}
 
   def_input_pad :input,
-    caps: {RemoteStream, type: :packetized, content_format: one_of([nil, RTP])},
+    caps: :any,
     demand_unit: :buffers
 
   def_output_pad :output,
-    caps: {RemoteStream, type: :packetized, content_format: one_of([nil, RTP])}
+    caps: :any
 
   def_options ssrc: [spec: RTP.ssrc_t()],
               payload_type: [spec: RTP.payload_type_t()],
               clock_rate: [spec: RTP.clock_rate_t()],
+              serialize_packets?: [
+                spec: boolean(),
+                default: false,
+                description: """
+                Decides if incoming buffers should get serialized to RTP packets.
+                If set to true then the filter assumes that buffer's metadata has proper header information under `:rtp` key
+                and buffer's payload is a proper RTP payload.
+
+                Packet serialization may be necessary when there is no payloading process applied and we receive buffers with
+                parsed header and proper payload and we need to concatenate them.
+                """
+              ],
               alignment: [
                 default: 1,
                 spec: pos_integer(),
@@ -35,6 +50,7 @@ defmodule Membrane.RTP.OutbandPacketTracker do
           }
 
     defstruct any_buffer_sent?: false,
+              serialize_packets?: false,
               stats_acc: %{
                 clock_rate: 0,
                 timestamp: 0,
@@ -46,7 +62,7 @@ defmodule Membrane.RTP.OutbandPacketTracker do
 
   @impl true
   def handle_init(options) do
-    state = %State{}
+    state = %State{serialize_packets?: options.serialize_packets?}
 
     state = state |> put_in([:stats_acc, :clock_rate], options.clock_rate)
     {:ok, Map.merge(Map.from_struct(options), state)}
@@ -61,7 +77,7 @@ defmodule Membrane.RTP.OutbandPacketTracker do
   def handle_process(:input, %Buffer{} = buffer, _ctx, state) do
     state = update_stats(buffer, state)
 
-    {{:ok, buffer: {:output, buffer}}, state}
+    {{:ok, buffer: {:output, process_buffer(buffer, state)}}, state}
   end
 
   @impl true
@@ -91,4 +107,13 @@ defmodule Membrane.RTP.OutbandPacketTracker do
 
     Map.put(state, :stats_acc, updated_stats)
   end
+
+  defp process_buffer(buffer, %{serialize_packets?: true, ssrc: ssrc}) do
+    header = struct(RTP.Header, %{buffer.metadata.rtp | ssrc: ssrc})
+    payload = RTP.Packet.serialize(%RTP.Packet{header: header, payload: buffer.payload})
+
+    %Buffer{buffer | payload: payload}
+  end
+
+  defp process_buffer(buffer, _state), do: buffer
 end

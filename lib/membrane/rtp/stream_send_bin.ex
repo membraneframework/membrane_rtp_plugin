@@ -16,6 +16,8 @@ defmodule Membrane.RTP.StreamSendBin do
 
   @impl true
   def handle_init(opts) do
+    use_payloader = !is_nil(opts.payloader)
+
     maybe_link_payloader_bin =
       &to(&1, :payloader, %RTP.PayloaderBin{
         payloader: opts.payloader,
@@ -26,8 +28,9 @@ defmodule Membrane.RTP.StreamSendBin do
 
     links = [
       link_bin_input()
-      |> then(if opts.payloader != nil, do: maybe_link_payloader_bin, else: & &1)
-      |> to(:packet_tracker, %RTP.OutbandPacketTracker{
+      |> then(if use_payloader, do: maybe_link_payloader_bin, else: & &1)
+      |> to(:packet_tracker, %RTP.OutboundPacketTracker{
+        serialize_packets?: not use_payloader,
         ssrc: opts.ssrc,
         payload_type: opts.payload_type,
         clock_rate: opts.clock_rate

@@ -55,7 +55,7 @@ defmodule Membrane.RTP.StreamReceiveBin do
         report_interval: opts.rtcp_report_interval,
         fir_interval: opts.rtcp_fir_interval
       })
-      |> to(:tracker, %Membrane.RTP.InboundPacketTracker{
+      |> to(:packet_tracker, %Membrane.RTP.InboundPacketTracker{
         clock_rate: opts.clock_rate,
         repair_sequence_numbers?: true
       })
