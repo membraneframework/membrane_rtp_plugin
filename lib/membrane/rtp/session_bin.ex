@@ -460,14 +460,15 @@ defmodule Membrane.RTP.SessionBin do
   @impl true
   def handle_pad_removed(Pad.ref(name, ssrc), ctx, state)
       when name in [:input, :rtp_output] do
-    case Map.fetch(ctx.children, {:stream_send_bin, ssrc}) do
-      {:ok, %{terminating?: false}} ->
-        state = %{state | senders_ssrcs: MapSet.delete(state.senders_ssrcs, ssrc)}
-        {{:ok, remove_child: {:stream_send_bin, ssrc}}, state}
+    children =
+      for {child_name, child} <-
+            Map.take(ctx.children, [{:stream_send_bin, ssrc}, {:srtp_encryptor, ssrc}]),
+          !child.terminating?,
+          into: [] do
+        child_name
+      end
 
-      _result ->
-        {:ok, state}
-    end
+    {{:ok, remove_child: children}, state}
   end
 
   @impl true
