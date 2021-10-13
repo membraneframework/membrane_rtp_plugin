@@ -15,7 +15,7 @@ defmodule Membrane.RTP.Packet do
   defstruct @enforce_keys
 
   # 0xBEDE for Venerable Bede from RFC 8285
-  @one_byte_header_identifier <<190, 222>>
+  @one_byte_header_identifier <<190::8, 222::8>>
 
   @spec identify(binary()) :: :rtp | :rtcp
   def identify(<<_first_byte, _marker::1, payload_type::7, _rest::binary>>)
@@ -29,7 +29,7 @@ defmodule Membrane.RTP.Packet do
     %__MODULE__{header: header, payload: payload} = packet
     %Header{version: 2} = header
     has_padding = 0
-    has_extension = if header.extensions, do: 1, else: 0
+    has_extension = if Enum.empty?(header.extensions), do: 0, else: 1
     marker = if header.marker, do: 1, else: 0
     csrcs = Enum.map_join(header.csrcs, &<<&1::32>>)
 
@@ -56,16 +56,29 @@ defmodule Membrane.RTP.Packet do
         acc <> serialize_header_extension(extension)
       end)
 
-    <<@one_byte_header_identifier, byte_size(extensions) |> div(4)::16>> <> extensions
+    identifer = @one_byte_header_identifier
+    padding = calculate_padding_size(byte_size(extensions)) * 8
+    extensions_size = byte_size(extensions)
+
+    extension_header_size =
+      div(extensions_size, 4) + if rem(extensions_size, 4) == 0, do: 0, else: 1
+
+    <<identifer::binary-size(2), extension_header_size::16>> <>
+      extensions <> <<0::integer-size(padding)>>
+  end
+
+  defp calculate_padding_size(extensions_size) do
+    how_many_bytes_over_32 = rem(extensions_size, 4)
+    if how_many_bytes_over_32 == 0, do: 0, else: 4 - how_many_bytes_over_32
   end
 
   defp serialize_header_extension(nil) do
     <<>>
   end
 
-  defp serialize_header_extension(%Header.Extension{data: data} = extension)
-       when byte_size(data) |> rem(4) == 0 do
-    <<extension.profile_specific::bitstring, byte_size(data) |> div(4)::16, data::binary>>
+  defp serialize_header_extension(%Header.Extension{data: data} = extension) do
+    data_size = byte_size(data) - 1
+    <<extension.profile_specific::integer-size(4), data_size::integer-size(4), data::binary>>
   end
 
   @spec parse(binary(), boolean()) ::
@@ -114,7 +127,7 @@ defmodule Membrane.RTP.Packet do
   def parse(_binary, _parse_payload?), do: {:error, :malformed_packet}
 
   defp parse_header_extension(binary, header_present?)
-  defp parse_header_extension(binary, false), do: {:ok, {nil, binary}}
+  defp parse_header_extension(binary, false), do: {:ok, {[], binary}}
 
   defp parse_header_extension(
          <<_profile_specific::binary-size(2), data_len::16, data::binary-size(data_len)-unit(32),
@@ -130,17 +143,22 @@ defmodule Membrane.RTP.Packet do
   defp parse_data_while_possible(<<>>, acc), do: acc
 
   defp parse_data_while_possible(data, acc) do
-    {:ok, {data, rest}} = parse_one_byte_header(data)
-    parse_data_while_possible(rest, [data | acc])
+    case parse_one_byte_header(data) do
+      {:ok, {data, rest}} -> parse_data_while_possible(rest, [data | acc])
+      {:ok, rest} -> parse_data_while_possible(rest, acc)
+    end
   end
 
-  defp parse_one_byte_header(
-         <<local_identifier::integer-size(4), len_data::integer-size(4), data::binary>>
-       ) do
-    len_data = len_data + 1
-    <<data::binary-size(len_data), rest::binary>> = data
+  defp parse_one_byte_header(<<extension_header::bits-size(8), extensions::binary>>) do
+    <<local_identifier::integer-size(4), len_data::integer-size(4)>> = extension_header
 
-    extension = %Header.Extension{profile_specific: local_identifier, data: data}
-    {:ok, {extension, rest}}
+    if local_identifier == 0 do
+      {:ok, extensions}
+    else
+      len_data = len_data + 1
+      <<data::binary-size(len_data), next_extensions::binary>> = extensions
+      extension = %Header.Extension{profile_specific: local_identifier, data: data}
+      {:ok, {extension, next_extensions}}
+    end
   end
 end
