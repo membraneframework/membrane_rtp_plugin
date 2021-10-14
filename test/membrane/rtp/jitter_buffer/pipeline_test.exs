@@ -128,7 +128,7 @@ defmodule Membrane.RTP.JitterBuffer.PipelineTest do
             pipeline,
             :sink,
             %Membrane.Buffer{
-              metadata: %{rtp: %{sequence_number: ^seq_num, timestamp: _}},
+              metadata: %{rtp: %{sequence_number: ^seq_num}},
               payload: _
             },
             timeout

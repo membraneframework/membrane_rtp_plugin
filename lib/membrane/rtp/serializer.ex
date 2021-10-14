@@ -62,12 +62,12 @@ defmodule Membrane.RTP.Serializer do
   end
 
   @impl true
-  def handle_process(:input, %Buffer{payload: payload, metadata: metadata}, _ctx, state) do
-    {rtp_metadata, metadata} = Map.pop(metadata, :rtp, %{})
+  def handle_process(:input, buffer, _ctx, state) do
+    {rtp_metadata, metadata} = Map.pop(buffer.metadata, :rtp, %{})
 
     rtp_offset =
       rtp_metadata
-      |> buffer_timestamp(metadata)
+      |> buffer_timestamp(Buffer.get_dts_or_pts(buffer))
       |> Ratio.mult(state.clock_rate)
       |> Membrane.Time.to_seconds()
 
@@ -85,7 +85,7 @@ defmodule Membrane.RTP.Serializer do
       extension: Map.get(rtp_metadata, :extension)
     }
 
-    packet = %RTP.Packet{header: header, payload: payload}
+    packet = %RTP.Packet{header: header, payload: buffer.payload}
     payload = RTP.Packet.serialize(packet, align_to: state.alignment)
 
     buffer = %Buffer{
@@ -97,5 +97,5 @@ defmodule Membrane.RTP.Serializer do
   end
 
   defp buffer_timestamp(%{timestamp: timestamp}, _metadata), do: timestamp
-  defp buffer_timestamp(_rtp_metadata, %{timestamp: timestamp}), do: timestamp
+  defp buffer_timestamp(_rtp_metadata, timestamp), do: timestamp
 end

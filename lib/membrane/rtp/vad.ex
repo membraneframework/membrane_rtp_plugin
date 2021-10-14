@@ -91,7 +91,7 @@ defmodule Membrane.RTP.VAD do
     <<_id::4, _len::4, _v::1, level::7, _rest::binary-size(2)>> =
       buffer.metadata.rtp.extension.data
 
-    state = %{state | current_timestamp: buffer.metadata.timestamp}
+    state = %{state | current_timestamp: buffer.pts}
     state = filter_old_audio_levels(state)
     state = add_new_audio_level(state, level)
     audio_levels_vad = get_audio_levels_vad(state)
