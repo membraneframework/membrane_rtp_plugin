@@ -98,7 +98,7 @@ defmodule Membrane.RTP.InboundPacketTracker do
 
       # the packets is either too old or too new
       delta <= @max_seq_num - @max_unordered ->
-        {{:ok, redemand: :output}, %State{state | discarded: state.discarded + 1}}
+        {{:ok, redemand: :output}, update_received(state)}
 
       # packet is old but within dropout threshold
       true ->
