@@ -15,20 +15,24 @@ defmodule Membrane.RTP.SessionBin do
 
   ## Payloaders and depayloaders
   Payloaders are Membrane elements that transform stream so that it can be put into RTP packets, while depayloaders
-  work the other way round. Different codecs require different payloaders and depayloaders. Thus, to send or receive
-  given codec via this bin, proper payloader/depayloader is needed. Payloaders and depayloaders can be found in
-  `membrane_rtp_X_plugin` packages, where X stands for codec name. It's enough when such plugin is added to
-  dependencies.
+  work the other way round. Different codecs require different payloaders and depayloaders.
 
-  #### Jitter Buffer
-  Some depayloaders may need the incoming packets to be in a correct order therefore one needs to not only
-  use depayloader but also include a jitter buffer. It can be specified via pad's option `use_jitter_buffer?` when
-  adding `Pad.ref(:output, ssrc)` pad.
+  By default `SessionBin` will try to depayload streams that first came with `Pad.ref(:rtp_input, ref)` and are
+  leaving the bin via `Pad.ref(:output, ssrc)` pads. It will also try to payload streams that come
+  via `Pad.ref(:input, ssrc)` and leave via `Pad.ref(:rtp_output, ssrc)`.
+  This behaviour is necessary if we need to somehow transform the streams. If `SessionBin`s main role is to route packets
+  then depayloading and payloading processes are redundant.
 
+  Payloaders and depayloaders can be found in `membrane_rtp_X_plugin` packages, where X stands for codec name.
+  It's enough when such a plugin is added to dependencies.
+
+  For payloading and depayloading, `SessionBin` uses respective bins `Membrane.RTP.PayloaderBin` and `Membrane.RTP.DepayloaderBin`
+  which can be configured via specific flags `use_payloader?` and `use_depayloader?` in pads options or if needed they can be used externally
+  and linked to `SessionBin` pads.
 
   #### Important note
   Payloaders and depayloaders are mostly needed when working with external media sources (in different formats than RTP).
-  For applications such an SFU it is not needed to either payload or depayload the RTP stream as we are always dealing with RTP format.
+  For applications such as an SFU it is not needed to either payload or depayload the RTP stream as we are always dealing with RTP format.
   In such a case, SessionBin will receive payloaded packets and work as a simple proxy just forwarding the packets (and decrypting them if necessary).
   Therefore it is possible to specify in newly added pads if payloaders/depayloaders should be used for the correlated stream.
 
