@@ -89,6 +89,7 @@ defmodule Membrane.RTP.Serializer do
     payload = RTP.Packet.serialize(packet, align_to: state.alignment)
 
     buffer = %Buffer{
+      pts: Buffer.get_dts_or_pts(buffer),
       payload: payload,
       metadata: Map.put(metadata, :rtp, %{timestamp: rtp_timestamp})
     }
