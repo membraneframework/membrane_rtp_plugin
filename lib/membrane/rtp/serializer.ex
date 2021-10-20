@@ -8,12 +8,18 @@ defmodule Membrane.RTP.Serializer do
   use Membrane.Filter
 
   alias Membrane.{Buffer, RTP, RemoteStream, Payload, Time}
+  alias Membrane.RTP.Session.SenderReport
+  alias Membrane.RTCP.ReportPacketBlock
+  alias Membrane.RTCPEvent
 
   @max_seq_num 65_535
   @max_timestamp 0xFFFFFFFF
 
   def_input_pad :input, caps: RTP, demand_unit: :buffers
+  def_input_pad :rtcp_input, availability: :on_request, caps: :any, demand_unit: :buffers
+
   def_output_pad :output, caps: {RemoteStream, type: :packetized, content_format: RTP}
+  def_output_pad :rtcp_output, availability: :on_request, caps: :any
 
   def_options ssrc: [spec: RTP.ssrc_t()],
               payload_type: [spec: RTP.payload_type_t()],
@@ -34,6 +40,7 @@ defmodule Membrane.RTP.Serializer do
     defstruct sequence_number: 0,
               init_timestamp: 0,
               any_buffer_sent?: false,
+              rtcp_output_pad: nil,
               stats_acc: %{
                 clock_rate: 0,
                 timestamp: 0,
@@ -68,9 +75,38 @@ defmodule Membrane.RTP.Serializer do
   end
 
   @impl true
+  def handle_caps(Pad.ref(:rtcp_input, _id), _caps, _ctx, state) do
+    {:ok, state}
+  end
+
+  @impl true
+  def handle_pad_added(Pad.ref(:rtcp_output, _id) = pad, _ctx, state) do
+    {:ok, %State{state | rtcp_output_pad: pad}}
+  end
+
+  @impl true
+  def handle_pad_added(Pad.ref(:rtcp_input, _id), _ctx, state) do
+    {:ok, state}
+  end
+
+  @impl true
   def handle_demand(:output, size, :buffers, _ctx, state) do
     {{:ok, demand: {:input, size}}, state}
   end
+
+  @impl true
+  def handle_demand(Pad.ref(:rtcp_output, _ref), _size, _type, _ctx, state) do
+    {:ok, state}
+  end
+
+  # handling report block from receiver report
+  @impl true
+  def handle_event(Pad.ref(:rtcp_input, _id), %RTCPEvent{rtcp: %ReportPacketBlock{}}, _ctx, state) do
+    {:ok, state}
+  end
+
+  @impl true
+  def handle_event(pad, event, ctx, state), do: super(pad, event, ctx, state)
 
   @impl true
   def handle_process(:input, %Buffer{payload: payload, metadata: metadata} = buffer, _ctx, state) do
@@ -108,8 +144,16 @@ defmodule Membrane.RTP.Serializer do
   @impl true
   def handle_other(:send_stats, _ctx, state) do
     stats = get_stats(state)
-    state = %{state | any_buffer_sent?: false}
-    {{:ok, notify: {:serializer_stats, stats}}, state}
+
+    actions =
+      %{state.ssrc => stats}
+      |> SenderReport.generate_report()
+      |> Enum.map(&Membrane.RTCP.Packet.serialize(&1))
+      |> Enum.map(&{:buffer, {state.rtcp_output_pad, %Membrane.Buffer{payload: &1}}})
+
+    {{:ok, actions ++ [redemand: state.rtcp_output_pad]}, %{state | any_buffer_sent?: false}}
+
+    # {:ok, state}
   end
 
   @spec get_stats(State.t()) :: %{} | :no_stats

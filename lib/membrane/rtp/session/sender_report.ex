@@ -72,7 +72,7 @@ defmodule Membrane.RTP.Session.SenderReport do
     end
   end
 
-  defp generate_report(stats) do
+  def generate_report(stats) do
     stats
     |> Enum.filter(fn {_k, v} -> v != :no_stats end)
     |> Enum.flat_map(fn {sender_ssrc, sender_stats} ->
