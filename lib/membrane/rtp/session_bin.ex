@@ -44,7 +44,7 @@ defmodule Membrane.RTP.SessionBin do
   use Membrane.Bin
 
   alias Membrane.{ParentSpec, RemoteStream, RTCP, RTP, SRTP}
-  alias Membrane.RTP.{PayloadFormat, Session}
+  alias Membrane.RTP.{PayloadFormat, PayloadFormatResolver, Session}
 
   require Bitwise
   require Membrane.Logger
@@ -526,16 +526,16 @@ defmodule Membrane.RTP.SessionBin do
   end
 
   defp get_payloader!(encoding_name, state) do
-    case state.custom_payloaders[encoding_name] || PayloadFormat.get(encoding_name).payloader do
-      nil -> raise "Cannot find payloader for encoding #{encoding_name}"
-      payloader -> payloader
+    case PayloadFormatResolver.payloader(encoding_name, state.custom_payloaders) do
+      :error -> raise "Cannot find payloader for encoding #{encoding_name}"
+      {:ok, payloader} -> payloader
     end
   end
 
   defp get_depayloader!(encoding_name, state) do
-    case state.custom_depayloaders[encoding_name] || PayloadFormat.get(encoding_name).depayloader do
-      nil -> raise "Cannot find depayloader for encoding #{encoding_name}"
-      depayloader -> depayloader
+    case PayloadFormatResolver.depayloader(encoding_name, state.custom_depayloaders) do
+      :error -> raise "Cannot find depayloader for encoding #{encoding_name}"
+      {:ok, depayloader} -> depayloader
     end
   end
 
