@@ -1,6 +1,8 @@
 defmodule Membrane.RTP.Serializer do
   @moduledoc """
-  Serializes RTP payload to RTP packets by adding the RTP header to each of them.
+  Given following RTP payloads and their minimal metadata, creates their proper header information,
+  incrementing timestamps and sequence numbers for each packet. Header information then is put
+  inside buffer's metadata under `:rtp` key.
 
   Accepts the following metadata under `:rtp` key: `:marker`, `:csrcs`, `:extension`.
   See `Membrane.RTP.Header` for their meaning and specifications.
@@ -75,7 +77,7 @@ defmodule Membrane.RTP.Serializer do
 
     state = Map.update!(state, :sequence_number, &rem(&1 + 1, @max_seq_num + 1))
 
-    header = %RTP.Header{
+    header = %{
       ssrc: state.ssrc,
       marker: Map.get(rtp_metadata, :marker, false),
       payload_type: state.payload_type,
@@ -85,12 +87,9 @@ defmodule Membrane.RTP.Serializer do
       extension: Map.get(rtp_metadata, :extension)
     }
 
-    packet = %RTP.Packet{header: header, payload: payload}
-    payload = RTP.Packet.serialize(packet, align_to: state.alignment)
-
-    buffer = %Buffer{
-      payload: payload,
-      metadata: Map.put(metadata, :rtp, %{timestamp: rtp_timestamp})
+    buffer = %Membrane.Buffer{
+      metadata: Map.put(metadata, :rtp, header),
+      payload: payload
     }
 
     {{:ok, buffer: {:output, buffer}}, state}

@@ -19,18 +19,6 @@ defmodule Membrane.RTP.OutboundPacketTracker do
   def_options ssrc: [spec: RTP.ssrc_t()],
               payload_type: [spec: RTP.payload_type_t()],
               clock_rate: [spec: RTP.clock_rate_t()],
-              serialize_packets?: [
-                spec: boolean(),
-                default: false,
-                description: """
-                Decides if incoming buffers should get serialized to RTP packets.
-                If set to true then the filter assumes that buffer's metadata has proper header information under `:rtp` key
-                and buffer's payload is a proper RTP payload.
-
-                Packet serialization may be necessary when there is no payloading process applied and we receive buffers with
-                parsed header and proper payload and we need to concatenate them.
-                """
-              ],
               alignment: [
                 default: 1,
                 spec: pos_integer(),
@@ -50,7 +38,6 @@ defmodule Membrane.RTP.OutboundPacketTracker do
           }
 
     defstruct any_buffer_sent?: false,
-              serialize_packets?: false,
               stats_acc: %{
                 clock_rate: 0,
                 timestamp: 0,
@@ -62,9 +49,8 @@ defmodule Membrane.RTP.OutboundPacketTracker do
 
   @impl true
   def handle_init(options) do
-    state = %State{serialize_packets?: options.serialize_packets?}
+    state = %State{} |> put_in([:stats_acc, :clock_rate], options.clock_rate)
 
-    state = state |> put_in([:stats_acc, :clock_rate], options.clock_rate)
     {:ok, Map.merge(Map.from_struct(options), state)}
   end
 
@@ -77,7 +63,18 @@ defmodule Membrane.RTP.OutboundPacketTracker do
   def handle_process(:input, %Buffer{} = buffer, _ctx, state) do
     state = update_stats(buffer, state)
 
-    {{:ok, buffer: {:output, process_buffer(buffer, state)}}, state}
+    {rtp_metadata, metadata} = Map.pop(buffer.metadata, :rtp, %{})
+
+    header = struct(RTP.Header, %{rtp_metadata | ssrc: state.ssrc})
+
+    payload =
+      RTP.Packet.serialize(%RTP.Packet{header: header, payload: buffer.payload},
+        align_to: state.alignment
+      )
+
+    buffer = %Buffer{payload: payload, metadata: metadata}
+
+    {{:ok, buffer: {:output, buffer}}, state}
   end
 
   @impl true
@@ -107,13 +104,4 @@ defmodule Membrane.RTP.OutboundPacketTracker do
 
     Map.put(state, :stats_acc, updated_stats)
   end
-
-  defp process_buffer(buffer, %{serialize_packets?: true, ssrc: ssrc}) do
-    header = struct(RTP.Header, %{buffer.metadata.rtp | ssrc: ssrc})
-    payload = RTP.Packet.serialize(%RTP.Packet{header: header, payload: buffer.payload})
-
-    %Buffer{buffer | payload: payload}
-  end
-
-  defp process_buffer(buffer, _state), do: buffer
 end

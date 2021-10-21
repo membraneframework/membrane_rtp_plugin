@@ -4,6 +4,7 @@ defmodule Membrane.RTP.Session.BinTest do
   import Membrane.Testing.Assertions
 
   alias Membrane.{RemoteStream, RTP, RTCP}
+  alias Membrane.RTP.PayloadFormat
   alias Membrane.Testing
 
   @rtp_input %{
@@ -125,18 +126,40 @@ defmodule Membrane.RTP.Session.BinTest do
           |> to(:pauser)
           |> via_in(Pad.ref(:rtp_input, rtp_input_ref))
           |> to(:rtp),
-          link(:hackney)
-          |> to(:parser)
-          |> via_in(Pad.ref(:input, options.output.video.ssrc), options: [use_payloader?: true])
-          |> to(:rtp)
-          |> via_out(Pad.ref(:rtp_output, options.output.video.ssrc),
-            options: [encoding: :H264]
-          )
-          |> to(:rtp_sink)
+          # in case of payload_and_depayload option being true,
+          # session bin is responsible for payloading the stream
+          #
+          # to test the case where stream is already payloaded (payload_and_depayload being false)
+          # we need to manually add payloader bin and then link it with the session bin
+          if options.payload_and_depayload do
+            link(:hackney)
+            |> to(:parser)
+            |> via_in(Pad.ref(:input, options.output.video.ssrc), options: [use_payloader?: true])
+            |> to(:rtp)
+            |> via_out(Pad.ref(:rtp_output, options.output.video.ssrc),
+              options: [encoding: :H264]
+            )
+            |> to(:rtp_sink)
+          else
+            link(:hackney)
+            |> to(:parser)
+            |> to(:payloader, %RTP.PayloaderBin{
+              payloader: PayloadFormat.get(:H264).payloader,
+              payload_type: PayloadFormat.get(:H264).payload_type,
+              ssrc: options.output.video.ssrc,
+              clock_rate: 90_000
+            })
+            |> via_in(Pad.ref(:input, options.output.video.ssrc), options: [use_payloader?: false])
+            |> to(:rtp)
+            |> via_out(Pad.ref(:rtp_output, options.output.video.ssrc),
+              options: [encoding: :H264]
+            )
+            |> to(:rtp_sink)
+          end
         ]
       }
 
-      {{:ok, spec: spec}, %{}}
+      {{:ok, spec: spec}, %{payload_and_depayload: options.payload_and_depayload}}
     end
 
     @impl true
@@ -148,7 +171,7 @@ defmodule Membrane.RTP.Session.BinTest do
         links: [
           link(:rtp)
           |> via_out(Pad.ref(:output, ssrc),
-            options: [use_depayloader?: true, rtcp_fir_interval: nil]
+            options: [use_depayloader?: state.payload_and_depayload, rtcp_fir_interval: nil]
           )
           |> to({:sink, ssrc})
         ]
@@ -182,7 +205,17 @@ defmodule Membrane.RTP.Session.BinTest do
       @rtp_output,
       sender_report,
       [@rtp_input.video.ssrc, @rtp_input.audio.ssrc],
-      [@rtp_output.video.ssrc]
+      [@rtp_output.video.ssrc],
+      true
+    )
+
+    test_stream(
+      @rtp_input,
+      @rtp_output,
+      sender_report,
+      [@rtp_input.video.ssrc, @rtp_input.audio.ssrc],
+      [@rtp_output.video.ssrc],
+      false
     )
   end
 
@@ -192,10 +225,18 @@ defmodule Membrane.RTP.Session.BinTest do
         33, 116, 108, 233, 19, 36, 26, 247, 128, 0, 0, 1, 255, 96, 51, 225, 176, 61, 171, 239, 14,
         63>>
 
-    test_stream(@srtp_input, @rtp_output, encrypted_sender_report, [], [])
+    test_stream(@srtp_input, @rtp_output, encrypted_sender_report, [], [], true)
+    test_stream(@srtp_input, @rtp_output, encrypted_sender_report, [], [], false)
   end
 
-  defp test_stream(input, output, sender_report, rr_senders_ssrcs, _sr_senders_ssrcs) do
+  defp test_stream(
+         input,
+         output,
+         sender_report,
+         rr_senders_ssrcs,
+         _sr_senders_ssrcs,
+         payload_and_depayload
+       ) do
     {:ok, pipeline} =
       %Testing.Pipeline.Options{
         module: DynamicPipeline,
@@ -204,7 +245,8 @@ defmodule Membrane.RTP.Session.BinTest do
           output: output,
           fmt_mapping: @fmt_mapping,
           rtcp_input: [sender_report],
-          rtcp_report_interval: Membrane.Time.second()
+          rtcp_report_interval: Membrane.Time.second(),
+          payload_and_depayload: payload_and_depayload
         }
       }
       |> Testing.Pipeline.start_link()
