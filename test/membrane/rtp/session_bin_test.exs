@@ -93,6 +93,8 @@ defmodule Membrane.RTP.Session.BinTest do
     def handle_init(options) do
       rtp_input_ref = make_ref()
 
+      {:ok, h264_payloader} = Membrane.RTP.PayloadFormatResolver.payloader(:H264)
+
       spec = %ParentSpec{
         children: [
           pcap: %Membrane.Element.Pcap.Source{path: options.input.pcap},
@@ -134,22 +136,25 @@ defmodule Membrane.RTP.Session.BinTest do
           if options.payload_and_depayload do
             link(:hackney)
             |> to(:parser)
-            |> via_in(Pad.ref(:input, options.output.video.ssrc), options: [use_payloader?: true])
+            |> via_in(Pad.ref(:input, options.output.video.ssrc),
+              options: [payloader: h264_payloader]
+            )
             |> to(:rtp)
             |> via_out(Pad.ref(:rtp_output, options.output.video.ssrc),
               options: [encoding: :H264]
             )
             |> to(:rtp_sink)
           else
+            # assume that incoming stream is already payloaded when entering session bin
             link(:hackney)
             |> to(:parser)
             |> to(:payloader, %RTP.PayloaderBin{
-              payloader: PayloadFormat.get(:H264).payloader,
+              payloader: h264_payloader,
               payload_type: PayloadFormat.get(:H264).payload_type,
               ssrc: options.output.video.ssrc,
               clock_rate: 90_000
             })
-            |> via_in(Pad.ref(:input, options.output.video.ssrc), options: [use_payloader?: false])
+            |> via_in(Pad.ref(:input, options.output.video.ssrc))
             |> to(:rtp)
             |> via_out(Pad.ref(:rtp_output, options.output.video.ssrc),
               options: [encoding: :H264]
@@ -159,11 +164,23 @@ defmodule Membrane.RTP.Session.BinTest do
         ]
       }
 
-      {{:ok, spec: spec}, %{payload_and_depayload: options.payload_and_depayload}}
+      {{:ok, spec: spec},
+       %{fmt_mapping: options.fmt_mapping, payload_and_depayload: options.payload_and_depayload}}
     end
 
     @impl true
-    def handle_notification({:new_rtp_stream, ssrc, _pt}, :rtp, _ctx, state) do
+    def handle_notification({:new_rtp_stream, ssrc, pt}, :rtp, _ctx, state) do
+      {encoding, _clock_rate} = Map.fetch!(state.fmt_mapping, pt)
+
+      depayloader =
+        if state.payload_and_depayload do
+          {:ok, depayloader} = RTP.PayloadFormatResolver.depayloader(encoding)
+
+          depayloader
+        else
+          nil
+        end
+
       spec = %ParentSpec{
         children: [
           {{:sink, ssrc}, Testing.Sink}
@@ -171,7 +188,7 @@ defmodule Membrane.RTP.Session.BinTest do
         links: [
           link(:rtp)
           |> via_out(Pad.ref(:output, ssrc),
-            options: [use_depayloader?: state.payload_and_depayload, rtcp_fir_interval: nil]
+            options: [depayloader: depayloader, rtcp_fir_interval: nil]
           )
           |> to({:sink, ssrc})
         ]
