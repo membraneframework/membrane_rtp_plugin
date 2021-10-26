@@ -10,7 +10,7 @@ defmodule Membrane.RTP.ParserTest do
   @buffer_receive_timeout 1000
 
   describe "Parser" do
-    test "parse a packet" do
+    test "parses a packet" do
       state = %{secure?: false}
       packet = Fixtures.sample_packet_binary()
 
@@ -34,6 +34,22 @@ defmodule Membrane.RTP.ParserTest do
                       },
                       payload: Fixtures.sample_packet_payload()
                     }}}, state}
+    end
+
+    test "buffers and redemands when parsing an RTCP packet" do
+      state = %{secure?: false, rtcp_output_pad: :rtcp_output}
+      buffer = Fixtures.sample_rtcp_buffer()
+
+      assert Parser.handle_process(:input, buffer, nil, state) ==
+               {{:ok, buffer: {:rtcp_output, buffer}, redemand: :output}, state}
+    end
+
+    test "redemands when no rtcp_output is present" do
+      state = %{secure?: false, rtcp_output_pad: nil}
+      buffer = Fixtures.sample_rtcp_buffer()
+
+      assert Parser.handle_process(:input, buffer, nil, state) ==
+               {{:ok, redemand: :output}, state}
     end
 
     test "works in pipeline" do
