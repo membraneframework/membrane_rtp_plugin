@@ -1,7 +1,7 @@
 defmodule Membrane.RTP.PayloadFormatResolver do
   @moduledoc """
-  Wrapper for `Membrane.RTP.PayloadFormat` that returns an error
-  on unresolved payloaders/depayloaders.
+  Wrapper over `Membrane.RTP.PayloadFormat` that returns payloaders and depayloaders, or an error
+  if they can't be resolved.
   """
 
   alias Membrane.RTP
