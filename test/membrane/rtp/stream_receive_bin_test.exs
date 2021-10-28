@@ -40,10 +40,10 @@ defmodule Membrane.RTP.StreamReceiveBinTest do
         pcap: %Membrane.Element.Pcap.Source{path: @pcap_file},
         rtp_parser: RTP.Parser,
         rtp: %StreamReceiveBin{
+          clock_rate: @h264_clock_rate,
           depayloader: H264.Depayloader,
           remote_ssrc: @ssrc,
           local_ssrc: 0,
-          clock_rate: @h264_clock_rate,
           rtcp_report_interval: Membrane.Time.seconds(5),
           rtcp_fir_interval: nil
         },
@@ -84,10 +84,10 @@ defmodule Membrane.RTP.StreamReceiveBinTest do
         },
         rtp_parser: RTP.Parser,
         rtp: %StreamReceiveBin{
+          clock_rate: @h264_clock_rate,
           depayloader: H264.Depayloader,
           local_ssrc: 0,
           remote_ssrc: 4_194_443_425,
-          clock_rate: @h264_clock_rate,
           rtcp_report_interval: Membrane.Time.seconds(5),
           rtcp_fir_interval: nil
         },

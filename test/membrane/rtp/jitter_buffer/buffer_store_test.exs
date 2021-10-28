@@ -48,16 +48,6 @@ defmodule Membrane.RTP.JitterBuffer.BufferStoreTest do
       assert read_index == @next_index
     end
 
-    test "only changes stats in the BufferStore when duplicate is inserted", %{
-      base_store: base_store
-    } do
-      buffer = BufferFactory.sample_buffer(@next_index)
-      {:ok, store} = BufferStore.insert_buffer(base_store, buffer)
-      assert {:ok, new_store} = BufferStore.insert_buffer(store, buffer)
-      assert Map.delete(store, :received) == Map.delete(new_store, :received)
-      assert new_store.received == store.received + 1
-    end
-
     test "handles first buffers starting with sequence_number 0" do
       store = %BufferStore{}
       buffer_a = BufferFactory.sample_buffer(0)
