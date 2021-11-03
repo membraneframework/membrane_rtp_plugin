@@ -1,4 +1,4 @@
-defmodule Membrane.RTP.JitterBuffer.StatsRequestEvent do
+defmodule Membrane.RTCP.ReceiverReport.StatsRequestEvent do
   @moduledoc """
   Event to be sent to jitter buffer to request statistics.
   """

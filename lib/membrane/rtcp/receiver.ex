@@ -7,6 +7,7 @@ defmodule Membrane.RTCP.Receiver do
   alias Membrane.RTCPEvent
   alias Membrane.RTCP.{FeedbackPacket, SenderReportPacket}
   alias Membrane.{RTCP, RTP}
+  alias Membrane.RTCP.ReceiverReport
   alias Membrane.Time
 
   require Membrane.Logger
@@ -46,7 +47,7 @@ defmodule Membrane.RTCP.Receiver do
 
   @impl true
   def handle_tick(:report_timer, _ctx, state) do
-    {{:ok, event: {:output, %RTP.JitterBuffer.StatsRequestEvent{}}}, state}
+    {{:ok, event: {:output, %ReceiverReport.StatsRequestEvent{}}}, state}
   end
 
   @impl true
@@ -74,12 +75,12 @@ defmodule Membrane.RTCP.Receiver do
   end
 
   @impl true
-  def handle_event(:output, %RTP.JitterBuffer.StatsEvent{stats: :no_stats}, _ctx, state) do
+  def handle_event(:output, %ReceiverReport.StatsEvent{stats: :no_stats}, _ctx, state) do
     {:ok, state}
   end
 
   @impl true
-  def handle_event(:output, %RTP.JitterBuffer.StatsEvent{stats: stats}, _ctx, state) do
+  def handle_event(:output, %ReceiverReport.StatsEvent{stats: stats}, _ctx, state) do
     now = Time.vm_time()
     delay_since_sr = now - Map.get(state.sr_info, :arrival_ts, now)
 

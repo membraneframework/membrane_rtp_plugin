@@ -15,10 +15,26 @@ defmodule Membrane.RTP.SessionBin do
 
   ## Payloaders and depayloaders
   Payloaders are Membrane elements that transform stream so that it can be put into RTP packets, while depayloaders
-  work the other way round. Different codecs require different payloaders and depayloaders. Thus, to send or receive
-  given codec via this bin, proper payloader/depayloader is needed. Payloaders and depayloaders can be found in
-  `membrane_rtp_X_plugin` packages, where X stands for codec name. It's enough when such plugin is added to
-  dependencies.
+  work the other way round. Different codecs require different payloaders and depayloaders.
+
+  By default `SessionBin` will neither payload nor depayload incoming/outgoing streams, to do so a payloader/depayloader needs to be
+  passed via `Pad.ref(:input, ssrc)` and `Pad.ref(:output, ssrc)` pads options.
+
+  Payloading/Depayloading is necessary if we need to somehow transform the streams. If `SessionBin`s main role is to route packets
+  then depayloading and payloading processes are redundant.
+
+  Payloaders and depayloaders can be found in `membrane_rtp_X_plugin` packages, where X stands for codec name.
+  It's enough when such a plugin is added to dependencies. To determine which payloader/depayloader to use, one can use `Membrane.RTP.PayloadFormatResolver`
+  which given an encoding name should resolve to proper payloader/depayloader modules (if those previously have been registered via mentioned plugins).
+
+  For payloading and depayloading, `SessionBin` uses respective bins `Membrane.RTP.PayloaderBin` and `Membrane.RTP.DepayloaderBin`
+  which will be spawned once payloader/depayloader are passed explicitly via pads' options.
+
+  #### Important note
+  Payloaders and depayloaders are mostly needed when working with external media sources (in different formats than RTP).
+  For applications such as an SFU it is not needed to either payload or depayload the RTP stream as we are always dealing with RTP format.
+  In such a case, SessionBin will receive payloaded packets and work as a simple proxy just forwarding the packets (and decrypting them if necessary).
+  Therefore it is possible to specify in newly added pads if payloaders/depayloaders should be used for the certain stream.
 
   ## RTCP
   RTCP packets for inbound stream can be provided either in-band or via a separate `rtp_input` pad instance. Corresponding
@@ -71,16 +87,6 @@ defmodule Membrane.RTP.SessionBin do
                 spec: %{RTP.payload_type_t() => {RTP.encoding_name_t(), RTP.clock_rate_t()}},
                 default: %{},
                 description: "Mapping of the custom payload types ( > 95)"
-              ],
-              custom_payloaders: [
-                spec: %{RTP.encoding_name_t() => module()},
-                default: %{},
-                description: "Mapping from encoding names to custom payloader modules"
-              ],
-              custom_depayloaders: [
-                spec: %{RTP.encoding_name_t() => module()},
-                default: %{},
-                description: "Mapping from encoding names to custom depayloader modules"
               ],
               rtcp_receiver_report_interval: [
                 spec: Membrane.Time.t() | nil,
@@ -138,7 +144,21 @@ defmodule Membrane.RTP.SessionBin do
     |> Enum.find(&(&1 not in local_ssrcs and &1 not in remote_ssrcs))
   end
 
-  def_input_pad :input, demand_unit: :buffers, caps: :any, availability: :on_request
+  def_input_pad :input,
+    demand_unit: :buffers,
+    caps: :any,
+    availability: :on_request,
+    options: [
+      payloader: [
+        spec: module() | nil,
+        default: nil,
+        description: """
+        Payloader's module that should be used for a media stream flowing through the pad.
+
+        If set to nil then the payloading process gets skipped.
+        """
+      ]
+    ]
 
   def_input_pad :rtp_input,
     demand_unit: :buffers,
@@ -150,11 +170,13 @@ defmodule Membrane.RTP.SessionBin do
     caps: :any,
     availability: :on_request,
     options: [
-      encoding: [
-        spec: RTP.encoding_name_t() | nil,
+      depayloader: [
+        spec: module() | nil,
         default: nil,
         description: """
-        Encoding name determining depayloader which will be used to produce output stream from RTP stream.
+        Depayloader's module that should be used for an outgoing media stream flowing through the pad.
+
+        If set to nil then the depayloading process gets skipped.
         """
       ],
       clock_rate: [
@@ -318,7 +340,7 @@ defmodule Membrane.RTP.SessionBin do
   @impl true
   def handle_pad_added(Pad.ref(:output, ssrc) = pad, ctx, state) do
     %{
-      encoding: encoding_name,
+      depayloader: depayloader,
       clock_rate: clock_rate,
       extensions: extensions,
       rtcp_fir_interval: fir_interval,
@@ -326,25 +348,23 @@ defmodule Membrane.RTP.SessionBin do
     } = ctx.pads[pad].options
 
     payload_type = Map.fetch!(state.ssrc_pt_mapping, ssrc)
-
-    encoding_name = encoding_name || get_from_register!(:encoding_name, payload_type, state)
     clock_rate = clock_rate || get_from_register!(:clock_rate, payload_type, state)
-    depayloader = get_depayloader!(encoding_name, state)
+
     {local_ssrc, state} = add_ssrc(ssrc, state)
 
     rtp_stream_name = {:stream_receive_bin, ssrc}
 
     new_children = %{
       rtp_stream_name => %RTP.StreamReceiveBin{
-        filters: filters,
-        srtp_policies: state.srtp_policies,
-        secure?: state.secure?,
+        clock_rate: clock_rate,
         depayloader: depayloader,
+        filters: filters,
         local_ssrc: local_ssrc,
         remote_ssrc: ssrc,
-        clock_rate: clock_rate,
         rtcp_report_interval: state.rtcp_receiver_report_interval,
-        rtcp_fir_interval: fir_interval
+        rtcp_fir_interval: fir_interval,
+        secure?: state.secure?,
+        srtp_policies: state.srtp_policies
       }
     }
 
@@ -393,9 +413,10 @@ defmodule Membrane.RTP.SessionBin do
   @impl true
   def handle_pad_added(Pad.ref(name, ssrc), ctx, state)
       when name in [:input, :rtp_output] do
-    pads_present? =
-      Map.has_key?(ctx.pads, Pad.ref(:input, ssrc)) and
-        Map.has_key?(ctx.pads, Pad.ref(:rtp_output, ssrc))
+    input_pad = Pad.ref(:input, ssrc)
+    output_pad = Pad.ref(:rtp_output, ssrc)
+
+    pads_present? = Enum.all?([input_pad, output_pad], &Map.has_key?(ctx.pads, &1))
 
     rtcp_sender_output = Pad.ref(:rtcp_sender_output, ssrc)
     rtcp? = Map.has_key?(ctx.pads, rtcp_sender_output)
@@ -403,49 +424,40 @@ defmodule Membrane.RTP.SessionBin do
     if not pads_present? or Map.has_key?(ctx.children, {:stream_send_bin, ssrc}) do
       {:ok, state}
     else
-      pad = Pad.ref(:rtp_output, ssrc)
-      %{encoding: encoding_name, clock_rate: clock_rate} = ctx.pads[pad].options
+      %{payloader: payloader} = ctx.pads[input_pad].options
+      %{clock_rate: clock_rate} = ctx.pads[output_pad].options
 
       payload_type = get_output_payload_type!(ctx, ssrc)
-      encoding_name = encoding_name || get_from_register!(:encoding_name, payload_type, state)
       clock_rate = clock_rate || get_from_register!(:clock_rate, payload_type, state)
-      payloader = get_payloader!(encoding_name, state)
 
-      spec = sent_stream_spec(ssrc, payload_type, payloader, clock_rate, rtcp?, state)
-      state = %{state | senders_ssrcs: MapSet.put(state.senders_ssrcs, ssrc)}
+      maybe_link_encryptor =
+        &to(&1, {:srtp_encryptor, ssrc}, %SRTP.Encryptor{policies: state.srtp_policies})
 
-      {{:ok, spec: spec}, state}
-    end
-  end
+      links = [
+        link_bin_input(input_pad)
+        |> to({:stream_send_bin, ssrc}, %RTP.StreamSendBin{
+          ssrc: ssrc,
+          payload_type: payload_type,
+          payloader: payloader,
+          clock_rate: clock_rate,
+          rtcp_report_interval: state.rtcp_sender_report_interval
+        })
+        |> then(if state.secure?, do: maybe_link_encryptor, else: & &1)
+        |> to_bin_output(output_pad)
+      ]
 
-  defp sent_stream_spec(ssrc, payload_type, payloader, clock_rate, rtcp?, %{
-         secure?: true,
-         srtp_policies: policies,
-         rtcp_sender_report_interval: interval
-       }) do
-    children = %{
-      {:stream_send_bin, ssrc} => %RTP.StreamSendBin{
-        ssrc: ssrc,
-        payload_type: payload_type,
-        payloader: payloader,
-        clock_rate: clock_rate,
-        rtcp_report_interval: interval
-      },
-      {:srtp_encryptor, ssrc} => %SRTP.Encryptor{policies: policies}
-    }
-
-    links =
-      [
-        link_bin_input(Pad.ref(:input, ssrc))
-        |> to({:stream_send_bin, ssrc})
-        |> to({:srtp_encryptor, ssrc})
-        |> to_bin_output(Pad.ref(:rtp_output, ssrc))
-      ] ++
+      # if RTCP is present create all set of input and output pads for RTCP flow
+      rtcp_links =
         if rtcp? do
+          maybe_link_srtcp_encryptor =
+            &to(&1, {:srtcp_sender_encryptor, ssrc}, %SRTP.Encryptor{
+              policies: state.srtp_policies
+            })
+
           [
             link({:stream_send_bin, ssrc})
             |> via_out(Pad.ref(:rtcp_output, make_ref()))
-            |> to({:srtcp_sender_encryptor, ssrc}, %SRTP.Encryptor{policies: policies})
+            |> then(if state.secure?, do: maybe_link_srtcp_encryptor)
             |> to_bin_output(Pad.ref(:rtcp_sender_output, ssrc)),
             link(:ssrc_router)
             |> via_out(Pad.ref(:output, ssrc))
@@ -456,40 +468,11 @@ defmodule Membrane.RTP.SessionBin do
           []
         end
 
-    %ParentSpec{children: children, links: links}
-  end
+      spec = %ParentSpec{links: links ++ rtcp_links}
+      state = %{state | senders_ssrcs: MapSet.put(state.senders_ssrcs, ssrc)}
 
-  defp sent_stream_spec(ssrc, payload_type, payloader, clock_rate, rtcp?, %{
-         secure?: false,
-         rtcp_sender_report_interval: interval
-       }) do
-    children = %{
-      {:stream_send_bin, ssrc} => %RTP.StreamSendBin{
-        ssrc: ssrc,
-        payload_type: payload_type,
-        payloader: payloader,
-        clock_rate: clock_rate,
-        rtcp_report_interval: interval
-      }
-    }
-
-    links =
-      [
-        link_bin_input(Pad.ref(:input, ssrc))
-        |> to({:stream_send_bin, ssrc})
-        |> to_bin_output(Pad.ref(:rtp_output, ssrc))
-      ] ++
-        if rtcp? do
-          [
-            link({:stream_send_bin, ssrc})
-            |> via_out(Pad.ref(:rtcp_output, make_ref()))
-            |> to_bin_output(Pad.ref(:rtcp_sender_output, ssrc))
-          ]
-        else
-          []
-        end
-
-    %ParentSpec{children: children, links: links}
+      {{:ok, spec: spec}, state}
+    end
   end
 
   @impl true
@@ -568,20 +551,6 @@ defmodule Membrane.RTP.SessionBin do
     end
   end
 
-  defp get_payloader!(encoding_name, state) do
-    case state.custom_payloaders[encoding_name] || PayloadFormat.get(encoding_name).payloader do
-      nil -> raise "Cannot find payloader for encoding #{encoding_name}"
-      payloader -> payloader
-    end
-  end
-
-  defp get_depayloader!(encoding_name, state) do
-    case state.custom_depayloaders[encoding_name] || PayloadFormat.get(encoding_name).depayloader do
-      nil -> raise "Cannot find depayloader for encoding #{encoding_name}"
-      depayloader -> depayloader
-    end
-  end
-
   defp get_output_payload_type!(ctx, ssrc) do
     pad = Pad.ref(:rtp_output, ssrc)
     %{payload_type: pt, encoding: encoding} = ctx.pads[pad].options
@@ -592,31 +561,5 @@ defmodule Membrane.RTP.SessionBin do
 
     pt || PayloadFormat.get(encoding).payload_type ||
       raise "Cannot find default RTP payload type for encoding #{encoding}"
-  end
-end
-
-defmodule Dummy do
-  use Membrane.Filter
-
-  def_input_pad :input, demand_unit: :buffers, caps: :any
-  def_output_pad :output, caps: :any
-
-  @impl true
-  def handle_init(_opts) do
-    {:ok, %{}}
-  end
-
-  @impl true
-  def handle_demand(:output, size, :buffers, _ctx, state) do
-    {{:ok, demand: {:input, size}}, state}
-  end
-
-  @impl true
-  def handle_event(:input, event, _ctx, state) do
-    {{:ok, event: {:output, event}}, state}
-  end
-
-  def handle_process(:input, buffer, _ctx, state) do
-    {{:ok, buffer: {:output, buffer}}, state}
   end
 end
