@@ -13,7 +13,7 @@ defmodule Membrane.RTP.SSRCRouter do
 
   use Membrane.Filter
 
-  alias Membrane.{RTP, RTCPEvent}
+  alias Membrane.{RTP, RTCP, RTCPEvent}
 
   def_input_pad :input, demand_unit: :buffers, caps: RTP, availability: :on_request
 
@@ -118,6 +118,27 @@ defmodule Membrane.RTP.SSRCRouter do
 
     {actions, state} = maybe_add_to_linking_buffer(:buffer, buffer, ssrc, state)
     {{:ok, new_stream_actions ++ actions}, state}
+  end
+
+  @impl true
+  def handle_event(
+        Pad.ref(:input, _id),
+        %RTCPEvent{rtcp: %RTCP.TransportWideFeedbackPacket{} = rtcp} = event,
+        ctx,
+        state
+      ) do
+    with {:ok, Pad.ref(:input, id)} <- Map.fetch(state.pads, rtcp.media_ssrc),
+         rtcp_pad = Pad.ref(:input, {:rtcp, id}),
+         true <- Map.has_key?(ctx.pads, rtcp_pad) do
+      {{:ok, event: {rtcp_pad, event}}, state}
+    else
+      :error ->
+        {:ok, state}
+
+      # rtcp pad not found
+      false ->
+        {:ok, state}
+    end
   end
 
   @impl true

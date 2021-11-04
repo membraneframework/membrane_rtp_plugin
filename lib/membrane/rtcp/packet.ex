@@ -7,6 +7,7 @@ defmodule Membrane.RTCP.Packet do
     AppPacket,
     ByePacket,
     FeedbackPacket,
+    TransportWideFeedbackPacket,
     Header,
     ReceiverReportPacket,
     SdesPacket,
@@ -20,6 +21,7 @@ defmodule Membrane.RTCP.Packet do
           AppPacket.t()
           | ByePacket.t()
           | FeedbackPacket.t()
+          | TransportWideFeedbackPacket.t()
           | ReceiverReportPacket.t()
           | SenderReportPacket.t()
           | SdesPacket.t()
@@ -41,6 +43,7 @@ defmodule Membrane.RTCP.Packet do
                         202 => SdesPacket,
                         203 => ByePacket,
                         204 => AppPacket,
+                        205 => TransportWideFeedbackPacket,
                         206 => FeedbackPacket
                       })
 
@@ -52,9 +55,19 @@ defmodule Membrane.RTCP.Packet do
     {body, packet_specific} = packet_module.encode(packet)
     packet_type = BiMap.fetch_key!(@packet_type_module, packet_module)
 
+    {padding?, body} =
+      case rem(bit_size(body), 32) do
+        0 ->
+          {false, body}
+
+        bits_remaining ->
+          padding_size = 32 - bits_remaining
+          {true, <<body::bitstring, 0::size(padding_size)>>}
+      end
+
     header =
       %Header{packet_type: packet_type, packet_specific: packet_specific}
-      |> Header.serialize(body_size: byte_size(body))
+      |> Header.serialize(body_size: byte_size(body), padding?: padding?)
 
     header <> body
   end

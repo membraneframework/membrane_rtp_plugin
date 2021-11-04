@@ -295,7 +295,14 @@ defmodule Membrane.RTP.SessionBin do
 
   @impl true
   def handle_init(options) do
-    children = [ssrc_router: RTP.SSRCRouter]
+    twcc_ssrc = Enum.random(@ssrc_boundaries)
+
+    children = [
+      transport_tracer: %RTP.TransportWideTracer{origin_ssrc: twcc_ssrc},
+      ssrc_router: RTP.SSRCRouter
+      # transport_tagger: RTP.TransportWideTagger
+    ]
+
     links = []
     spec = %ParentSpec{children: children, links: links}
     {receiver_srtp_policies, options} = Map.pop(options, :receiver_srtp_policies)
@@ -309,7 +316,9 @@ defmodule Membrane.RTP.SessionBin do
     state =
       %State{
         receiver_srtp_policies: receiver_srtp_policies || options.srtp_policies,
-        fmt_mapping: fmt_mapping
+        fmt_mapping: fmt_mapping,
+        # TODO: maybe handle twcc_ssrc better?
+        ssrcs: %{twcc_ssrc => twcc_ssrc}
       }
       |> Map.merge(Map.from_struct(options))
 
@@ -333,6 +342,9 @@ defmodule Membrane.RTP.SessionBin do
       [
         link_bin_input(pad, buffer: @rtp_input_buffer_params)
         |> to({:rtp_parser, ref}, %RTP.Parser{secure?: secure?})
+        |> via_in(Pad.ref(:input, ref))
+        |> to(:transport_tracer)
+        |> via_out(Pad.ref(:output, ref))
         |> via_in(Pad.ref(:input, ref))
         |> to(:ssrc_router)
       ] ++
@@ -382,6 +394,7 @@ defmodule Membrane.RTP.SessionBin do
         remote_ssrc: ssrc,
         rtcp_report_interval: state.rtcp_receiver_report_interval,
         rtcp_fir_interval: fir_interval,
+        rtcp_report_interval: Membrane.Time.seconds(5),
         secure?: state.secure?,
         srtp_policies: state.srtp_policies
       }
@@ -455,6 +468,9 @@ defmodule Membrane.RTP.SessionBin do
 
       links = [
         link_bin_input(input_pad)
+        # |> via_in(Pad.ref(:input, ssrc))
+        # |> to(:transport_tagger)
+        # |> via_out(Pad.ref(:output, ssrc))
         |> to({:stream_send_bin, ssrc}, %RTP.StreamSendBin{
           ssrc: ssrc,
           payload_type: payload_type,
