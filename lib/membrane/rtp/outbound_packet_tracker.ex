@@ -65,7 +65,8 @@ defmodule Membrane.RTP.OutboundPacketTracker do
 
     {rtp_metadata, metadata} = Map.pop(buffer.metadata, :rtp, %{})
 
-    header = struct(RTP.Header, %{rtp_metadata | ssrc: state.ssrc})
+    header =
+      struct(RTP.Header, %{rtp_metadata | ssrc: state.ssrc, payload_type: state.payload_type})
 
     payload =
       RTP.Packet.serialize(%RTP.Packet{header: header, payload: buffer.payload},
