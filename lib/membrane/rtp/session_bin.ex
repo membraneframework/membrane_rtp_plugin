@@ -298,9 +298,8 @@ defmodule Membrane.RTP.SessionBin do
     twcc_ssrc = Enum.random(@ssrc_boundaries)
 
     children = [
-      transport_tracer: %RTP.TransportWideTracer{origin_ssrc: twcc_ssrc},
+      transport_tracer: %RTP.TWCC{sender_ssrc: twcc_ssrc},
       ssrc_router: RTP.SSRCRouter
-      # transport_tagger: RTP.TransportWideTagger
     ]
 
     links = []
@@ -342,9 +341,6 @@ defmodule Membrane.RTP.SessionBin do
       [
         link_bin_input(pad, buffer: @rtp_input_buffer_params)
         |> to({:rtp_parser, ref}, %RTP.Parser{secure?: secure?})
-        |> via_in(Pad.ref(:input, ref))
-        |> to(:transport_tracer)
-        |> via_out(Pad.ref(:output, ref))
         |> via_in(Pad.ref(:input, ref))
         |> to(:ssrc_router)
       ] ++
@@ -394,7 +390,7 @@ defmodule Membrane.RTP.SessionBin do
         remote_ssrc: ssrc,
         rtcp_report_interval: state.rtcp_receiver_report_interval,
         rtcp_fir_interval: fir_interval,
-        rtcp_report_interval: Membrane.Time.seconds(5),
+        rtcp_report_interval: state.rtcp_report_interval,
         secure?: state.secure?,
         srtp_policies: state.srtp_policies
       }
@@ -402,6 +398,9 @@ defmodule Membrane.RTP.SessionBin do
 
     router_link =
       link(:ssrc_router)
+      |> via_out(Pad.ref(:output, ssrc))
+      |> via_in(Pad.ref(:input, ssrc))
+      |> to(:transport_tracer)
       |> via_out(Pad.ref(:output, ssrc))
       |> to(rtp_stream_name)
 
@@ -468,9 +467,6 @@ defmodule Membrane.RTP.SessionBin do
 
       links = [
         link_bin_input(input_pad)
-        # |> via_in(Pad.ref(:input, ssrc))
-        # |> to(:transport_tagger)
-        # |> via_out(Pad.ref(:output, ssrc))
         |> to({:stream_send_bin, ssrc}, %RTP.StreamSendBin{
           ssrc: ssrc,
           payload_type: payload_type,

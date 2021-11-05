@@ -1,9 +1,9 @@
-defmodule Membrane.RTCP.TransportWideFeedbackPacket.TWCC do
+defmodule Membrane.RTCP.TransportFeedbackPacket.TWCC do
   @moduledoc """
   Serializes [Transport-wide congestion control](https://datatracker.ietf.org/doc/html/draft-holmer-rmcat-transport-wide-cc-extensions-01)
   packets using run-length or status vector packet status chunks.
   """
-  @behaviour Membrane.RTCP.TransportWideFeedbackPacket
+  @behaviour Membrane.RTCP.TransportFeedbackPacket
 
   alias Membrane.Time
 
@@ -18,7 +18,7 @@ defmodule Membrane.RTCP.TransportWideFeedbackPacket.TWCC do
 
   defstruct @enforce_keys
 
-  @compression_method :status_vector
+  @compression_method :run_length
 
   @small_delta_range 0..255
 
@@ -33,16 +33,18 @@ defmodule Membrane.RTCP.TransportWideFeedbackPacket.TWCC do
     reserved: 3
   }
 
-  @stub_stats %{
-    base_seq_num: 0,
-    max_seq_num: 0,
-    seq_to_timestamp: %{},
-    feedback_packet_count: 0
-  }
-
   @impl true
-  def decode(_binary) do
-    {:ok, struct!(__MODULE__, @stub_stats)}
+  def decode(binary) do
+    <<base_seq_num::16, packet_status_count::16, _reference_time::24, feedback_packet_count::8,
+      _rest::binary>> = binary
+
+    {:ok,
+     %__MODULE__{
+       base_seq_num: base_seq_num,
+       max_seq_num: base_seq_num + packet_status_count,
+       seq_to_timestamp: %{},
+       feedback_packet_count: feedback_packet_count
+     }}
   end
 
   @impl true

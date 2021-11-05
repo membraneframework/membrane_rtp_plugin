@@ -10,25 +10,6 @@ defmodule Membrane.RTCP.FeedbackPacket.AFB do
 
   @impl true
   def decode(_binary) do
-    # require Membrane.Logger
-
-    # case binary do
-    #   <<"REMB", num_ssrcs::8, br_exp::6, br_mantissa::18, ssrcs::binary>> ->
-    #     ssrc_list = for <<ssrc::32 <- ssrcs>>, do: ssrc
-
-    #     Membrane.Logger.warn("""
-    #     REMB
-    #     num_ssrcs: #{num_ssrcs}
-    #     br_exp: #{br_exp}
-    #     br_mantissa: #{br_mantissa}
-    #     ssrcs: #{inspect(ssrc_list)}
-    #     """)
-
-    #   _ ->
-    #     Membrane.Logger.warn("Received unknown App Feedback Packet")
-    #     Membrane.Logger.warn(binary)
-    # end
-
     {:ok, %__MODULE__{}}
   end
 
