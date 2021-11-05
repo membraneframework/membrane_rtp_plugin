@@ -7,6 +7,7 @@ defmodule Membrane.RTCP.TransportFeedbackPacket.TWCC do
 
   alias Membrane.Time
 
+  require Bitwise
   require Membrane.Logger
 
   defmodule RunLength do
@@ -34,18 +35,19 @@ defmodule Membrane.RTCP.TransportFeedbackPacket.TWCC do
     :feedback_packet_count
   ]
 
-  @small_delta_range 0..255
+  @max_u8_val Bitwise.bsl(1, 8) - 1
+  @max_u13_val Bitwise.bsl(1, 13) - 1
+  @max_s16_val Bitwise.bsl(1, 15) - 1
+  @min_s16_val Bitwise.bsl(-1, 15)
 
-  @max_s16_val 32_767
-  @min_s16_val -32_768
-
-  @run_length_capacity 8191
-  @status_vector_capacity 7
+  @small_delta_range 0..@max_u8_val
 
   @run_length_id 0
-  @status_vector_id 1
+  @run_length_capacity @max_u13_val
 
+  @status_vector_id 1
   @status_vector_symbol_size_id 1
+  @status_vector_capacity 7
 
   @packet_status_code %{
     not_received: 0,

@@ -7,65 +7,59 @@ defmodule Membrane.RTP.TWCC do
   alias Membrane.{RTP, RTCPEvent, Time}
   alias Membrane.RTCP.TransportFeedbackPacket
 
+  require Bitwise
+
   # taken from Chromium SDP offer
   @sdp_extension_id 3
+
+  @feedback_count_rollover Bitwise.bsl(1, 8)
+  @seq_num_rollover Bitwise.bsl(1, 16)
 
   def_input_pad :input, demand_unit: :buffers, caps: RTP, availability: :on_request
   def_output_pad :output, caps: RTP, availability: :on_request
 
-  def_options sender_ssrc: [
-                spec: RTP.ssrc_t(),
-                description: """
-                Sender SSRC for TWCC element.
-                """
-              ],
-              stats_interval: [
-                default: Time.milliseconds(500),
-                spec: Time.t(),
-                description: """
-                How often to generate TWCC statistics.
-                """
-              ]
+  def_options sender_ssrc: [spec: RTP.ssrc_t()],
+              report_interval: [spec: Time.t()]
 
   defmodule State do
     @moduledoc false
 
     @type t :: %__MODULE__{
-            stats_interval: Time.t(),
+            sender_ssrc: RTP.ssrc_t(),
+            report_interval: Time.t(),
             base_seq_num: non_neg_integer(),
             max_seq_num: non_neg_integer(),
             seq_to_timestamp: %{non_neg_integer() => Time.t()},
             feedback_packet_count: non_neg_integer(),
-            last_ssrc: RTP.ssrc_t(),
-            sender_ssrc: RTP.ssrc_t(),
-            local_seq_num: non_neg_integer()
+            local_seq_num: non_neg_integer(),
+            last_ssrc: RTP.ssrc_t()
           }
 
-    @enforce_keys [:sender_ssrc, :stats_interval]
+    @enforce_keys [:sender_ssrc, :report_interval]
     defstruct @enforce_keys ++
                 [
                   base_seq_num: nil,
                   max_seq_num: nil,
                   seq_to_timestamp: %{},
                   feedback_packet_count: 0,
-                  last_ssrc: nil,
-                  local_seq_num: 1
+                  local_seq_num: 0,
+                  last_ssrc: nil
                 ]
   end
 
   @impl true
   def handle_init(opts) do
-    {:ok, %State{sender_ssrc: opts.sender_ssrc, stats_interval: opts.stats_interval}}
+    {:ok, %State{sender_ssrc: opts.sender_ssrc, report_interval: opts.report_interval}}
   end
 
   @impl true
   def handle_prepared_to_playing(_ctx, state) do
-    {{:ok, start_timer: {:stats_timer, state.stats_interval}}, state}
+    {{:ok, start_timer: {:report_timer, state.report_interval}}, state}
   end
 
   @impl true
   def handle_playing_to_prepared(_ctx, state) do
-    {{:ok, stop_timer: :stats_timer}, state}
+    {{:ok, stop_timer: :report_timer}, state}
   end
 
   @impl true
@@ -117,10 +111,10 @@ defmodule Membrane.RTP.TWCC do
   end
 
   @impl true
-  def handle_tick(:stats_timer, _ctx, %State{base_seq_num: nil} = state), do: {:ok, state}
+  def handle_tick(:report_timer, _ctx, %State{base_seq_num: nil} = state), do: {:ok, state}
 
   @impl true
-  def handle_tick(:stats_timer, _ctx, state) do
+  def handle_tick(:report_timer, _ctx, state) do
     stats =
       Map.take(state, [
         :base_seq_num,
@@ -142,7 +136,9 @@ defmodule Membrane.RTP.TWCC do
         base_seq_num: nil,
         max_seq_num: nil,
         seq_to_timestamp: %{},
-        feedback_packet_count: state.feedback_packet_count + 1
+        feedback_packet_count: rem(state.feedback_packet_count + 1, @feedback_count_rollover),
+        # we wait with rollover until the next feedback packet to make encoding easier
+        local_seq_num: rem(state.local_seq_num, @seq_num_rollover)
       })
 
     {{:ok, event: {Pad.ref(:input, state.last_ssrc), event}}, state}

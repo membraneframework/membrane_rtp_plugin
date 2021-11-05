@@ -108,6 +108,10 @@ defmodule Membrane.RTP.SessionBin do
                 spec: Membrane.Time.t() | nil,
                 default: nil,
                 description: "Interval between sending subseqent RTCP sender reports."
+              twcc_report_interval: [
+                spec: Membrane.Time.t() | nil,
+                default: Membrane.Time.milliseconds(500),
+                description: "Interval between sending subseqent TWCC feedback packets."
               ],
               receiver_ssrc_generator: [
                 type: :function,
@@ -286,6 +290,7 @@ defmodule Membrane.RTP.SessionBin do
               senders_ssrcs: %MapSet{},
               rtcp_receiver_report_interval: nil,
               rtcp_sender_report_interval: nil,
+              twcc_report_interval: nil,
               receiver_ssrc_generator: nil,
               rtcp_sender_report_data: %Session.SenderReport.Data{},
               secure?: nil,
@@ -295,12 +300,20 @@ defmodule Membrane.RTP.SessionBin do
 
   @impl true
   def handle_init(options) do
-    twcc_ssrc = Enum.random(@ssrc_boundaries)
+    {maybe_twcc_ssrc, maybe_twcc} =
+      if options.twcc_report_interval do
+        twcc_ssrc = Enum.random(@ssrc_boundaries)
+        twcc = %RTP.TWCC{sender_ssrc: twcc_ssrc, report_interval: options.twcc_report_interval}
 
-    children = [
-      transport_tracer: %RTP.TWCC{sender_ssrc: twcc_ssrc},
-      ssrc_router: RTP.SSRCRouter
-    ]
+        {twcc_ssrc, [twcc: twcc]}
+      else
+        {nil, []}
+      end
+
+    children =
+      [
+        ssrc_router: RTP.SSRCRouter
+      ] ++ maybe_twcc
 
     links = []
     spec = %ParentSpec{children: children, links: links}
@@ -315,11 +328,17 @@ defmodule Membrane.RTP.SessionBin do
     state =
       %State{
         receiver_srtp_policies: receiver_srtp_policies || options.srtp_policies,
-        fmt_mapping: fmt_mapping,
-        # TODO: maybe handle twcc_ssrc better?
-        ssrcs: %{twcc_ssrc => twcc_ssrc}
+        fmt_mapping: fmt_mapping
       }
       |> Map.merge(Map.from_struct(options))
+      |> then(
+        # TODO: guess we should handle it better
+        &if maybe_twcc_ssrc do
+          Map.put(&1, :ssrcs, %{nil => maybe_twcc_ssrc})
+        else
+          &1
+        end
+      )
 
     {{:ok, spec: spec}, state}
   end
@@ -399,9 +418,16 @@ defmodule Membrane.RTP.SessionBin do
     router_link =
       link(:ssrc_router)
       |> via_out(Pad.ref(:output, ssrc))
-      |> via_in(Pad.ref(:input, ssrc))
-      |> to(:transport_tracer)
-      |> via_out(Pad.ref(:output, ssrc))
+      |> then(
+        &if state.twcc_report_interval do
+          &1
+          |> via_in(Pad.ref(:input, ssrc))
+          |> to(:twcc)
+          |> via_out(Pad.ref(:output, ssrc))
+        else
+          &1
+        end
+      )
       |> to(rtp_stream_name)
 
     acc = {new_children, router_link}
