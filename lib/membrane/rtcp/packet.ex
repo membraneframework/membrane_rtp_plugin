@@ -53,17 +53,9 @@ defmodule Membrane.RTCP.Packet do
   @spec serialize(t() | [t()]) :: binary()
   def serialize(%packet_module{} = packet) do
     {body, packet_specific} = packet_module.encode(packet)
+    {padding?, body} = maybe_add_padding(packet_module, body)
+
     packet_type = BiMap.fetch_key!(@packet_type_module, packet_module)
-
-    {padding?, body} =
-      case rem(bit_size(body), 32) do
-        0 ->
-          {false, body}
-
-        bits_remaining ->
-          padding_size = 32 - bits_remaining
-          {true, <<body::bitstring, 0::size(padding_size)>>}
-      end
 
     header =
       %Header{packet_type: packet_type, packet_specific: packet_specific}
@@ -119,6 +111,23 @@ defmodule Membrane.RTCP.Packet do
 
       :error ->
         {:error, :unknown_packet_type}
+    end
+  end
+
+  defp maybe_add_padding(packet_module, body) do
+    case packet_module do
+      TransportFeedbackPacket ->
+        bits_remaining = rem(bit_size(body), 32)
+
+        if bits_remaining > 0 do
+          padding_size = 32 - bits_remaining
+          {true, <<body::bitstring, 0::size(padding_size)>>}
+        else
+          {false, body}
+        end
+
+      _other_packet ->
+        {false, body}
     end
   end
 end

@@ -7,6 +7,7 @@ defmodule Membrane.RTP.TWCC do
   alias Membrane.{RTP, RTCPEvent, Time}
   alias Membrane.RTCP.TransportFeedbackPacket
 
+  # taken from Chromium SDP offer
   @sdp_extension_id 3
 
   def_input_pad :input, demand_unit: :buffers, caps: RTP, availability: :on_request
@@ -145,5 +146,10 @@ defmodule Membrane.RTP.TWCC do
       })
 
     {{:ok, event: {Pad.ref(:input, state.last_ssrc), event}}, state}
+  end
+
+  @impl true
+  def handle_end_of_stream(Pad.ref(:input, ssrc), _ctx, state) do
+    {{:ok, end_of_stream: Pad.ref(:output, ssrc)}, state}
   end
 end

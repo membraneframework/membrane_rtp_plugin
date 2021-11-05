@@ -1,7 +1,7 @@
 defmodule Membrane.RTCP.TransportFeedbackPacket.TWCC do
   @moduledoc """
   Serializes [Transport-wide congestion control](https://datatracker.ietf.org/doc/html/draft-holmer-rmcat-transport-wide-cc-extensions-01)
-  packets using run-length or status vector packet status chunks.
+  feedback packets.
   """
   @behaviour Membrane.RTCP.TransportFeedbackPacket
 
@@ -9,22 +9,43 @@ defmodule Membrane.RTCP.TransportFeedbackPacket.TWCC do
 
   require Membrane.Logger
 
-  @enforce_keys [
+  defmodule RunLength do
+    @moduledoc false
+
+    defstruct [
+      :packet_status,
+      :packet_count
+    ]
+  end
+
+  defmodule StatusVector do
+    @moduledoc false
+
+    defstruct [
+      :vector,
+      :packet_count
+    ]
+  end
+
+  defstruct [
     :base_seq_num,
     :max_seq_num,
     :seq_to_timestamp,
     :feedback_packet_count
   ]
 
-  defstruct @enforce_keys
-
-  @compression_method :run_length
-
   @small_delta_range 0..255
 
   @max_s16_val 32_767
   @min_s16_val -32_768
-  @max_u13_val 8191
+
+  @run_length_capacity 8191
+  @status_vector_capacity 7
+
+  @run_length_id 0
+  @status_vector_id 1
+
+  @status_vector_symbol_size_id 1
 
   @packet_status_code %{
     not_received: 0,
@@ -41,7 +62,7 @@ defmodule Membrane.RTCP.TransportFeedbackPacket.TWCC do
     {:ok,
      %__MODULE__{
        base_seq_num: base_seq_num,
-       max_seq_num: base_seq_num + packet_status_count,
+       max_seq_num: base_seq_num + packet_status_count - 1,
        seq_to_timestamp: %{},
        feedback_packet_count: feedback_packet_count
      }}
@@ -67,11 +88,10 @@ defmodule Membrane.RTCP.TransportFeedbackPacket.TWCC do
       |> Ratio.floor()
 
     reversed_receive_deltas = make_reversed_receive_deltas(stats, reference_time)
-    encoded_packet_status = encode_packet_status(reversed_receive_deltas)
-    encoded_receive_deltas = encode_receive_deltas(reversed_receive_deltas)
+    packet_status_chunks = make_packet_status_chunks(reversed_receive_deltas)
 
     <<base_seq_num::16, packet_status_count::16, reference_time::24, feedback_packet_count::8>> <>
-      encoded_packet_status <> encoded_receive_deltas
+      encode_packet_status(packet_status_chunks) <> encode_receive_deltas(reversed_receive_deltas)
   end
 
   defp make_reversed_receive_deltas(stats, reference_time) do
@@ -86,65 +106,49 @@ defmodule Membrane.RTCP.TransportFeedbackPacket.TWCC do
     reference_time = Time.milliseconds(reference_time * 64)
 
     base_seq_num..max_seq_num
-    |> Enum.map(&Map.get(seq_to_timestamp, &1))
-    |> Enum.reduce({[], reference_time}, fn timestamp, {deltas, previous_timestamp} ->
-      if is_nil(timestamp) do
-        {[nil | deltas], previous_timestamp}
-      else
-        # https://datatracker.ietf.org/doc/html/draft-holmer-rmcat-transport-wide-cc-extensions-01#section-3.1.5
-        delta =
-          ((timestamp - previous_timestamp) * 4)
-          |> Time.as_milliseconds()
-          |> Ratio.floor()
+    |> Enum.reduce({[], reference_time}, fn seq_num, {deltas, previous_timestamp} ->
+      case Map.get(seq_to_timestamp, seq_num) do
+        nil ->
+          {[nil | deltas], previous_timestamp}
 
-        {[delta | deltas], timestamp}
+        timestamp ->
+          # https://datatracker.ietf.org/doc/html/draft-holmer-rmcat-transport-wide-cc-extensions-01#section-3.1.5
+          delta =
+            ((timestamp - previous_timestamp) * 4)
+            |> Time.as_milliseconds()
+            |> Ratio.floor()
+
+          {[delta | deltas], timestamp}
       end
     end)
     |> elem(0)
   end
 
-  defp encode_packet_status(reversed_receive_deltas) do
+  defp make_packet_status_chunks(reversed_receive_deltas) do
     reversed_receive_deltas
     |> Enum.map(&delta_to_packet_status/1)
-    |> then(
-      &case @compression_method do
-        :run_length -> encode_run_length(&1)
-        :status_vector -> encode_status_vector(&1)
-      end
-    )
-  end
-
-  defp encode_run_length(reversed_packet_status) do
-    reversed_packet_status
     |> Enum.reduce([], fn status, acc ->
       case acc do
-        [%{packet_status: _status, packet_count: @max_u13_val} | _rest] ->
-          [%{packet_status: status, packet_count: 1} | acc]
+        [%RunLength{packet_count: @run_length_capacity} | _rest] ->
+          [%RunLength{packet_status: status, packet_count: 1} | acc]
 
-        [%{packet_status: ^status, packet_count: packet_count} | rest] ->
-          [%{packet_status: status, packet_count: packet_count + 1} | rest]
+        [%RunLength{packet_status: ^status, packet_count: count} | rest] ->
+          [%RunLength{packet_status: status, packet_count: count + 1} | rest]
 
-        _other_status ->
-          [%{packet_status: status, packet_count: 1} | acc]
+        # Got a differrent packet status and the current chunk is of run length type.
+        # If the condition is fulfilled, it's viable to convert it to a status vector.
+        [%RunLength{packet_count: count} | rest] when count < @status_vector_capacity ->
+          %StatusVector{vector: vector} = acc |> hd() |> run_length_to_status_vector()
+          [%StatusVector{vector: [status | vector], packet_count: count + 1} | rest]
+
+        [%StatusVector{vector: vector, packet_count: count} | rest]
+        when count < @status_vector_capacity ->
+          [%StatusVector{vector: [status | vector], packet_count: count + 1} | rest]
+
+        _acc_empty_or_status_vector_full_or_conversion_not_viable ->
+          [%RunLength{packet_status: status, packet_count: 1} | acc]
       end
     end)
-    |> Enum.map(&<<0::1, @packet_status_code[&1.packet_status]::2, &1.packet_count::13>>)
-    |> Enum.join()
-  end
-
-  defp encode_status_vector(reversed_packet_status) do
-    reversed_packet_status
-    |> Enum.reverse()
-    |> Enum.chunk_every(7, 7, Stream.repeatedly(fn -> :not_received end))
-    |> Enum.map(fn chunk ->
-      symbol_list =
-        Enum.reduce(chunk, <<>>, fn status, acc ->
-          <<acc::bitstring, @packet_status_code[status]::2>>
-        end)
-
-      <<(<<1::1, 1::1>>)::bitstring, symbol_list::bitstring>>
-    end)
-    |> Enum.join()
   end
 
   defp encode_receive_deltas(reversed_receive_deltas) do
@@ -166,6 +170,56 @@ defmodule Membrane.RTCP.TransportFeedbackPacket.TWCC do
       end
     end)
     |> Enum.join()
+  end
+
+  defp encode_packet_status(packet_status_chunks) do
+    packet_status_chunks
+    |> Enum.map(fn chunk ->
+      case chunk do
+        %RunLength{} ->
+          encode_run_length(chunk)
+
+        %StatusVector{packet_count: @status_vector_capacity} ->
+          encode_status_vector(chunk)
+
+        %StatusVector{packet_count: count} when count < @status_vector_capacity ->
+          chunk
+          |> status_vector_to_run_length()
+          |> Enum.map(&encode_run_length/1)
+          |> Enum.join()
+      end
+    end)
+    |> Enum.join()
+  end
+
+  defp encode_run_length(%RunLength{packet_status: status, packet_count: count}),
+    do: <<@run_length_id::1, @packet_status_code[status]::2, count::13>>
+
+  defp encode_status_vector(%StatusVector{vector: vector, packet_count: @status_vector_capacity}) do
+    symbol_list =
+      Enum.reduce(vector, <<>>, fn status, acc ->
+        <<acc::bitstring, @packet_status_code[status]::2>>
+      end)
+
+    <<(<<@status_vector_id::1, @status_vector_symbol_size_id::1>>)::bitstring,
+      symbol_list::bitstring>>
+  end
+
+  defp run_length_to_status_vector(%RunLength{packet_status: status, packet_count: count}),
+    do: %StatusVector{vector: Enum.map(1..count, fn _i -> status end), packet_count: count}
+
+  defp status_vector_to_run_length(%StatusVector{vector: vector, packet_count: _count}) do
+    vector
+    |> Enum.reduce([], fn status, acc ->
+      case acc do
+        [%RunLength{packet_status: ^status, packet_count: count} | rest] ->
+          [%RunLength{packet_status: status, packet_count: count + 1} | rest]
+
+        _empty_acc_or_other_status ->
+          [%RunLength{packet_status: status, packet_count: 1} | acc]
+      end
+    end)
+    |> Enum.reverse()
   end
 
   defp delta_to_packet_status(delta) do
