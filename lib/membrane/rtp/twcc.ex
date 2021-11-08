@@ -12,8 +12,8 @@ defmodule Membrane.RTP.TWCC do
   # taken from Chromium SDP offer
   @sdp_extension_id 3
 
-  @feedback_count_rollover Bitwise.bsl(1, 8)
-  @seq_num_rollover Bitwise.bsl(1, 16)
+  @feedback_count_limit Bitwise.bsl(1, 8)
+  @seq_number_limit Bitwise.bsl(1, 16)
 
   def_input_pad :input, demand_unit: :buffers, caps: RTP, availability: :on_request
   def_output_pad :output, caps: RTP, availability: :on_request
@@ -86,9 +86,17 @@ defmodule Membrane.RTP.TWCC do
       local_seq_num: local_seq_num
     } = state
 
-    arrival_ts = Time.vm_time()
-    # TODO: use ID proposed by us in our SDP offer
+    arrival_ts = Time.monotonic_time()
+
+    # TODO: match on ID proposed by membrane_webrtc_plugin in SDP offer
     <<_id::4, _len::4, seq_num::16, _padding::8>> = metadata.rtp.extension.data
+
+    seq_num =
+      if rollover?(seq_num, base_seq_num) do
+        seq_num + @seq_number_limit
+      else
+        seq_num
+      end
 
     # TODO: use ID proposed in browser's SDP offer (currently hardcoded to `@sdp_extension_id`)
     # TODO: consider moving sequence number tagging closer to the end of the pipeline
@@ -104,7 +112,7 @@ defmodule Membrane.RTP.TWCC do
         max_seq_num: max(max_seq_num, seq_num) || seq_num,
         seq_to_timestamp: Map.put(seq_to_timestamp, seq_num, arrival_ts),
         last_ssrc: ssrc,
-        local_seq_num: local_seq_num + 1
+        local_seq_num: rem(local_seq_num + 1, @seq_number_limit)
       })
 
     {{:ok, buffer: {Pad.ref(:output, ssrc), %{buffer | metadata: metadata}}}, state}
@@ -136,9 +144,7 @@ defmodule Membrane.RTP.TWCC do
         base_seq_num: nil,
         max_seq_num: nil,
         seq_to_timestamp: %{},
-        feedback_packet_count: rem(state.feedback_packet_count + 1, @feedback_count_rollover),
-        # we wait with rollover until the next feedback packet to make encoding easier
-        local_seq_num: rem(state.local_seq_num, @seq_num_rollover)
+        feedback_packet_count: rem(state.feedback_packet_count + 1, @feedback_count_limit)
       })
 
     {{:ok, event: {Pad.ref(:input, state.last_ssrc), event}}, state}
@@ -147,5 +153,11 @@ defmodule Membrane.RTP.TWCC do
   @impl true
   def handle_end_of_stream(Pad.ref(:input, ssrc), _ctx, state) do
     {{:ok, end_of_stream: Pad.ref(:output, ssrc)}, state}
+  end
+
+  defp rollover?(_new_seq, nil), do: false
+
+  defp rollover?(new_seq, base_seq) do
+    new_seq < base_seq and new_seq + (@seq_number_limit - base_seq) < base_seq - new_seq
   end
 end

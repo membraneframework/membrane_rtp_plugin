@@ -110,7 +110,7 @@ defmodule Membrane.RTP.SessionBin do
                 description: "Interval between sending subseqent RTCP sender reports."
               twcc_report_interval: [
                 spec: Membrane.Time.t() | nil,
-                default: Membrane.Time.milliseconds(500),
+                default: Membrane.Time.milliseconds(250),
                 description: "Interval between sending subseqent TWCC feedback packets."
               ],
               receiver_ssrc_generator: [
@@ -300,23 +300,6 @@ defmodule Membrane.RTP.SessionBin do
 
   @impl true
   def handle_init(options) do
-    {maybe_twcc_ssrc, maybe_twcc} =
-      if options.twcc_report_interval do
-        twcc_ssrc = Enum.random(@ssrc_boundaries)
-        twcc = %RTP.TWCC{sender_ssrc: twcc_ssrc, report_interval: options.twcc_report_interval}
-
-        {twcc_ssrc, [twcc: twcc]}
-      else
-        {nil, []}
-      end
-
-    children =
-      [
-        ssrc_router: RTP.SSRCRouter
-      ] ++ maybe_twcc
-
-    links = []
-    spec = %ParentSpec{children: children, links: links}
     {receiver_srtp_policies, options} = Map.pop(options, :receiver_srtp_policies)
     {fmt_mapping, options} = Map.pop(options, :fmt_mapping)
 
@@ -331,14 +314,12 @@ defmodule Membrane.RTP.SessionBin do
         fmt_mapping: fmt_mapping
       }
       |> Map.merge(Map.from_struct(options))
-      |> then(
-        # TODO: guess we should handle it better
-        &if maybe_twcc_ssrc do
-          Map.put(&1, :ssrcs, %{nil => maybe_twcc_ssrc})
-        else
-          &1
-        end
-      )
+
+    {maybe_twcc, state} = maybe_enable_twcc(state)
+
+    children = [ssrc_router: RTP.SSRCRouter] ++ maybe_twcc
+    links = []
+    spec = %ParentSpec{children: children, links: links}
 
     {{:ok, spec: spec}, state}
   end
@@ -625,5 +606,16 @@ defmodule Membrane.RTP.SessionBin do
 
     pt || PayloadFormat.get(encoding).payload_type ||
       raise "Cannot find default RTP payload type for encoding #{encoding}"
+  end
+
+  defp maybe_enable_twcc(%{twcc_report_interval: nil} = state), do: {[], state}
+
+  defp maybe_enable_twcc(%{twcc_report_interval: interval} = state) do
+    twcc_ssrc = Enum.random(@ssrc_boundaries)
+    twcc = %RTP.TWCC{sender_ssrc: twcc_ssrc, report_interval: interval}
+
+    state = Map.put(state, :ssrcs, %{nil => twcc_ssrc})
+
+    {[twcc: twcc], state}
   end
 end

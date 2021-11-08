@@ -46,7 +46,7 @@ defmodule Membrane.RTCP.TransportFeedbackPacket.TWCC do
   @run_length_capacity @max_u13_val
 
   @status_vector_id 1
-  @status_vector_symbol_size_id 1
+  @status_vector_symbol_2_bit_id 1
   @status_vector_capacity 7
 
   @packet_status_code %{
@@ -203,7 +203,7 @@ defmodule Membrane.RTCP.TransportFeedbackPacket.TWCC do
         <<acc::bitstring, @packet_status_code[status]::2>>
       end)
 
-    <<(<<@status_vector_id::1, @status_vector_symbol_size_id::1>>)::bitstring,
+    <<(<<@status_vector_id::1, @status_vector_symbol_2_bit_id::1>>)::bitstring,
       symbol_list::bitstring>>
   end
 
