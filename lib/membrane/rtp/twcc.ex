@@ -4,7 +4,7 @@ defmodule Membrane.RTP.TWCC do
   """
   use Membrane.Filter
 
-  alias Membrane.{RTP, RTCPEvent, Time}
+  alias Membrane.{Buffer, RTP, RTCPEvent, Time}
   alias Membrane.RTCP.TransportFeedbackPacket
 
   require Bitwise
@@ -18,8 +18,14 @@ defmodule Membrane.RTP.TWCC do
   def_input_pad :input, demand_unit: :buffers, caps: RTP, availability: :on_request
   def_output_pad :output, caps: RTP, availability: :on_request
 
-  def_options sender_ssrc: [spec: RTP.ssrc_t()],
-              report_interval: [spec: Time.t()]
+  def_options sender_ssrc: [
+                spec: RTP.ssrc_t(),
+                description: "Sender SSRC for generated feedback packets."
+              ],
+              report_interval: [
+                spec: Membrane.Time.t(),
+                description: "How often to generate feedback packets."
+              ]
 
   defmodule State do
     @moduledoc false
@@ -78,12 +84,22 @@ defmodule Membrane.RTP.TWCC do
   end
 
   @impl true
-  def handle_process(Pad.ref(:input, ssrc), %{metadata: metadata} = buffer, _ctx, state) do
+  def handle_pad_removed(Pad.ref(_direction, ssrc), _ctx, %State{last_ssrc: last_ssrc} = state) do
+    if ssrc == last_ssrc do
+      {:ok, %State{state | last_ssrc: nil}}
+    else
+      {:ok, state}
+    end
+  end
+
+  @impl true
+  def handle_process(Pad.ref(:input, ssrc), %Buffer{metadata: metadata} = buffer, _ctx, state) do
     %State{
       base_seq_num: base_seq_num,
       max_seq_num: max_seq_num,
       seq_to_timestamp: seq_to_timestamp,
-      local_seq_num: local_seq_num
+      local_seq_num: local_seq_num,
+      last_ssrc: last_ssrc
     } = state
 
     arrival_ts = Time.monotonic_time()
@@ -100,22 +116,25 @@ defmodule Membrane.RTP.TWCC do
 
     # TODO: use ID proposed in browser's SDP offer (currently hardcoded to `@sdp_extension_id`)
     # TODO: consider moving sequence number tagging closer to the end of the pipeline
+    header_extension = <<@sdp_extension_id::4, 1::4, local_seq_num::16, 0::8>>
+
     metadata =
-      put_in(metadata, [:rtp, :extension], %{
-        metadata.rtp.extension
-        | data: <<@sdp_extension_id::4, 1::4, local_seq_num::16, 0::8>>
-      })
+      Bunch.Struct.put_in(
+        metadata,
+        [:rtp, :extension, :data],
+        header_extension
+      )
 
     state =
       Map.merge(state, %{
         base_seq_num: min(base_seq_num, seq_num) || seq_num,
         max_seq_num: max(max_seq_num, seq_num) || seq_num,
         seq_to_timestamp: Map.put(seq_to_timestamp, seq_num, arrival_ts),
-        last_ssrc: ssrc,
-        local_seq_num: rem(local_seq_num + 1, @seq_number_limit)
+        local_seq_num: rem(local_seq_num + 1, @seq_number_limit),
+        last_ssrc: last_ssrc || ssrc
       })
 
-    {{:ok, buffer: {Pad.ref(:output, ssrc), %{buffer | metadata: metadata}}}, state}
+    {{:ok, buffer: {Pad.ref(:output, ssrc), %Buffer{buffer | metadata: metadata}}}, state}
   end
 
   @impl true
@@ -123,18 +142,30 @@ defmodule Membrane.RTP.TWCC do
 
   @impl true
   def handle_tick(:report_timer, _ctx, state) do
-    stats =
-      Map.take(state, [
-        :base_seq_num,
-        :max_seq_num,
-        :feedback_packet_count,
-        :seq_to_timestamp
-      ])
+    %State{
+      base_seq_num: base_seq_num,
+      max_seq_num: max_seq_num,
+      feedback_packet_count: feedback_packet_count,
+      sender_ssrc: sender_ssrc,
+      last_ssrc: last_ssrc
+    } = state
+
+    {reference_time, receive_deltas} = make_receive_deltas(state)
+
+    packet_status_count = max_seq_num - base_seq_num + 1
+
+    payload = %TransportFeedbackPacket.TWCC{
+      base_seq_num: base_seq_num,
+      reference_time: reference_time,
+      packet_status_count: packet_status_count,
+      receive_deltas: receive_deltas,
+      feedback_packet_count: feedback_packet_count
+    }
 
     rtcp = %TransportFeedbackPacket{
-      sender_ssrc: state.sender_ssrc,
-      media_ssrc: state.last_ssrc,
-      payload: struct!(TransportFeedbackPacket.TWCC, stats)
+      sender_ssrc: sender_ssrc,
+      media_ssrc: last_ssrc,
+      payload: payload
     }
 
     event = %RTCPEvent{rtcp: rtcp}
@@ -144,10 +175,10 @@ defmodule Membrane.RTP.TWCC do
         base_seq_num: nil,
         max_seq_num: nil,
         seq_to_timestamp: %{},
-        feedback_packet_count: rem(state.feedback_packet_count + 1, @feedback_count_limit)
+        feedback_packet_count: rem(feedback_packet_count + 1, @feedback_count_limit)
       })
 
-    {{:ok, event: {Pad.ref(:input, state.last_ssrc), event}}, state}
+    {{:ok, event: {Pad.ref(:input, last_ssrc), event}}, state}
   end
 
   @impl true
@@ -159,5 +190,46 @@ defmodule Membrane.RTP.TWCC do
 
   defp rollover?(new_seq, base_seq) do
     new_seq < base_seq and new_seq + (@seq_number_limit - base_seq) < base_seq - new_seq
+  end
+
+  defp make_receive_deltas(state) do
+    %State{
+      base_seq_num: base_seq_num,
+      max_seq_num: max_seq_num,
+      seq_to_timestamp: seq_to_timestamp
+    } = state
+
+    # reference time has to be divisible by 64
+    # https://datatracker.ietf.org/doc/html/draft-holmer-rmcat-transport-wide-cc-extensions-01#section-3.1
+    reference_time =
+      seq_to_timestamp
+      |> Map.fetch!(base_seq_num)
+      |> make_divisible_by_64ms()
+
+    receive_deltas =
+      base_seq_num..max_seq_num
+      |> Enum.reduce({[], reference_time}, fn seq_num, {deltas, previous_timestamp} ->
+        case Map.get(seq_to_timestamp, seq_num) do
+          nil ->
+            {[nil | deltas], previous_timestamp}
+
+          timestamp ->
+            delta = timestamp - previous_timestamp
+            {[delta | deltas], timestamp}
+        end
+      end)
+      |> elem(0)
+      |> Enum.reverse()
+
+    {reference_time, receive_deltas}
+  end
+
+  defp make_divisible_by_64ms(timestamp) do
+    timestamp
+    |> Time.as_milliseconds()
+    |> Ratio.div(64)
+    |> Ratio.floor()
+    |> then(&(&1 * 64))
+    |> Time.milliseconds()
   end
 end

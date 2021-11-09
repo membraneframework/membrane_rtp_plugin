@@ -1,7 +1,7 @@
 defmodule Membrane.RTCP.TransportFeedbackPacket do
   @moduledoc """
   Abstraction and generic encoding and decoding functionality for
-  [RTCP transport layer feedback packets](https://datatracker.ietf.org/doc/html/draft-holmer-rmcat-transport-wide-cc-extensions-01).
+  [RTCP transport layer feedback packets](https://datatracker.ietf.org/doc/html/rfc4585#section-6.1).
   """
 
   @behaviour Membrane.RTCP.Packet

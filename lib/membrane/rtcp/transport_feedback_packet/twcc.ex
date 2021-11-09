@@ -28,12 +28,15 @@ defmodule Membrane.RTCP.TransportFeedbackPacket.TWCC do
     ]
   end
 
-  defstruct [
+  @enforce_keys [
     :base_seq_num,
-    :max_seq_num,
-    :seq_to_timestamp,
+    :reference_time,
+    :packet_status_count,
+    :receive_deltas,
     :feedback_packet_count
   ]
+
+  defstruct @enforce_keys
 
   @max_u8_val Bitwise.bsl(1, 8) - 1
   @max_u13_val Bitwise.bsl(1, 13) - 1
@@ -58,14 +61,15 @@ defmodule Membrane.RTCP.TransportFeedbackPacket.TWCC do
 
   @impl true
   def decode(binary) do
-    <<base_seq_num::16, packet_status_count::16, _reference_time::24, feedback_packet_count::8,
+    <<base_seq_num::16, packet_status_count::16, reference_time::24, feedback_packet_count::8,
       _rest::binary>> = binary
 
     {:ok,
      %__MODULE__{
        base_seq_num: base_seq_num,
-       max_seq_num: base_seq_num + packet_status_count - 1,
-       seq_to_timestamp: %{},
+       reference_time: Time.milliseconds(reference_time * 64),
+       packet_status_count: packet_status_count,
+       receive_deltas: [],
        feedback_packet_count: feedback_packet_count
      }}
   end
@@ -74,61 +78,32 @@ defmodule Membrane.RTCP.TransportFeedbackPacket.TWCC do
   def encode(%__MODULE__{} = stats) do
     %{
       base_seq_num: base_seq_num,
-      max_seq_num: max_seq_num,
-      seq_to_timestamp: seq_to_timestamp,
+      reference_time: reference_time,
+      packet_status_count: packet_status_count,
+      receive_deltas: receive_deltas,
       feedback_packet_count: feedback_packet_count
     } = stats
 
-    packet_status_count = max_seq_num - base_seq_num + 1
+    scaled_receive_deltas = Enum.map(receive_deltas, &scale_delta/1)
+    packet_status_chunks = make_packet_status_chunks(scaled_receive_deltas)
 
-    # https://datatracker.ietf.org/doc/html/draft-holmer-rmcat-transport-wide-cc-extensions-01#section-3.1
     reference_time =
-      seq_to_timestamp
-      |> Map.fetch!(base_seq_num)
+      reference_time
       |> Time.as_milliseconds()
       |> Ratio.div(64)
       |> Ratio.floor()
 
-    reversed_receive_deltas = make_reversed_receive_deltas(stats, reference_time)
-    packet_status_chunks = make_packet_status_chunks(reversed_receive_deltas)
+    payload =
+      <<base_seq_num::16, packet_status_count::16, reference_time::24, feedback_packet_count::8>> <>
+        encode_packet_status(packet_status_chunks) <> encode_receive_deltas(scaled_receive_deltas)
 
-    <<base_seq_num::16, packet_status_count::16, reference_time::24, feedback_packet_count::8>> <>
-      encode_packet_status(packet_status_chunks) <> encode_receive_deltas(reversed_receive_deltas)
+    maybe_add_padding(payload)
   end
 
-  defp make_reversed_receive_deltas(stats, reference_time) do
-    %{
-      base_seq_num: base_seq_num,
-      max_seq_num: max_seq_num,
-      seq_to_timestamp: seq_to_timestamp
-    } = stats
-
-    # If reference time in ms was not divisible by 64, it had to be rounded down.
-    # In this case, the first delta will be equal to this rounding difference.
-    reference_time = Time.milliseconds(reference_time * 64)
-
-    base_seq_num..max_seq_num
-    |> Enum.reduce({[], reference_time}, fn seq_num, {deltas, previous_timestamp} ->
-      case Map.get(seq_to_timestamp, seq_num) do
-        nil ->
-          {[nil | deltas], previous_timestamp}
-
-        timestamp ->
-          # https://datatracker.ietf.org/doc/html/draft-holmer-rmcat-transport-wide-cc-extensions-01#section-3.1.5
-          delta =
-            ((timestamp - previous_timestamp) * 4)
-            |> Time.as_milliseconds()
-            |> Ratio.floor()
-
-          {[delta | deltas], timestamp}
-      end
-    end)
-    |> elem(0)
-  end
-
-  defp make_packet_status_chunks(reversed_receive_deltas) do
-    reversed_receive_deltas
+  defp make_packet_status_chunks(scaled_receive_deltas) do
+    scaled_receive_deltas
     |> Enum.map(&delta_to_packet_status/1)
+    |> Enum.reverse()
     |> Enum.reduce([], fn status, acc ->
       case acc do
         [%RunLength{packet_count: @run_length_capacity} | _rest] ->
@@ -139,8 +114,8 @@ defmodule Membrane.RTCP.TransportFeedbackPacket.TWCC do
 
         # Got a differrent packet status and the current chunk is of run length type.
         # If the condition is fulfilled, it's viable to convert it to a status vector.
-        [%RunLength{packet_count: count} | rest] when count < @status_vector_capacity ->
-          %StatusVector{vector: vector} = acc |> hd() |> run_length_to_status_vector()
+        [%RunLength{packet_count: count} = run_length | rest] when count < @status_vector_capacity ->
+          %StatusVector{vector: vector} = run_length_to_status_vector(run_length)
           [%StatusVector{vector: [status | vector], packet_count: count + 1} | rest]
 
         [%StatusVector{vector: vector, packet_count: count} | rest]
@@ -153,22 +128,22 @@ defmodule Membrane.RTCP.TransportFeedbackPacket.TWCC do
     end)
   end
 
-  defp encode_receive_deltas(reversed_receive_deltas) do
-    reversed_receive_deltas
-    |> Enum.reduce([], fn delta, prev_deltas ->
+  defp encode_receive_deltas(scaled_receive_deltas) do
+    scaled_receive_deltas
+    |> Enum.map(fn delta ->
       case delta_to_packet_status(delta) do
         :not_received ->
-          prev_deltas
+          <<>>
 
         :small_delta ->
-          [<<delta::8>> | prev_deltas]
+          <<delta::8>>
 
         :large_or_negative_delta ->
           Membrane.Logger.warn(
             "Reporting a packet with large or negative delta: (#{inspect(div(delta, 4))}ms)"
           )
 
-          [<<cap_delta(delta)::16>> | prev_deltas]
+          <<cap_delta(delta)::16>>
       end
     end)
     |> Enum.join()
@@ -184,7 +159,7 @@ defmodule Membrane.RTCP.TransportFeedbackPacket.TWCC do
         %StatusVector{packet_count: @status_vector_capacity} ->
           encode_status_vector(chunk)
 
-        %StatusVector{packet_count: count} when count < @status_vector_capacity ->
+        %StatusVector{} ->
           chunk
           |> status_vector_to_run_length()
           |> Enum.map(&encode_run_length/1)
@@ -224,19 +199,37 @@ defmodule Membrane.RTCP.TransportFeedbackPacket.TWCC do
     |> Enum.reverse()
   end
 
-  defp delta_to_packet_status(delta) do
+  defp scale_delta(nil), do: nil
+
+  defp scale_delta(delta) do
+    # https://datatracker.ietf.org/doc/html/draft-holmer-rmcat-transport-wide-cc-extensions-01#section-3.1.5
+    (delta * 4) |> Time.as_milliseconds() |> Ratio.floor()
+  end
+
+  defp delta_to_packet_status(scaled_delta) do
     cond do
-      delta == nil -> :not_received
-      delta in @small_delta_range -> :small_delta
+      scaled_delta == nil -> :not_received
+      scaled_delta in @small_delta_range -> :small_delta
       true -> :large_or_negative_delta
     end
   end
 
-  defp cap_delta(delta) do
+  defp cap_delta(scaled_delta) do
     cond do
-      delta < @min_s16_val -> @min_s16_val
-      delta > @max_s16_val -> @max_s16_val
-      true -> delta
+      scaled_delta < @min_s16_val -> @min_s16_val
+      scaled_delta > @max_s16_val -> @max_s16_val
+      true -> scaled_delta
+    end
+  end
+
+  defp maybe_add_padding(payload) do
+    bits_remaining = rem(bit_size(payload), 32)
+
+    if bits_remaining > 0 do
+      padding_size = 32 - bits_remaining
+      <<payload::bitstring, 0::size(padding_size)>>
+    else
+      payload
     end
   end
 end

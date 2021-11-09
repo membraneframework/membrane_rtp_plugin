@@ -110,7 +110,7 @@ defmodule Membrane.RTP.SessionBin do
                 description: "Interval between sending subseqent RTCP sender reports."
               twcc_report_interval: [
                 spec: Membrane.Time.t() | nil,
-                default: Membrane.Time.milliseconds(250),
+                default: nil,
                 description: "Interval between sending subseqent TWCC feedback packets."
               ],
               receiver_ssrc_generator: [
@@ -396,19 +396,16 @@ defmodule Membrane.RTP.SessionBin do
       }
     }
 
+    maybe_link_twcc =
+      &(&1
+        |> via_in(Pad.ref(:input, ssrc))
+        |> to(:twcc)
+        |> via_out(Pad.ref(:output, ssrc)))
+
     router_link =
       link(:ssrc_router)
       |> via_out(Pad.ref(:output, ssrc))
-      |> then(
-        &if state.twcc_report_interval do
-          &1
-          |> via_in(Pad.ref(:input, ssrc))
-          |> to(:twcc)
-          |> via_out(Pad.ref(:output, ssrc))
-        else
-          &1
-        end
-      )
+      |> then(if state.twcc_report_interval, do: maybe_link_twcc, else: & &1)
       |> to(rtp_stream_name)
 
     acc = {new_children, router_link}
@@ -611,10 +608,8 @@ defmodule Membrane.RTP.SessionBin do
   defp maybe_enable_twcc(%{twcc_report_interval: nil} = state), do: {[], state}
 
   defp maybe_enable_twcc(%{twcc_report_interval: interval} = state) do
-    twcc_ssrc = Enum.random(@ssrc_boundaries)
+    {twcc_ssrc, state} = add_ssrc(nil, state)
     twcc = %RTP.TWCC{sender_ssrc: twcc_ssrc, report_interval: interval}
-
-    state = Map.put(state, :ssrcs, %{nil => twcc_ssrc})
 
     {[twcc: twcc], state}
   end
