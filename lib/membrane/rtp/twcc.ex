@@ -6,6 +6,7 @@ defmodule Membrane.RTP.TWCC do
 
   alias Membrane.{Buffer, RTP, RTCPEvent, Time}
   alias Membrane.RTCP.TransportFeedbackPacket
+  alias __MODULE__.PacketInfoStore
 
   require Bitwise
 
@@ -29,13 +30,12 @@ defmodule Membrane.RTP.TWCC do
 
   defmodule State do
     @moduledoc false
+    alias Membrane.RTP.TWCC.PacketInfoStore
 
     @type t :: %__MODULE__{
             sender_ssrc: RTP.ssrc_t(),
             report_interval: Time.t(),
-            base_seq_num: non_neg_integer(),
-            max_seq_num: non_neg_integer(),
-            seq_to_timestamp: %{non_neg_integer() => Time.t()},
+            packet_info_store: PacketInfoStore.t(),
             feedback_packet_count: non_neg_integer(),
             local_seq_num: non_neg_integer(),
             last_ssrc: RTP.ssrc_t()
@@ -44,9 +44,7 @@ defmodule Membrane.RTP.TWCC do
     @enforce_keys [:sender_ssrc, :report_interval]
     defstruct @enforce_keys ++
                 [
-                  base_seq_num: nil,
-                  max_seq_num: nil,
-                  seq_to_timestamp: %{},
+                  packet_info_store: %PacketInfoStore{},
                   feedback_packet_count: 0,
                   local_seq_num: 0,
                   last_ssrc: nil
@@ -85,34 +83,24 @@ defmodule Membrane.RTP.TWCC do
 
   @impl true
   def handle_pad_removed(Pad.ref(_direction, ssrc), _ctx, %State{last_ssrc: last_ssrc} = state) do
-    if ssrc == last_ssrc do
-      {:ok, %State{state | last_ssrc: nil}}
-    else
-      {:ok, state}
+    case ssrc do
+      ^last_ssrc -> {:ok, %State{state | last_ssrc: nil}}
+      _other_ssrc -> {:ok, state}
     end
   end
 
   @impl true
   def handle_process(Pad.ref(:input, ssrc), %Buffer{metadata: metadata} = buffer, _ctx, state) do
     %State{
-      base_seq_num: base_seq_num,
-      max_seq_num: max_seq_num,
-      seq_to_timestamp: seq_to_timestamp,
+      packet_info_store: store,
       local_seq_num: local_seq_num,
       last_ssrc: last_ssrc
     } = state
 
-    arrival_ts = Time.monotonic_time()
-
     # TODO: match on ID proposed by membrane_webrtc_plugin in SDP offer
     <<_id::4, _len::4, seq_num::16, _padding::8>> = metadata.rtp.extension.data
 
-    seq_num =
-      if rollover?(seq_num, base_seq_num) do
-        seq_num + @seq_number_limit
-      else
-        seq_num
-      end
+    store = PacketInfoStore.insert_packet_info(store, seq_num)
 
     # TODO: use ID proposed in browser's SDP offer (currently hardcoded to `@sdp_extension_id`)
     # TODO: consider moving sequence number tagging closer to the end of the pipeline
@@ -127,9 +115,7 @@ defmodule Membrane.RTP.TWCC do
 
     state =
       Map.merge(state, %{
-        base_seq_num: min(base_seq_num, seq_num) || seq_num,
-        max_seq_num: max(max_seq_num, seq_num) || seq_num,
-        seq_to_timestamp: Map.put(seq_to_timestamp, seq_num, arrival_ts),
+        packet_info_store: store,
         local_seq_num: rem(local_seq_num + 1, @seq_number_limit),
         last_ssrc: last_ssrc || ssrc
       })
@@ -138,47 +124,20 @@ defmodule Membrane.RTP.TWCC do
   end
 
   @impl true
-  def handle_tick(:report_timer, _ctx, %State{base_seq_num: nil} = state), do: {:ok, state}
+  def handle_tick(:report_timer, _ctx, %State{packet_info_store: store} = state) do
+    if PacketInfoStore.empty?(store) or state.last_ssrc == nil do
+      {:ok, state}
+    else
+      event = make_rtcp_event(state)
 
-  @impl true
-  def handle_tick(:report_timer, _ctx, state) do
-    %State{
-      base_seq_num: base_seq_num,
-      max_seq_num: max_seq_num,
-      feedback_packet_count: feedback_packet_count,
-      sender_ssrc: sender_ssrc,
-      last_ssrc: last_ssrc
-    } = state
+      state =
+        Map.merge(state, %{
+          packet_info_store: %PacketInfoStore{},
+          feedback_packet_count: rem(state.feedback_packet_count + 1, @feedback_count_limit)
+        })
 
-    {reference_time, receive_deltas} = make_receive_deltas(state)
-
-    packet_status_count = max_seq_num - base_seq_num + 1
-
-    payload = %TransportFeedbackPacket.TWCC{
-      base_seq_num: base_seq_num,
-      reference_time: reference_time,
-      packet_status_count: packet_status_count,
-      receive_deltas: receive_deltas,
-      feedback_packet_count: feedback_packet_count
-    }
-
-    rtcp = %TransportFeedbackPacket{
-      sender_ssrc: sender_ssrc,
-      media_ssrc: last_ssrc,
-      payload: payload
-    }
-
-    event = %RTCPEvent{rtcp: rtcp}
-
-    state =
-      Map.merge(state, %{
-        base_seq_num: nil,
-        max_seq_num: nil,
-        seq_to_timestamp: %{},
-        feedback_packet_count: rem(feedback_packet_count + 1, @feedback_count_limit)
-      })
-
-    {{:ok, event: {Pad.ref(:input, last_ssrc), event}}, state}
+      {{:ok, event: {Pad.ref(:input, state.last_ssrc), event}}, state}
+    end
   end
 
   @impl true
@@ -186,50 +145,25 @@ defmodule Membrane.RTP.TWCC do
     {{:ok, end_of_stream: Pad.ref(:output, ssrc)}, state}
   end
 
-  defp rollover?(_new_seq, nil), do: false
-
-  defp rollover?(new_seq, base_seq) do
-    new_seq < base_seq and new_seq + (@seq_number_limit - base_seq) < base_seq - new_seq
-  end
-
-  defp make_receive_deltas(state) do
+  defp make_rtcp_event(state) do
     %State{
-      base_seq_num: base_seq_num,
-      max_seq_num: max_seq_num,
-      seq_to_timestamp: seq_to_timestamp
+      packet_info_store: store,
+      feedback_packet_count: feedback_packet_count,
+      sender_ssrc: sender_ssrc,
+      last_ssrc: last_ssrc
     } = state
 
-    # reference time has to be divisible by 64
-    # https://datatracker.ietf.org/doc/html/draft-holmer-rmcat-transport-wide-cc-extensions-01#section-3.1
-    reference_time =
-      seq_to_timestamp
-      |> Map.fetch!(base_seq_num)
-      |> make_divisible_by_64ms()
+    stats =
+      store
+      |> PacketInfoStore.get_stats()
+      |> Map.put(:feedback_packet_count, feedback_packet_count)
 
-    receive_deltas =
-      base_seq_num..max_seq_num
-      |> Enum.reduce({[], reference_time}, fn seq_num, {deltas, previous_timestamp} ->
-        case Map.get(seq_to_timestamp, seq_num) do
-          nil ->
-            {[nil | deltas], previous_timestamp}
-
-          timestamp ->
-            delta = timestamp - previous_timestamp
-            {[delta | deltas], timestamp}
-        end
-      end)
-      |> elem(0)
-      |> Enum.reverse()
-
-    {reference_time, receive_deltas}
-  end
-
-  defp make_divisible_by_64ms(timestamp) do
-    timestamp
-    |> Time.as_milliseconds()
-    |> Ratio.div(64)
-    |> Ratio.floor()
-    |> then(&(&1 * 64))
-    |> Time.milliseconds()
+    %RTCPEvent{
+      rtcp: %TransportFeedbackPacket{
+        sender_ssrc: sender_ssrc,
+        media_ssrc: last_ssrc,
+        payload: struct!(TransportFeedbackPacket.TWCC, stats)
+      }
+    }
   end
 end
