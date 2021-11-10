@@ -33,10 +33,20 @@ defmodule Membrane.RTP.Serializer do
     @moduledoc false
     use Bunch.Access
 
-    defstruct sequence_number: 0,
-              init_timestamp: 0
+    defstruct [
+      :ssrc,
+      :payload_type,
+      :clock_rate,
+      :alignment,
+      sequence_number: 0,
+      init_timestamp: 0
+    ]
 
     @type t :: %__MODULE__{
+            ssrc: RTP.ssrc_t(),
+            payload_type: RTP.payload_type_t(),
+            clock_rate: RTP.clock_rate_t(),
+            alignment: pos_integer(),
             sequence_number: non_neg_integer(),
             init_timestamp: non_neg_integer()
           }
