@@ -21,10 +21,15 @@ defmodule Membrane.RTP.VAD do
     availability: :always,
     caps: :any
 
-  def_options time_window: [
+  def_options clock_rate: [
+                spec: Membrane.RTP.clock_rate_t(),
+                default: 48_000,
+                description: "Clock rate of thingy"
+              ],
+              time_window: [
                 spec: pos_integer(),
-                default: 2_000_000_000,
-                description: "Time window (in `ns`) in which avg audio level is measured."
+                default: 2_000,
+                description: "Time window (in `ms`) in which avg audio level is measured."
               ],
               min_packet_num: [
                 spec: pos_integer(),
@@ -67,10 +72,11 @@ defmodule Membrane.RTP.VAD do
   def handle_init(opts) do
     state = %{
       audio_levels: Qex.new(),
+      clock_rate: opts.clock_rate,
       vad: :silence,
       vad_silence_timestamp: 0,
       current_timestamp: 0,
-      time_window: opts.time_window,
+      rtp_timestamp_increment: opts.time_window * opts.clock_rate / 1000,
       min_packet_num: opts.min_packet_num,
       vad_threshold: opts.vad_threshold,
       vad_silence_time: opts.vad_silence_time,
@@ -102,7 +108,8 @@ defmodule Membrane.RTP.VAD do
 
   defp filter_old_audio_levels(state) do
     Enum.reduce_while(state.audio_levels, state, fn {level, timestamp}, state ->
-      if Ratio.sub(state.current_timestamp, timestamp) |> Ratio.gt?(state.time_window) do
+      if Ratio.sub(state.current_timestamp, timestamp)
+         |> Ratio.gt?(state.rtp_timestamp_increment) do
         {_level, audio_levels} = Qex.pop(state.audio_levels)
 
         state = %{
@@ -121,9 +128,13 @@ defmodule Membrane.RTP.VAD do
 
   defp add_new_audio_level(state, level) do
     audio_levels = Qex.push(state.audio_levels, {-level, state.current_timestamp})
-    state = %{state | audio_levels: audio_levels}
-    state = %{state | audio_levels_sum: state.audio_levels_sum + -level}
-    %{state | audio_levels_count: state.audio_levels_count + 1}
+
+    %{
+      state
+      | audio_levels: audio_levels,
+        audio_levels_sum: state.audio_levels_sum + -level,
+        audio_levels_count: state.audio_levels_count + 1
+    }
   end
 
   defp get_audio_levels_vad(state) do
