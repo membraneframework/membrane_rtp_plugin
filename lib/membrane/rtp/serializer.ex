@@ -68,8 +68,7 @@ defmodule Membrane.RTP.Serializer do
     {rtp_metadata, metadata} = Map.pop(metadata, :rtp, %{})
 
     rtp_offset =
-      rtp_metadata
-      |> buffer_timestamp(metadata)
+      metadata.timestamp
       |> Ratio.mult(state.clock_rate)
       |> Membrane.Time.to_seconds()
 
@@ -94,7 +93,4 @@ defmodule Membrane.RTP.Serializer do
 
     {{:ok, buffer: {:output, buffer}}, state}
   end
-
-  defp buffer_timestamp(%{timestamp: timestamp}, _metadata), do: timestamp
-  defp buffer_timestamp(_rtp_metadata, %{timestamp: timestamp}), do: timestamp
 end
