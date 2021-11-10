@@ -92,7 +92,7 @@ defmodule Membrane.RTP.VADTest do
              } = new_state
     end
 
-    test "changes to :speech when ...", %{state: state} do
+    test "changes between :speech and :silence based on a running average", %{state: state} do
       original_timestamp = 1_201_851_607
 
       {{:ok, [buffer: _]}, state} =
