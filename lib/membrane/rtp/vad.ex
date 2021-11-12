@@ -9,6 +9,13 @@ defmodule Membrane.RTP.VAD do
 
   When avg falls below `vad_threshold` and doesn't exceed it in the next `vad_silence_timer`
   it emits notification `t:silence_notification_t/0`.
+
+  Buffers that are processed by this element may or may not have been processed by
+  a depayloader and passed through a jitter buffer. If they have not, then the only timestamp
+  available for time comparison is the RTP timestamp. The delta between RTP timestamps is
+  dependent on the clock rate used by the encoding. For `OPUS` the clock rate is `48kHz` and
+  packets are sent every `20ms`, so the RTP timestamp delta between sequential packets should
+  be `48000 / 1000 * 20`, or `960`.
   """
   use Membrane.Filter
 
@@ -24,7 +31,7 @@ defmodule Membrane.RTP.VAD do
   def_options clock_rate: [
                 spec: Membrane.RTP.clock_rate_t(),
                 default: 48_000,
-                description: "Clock rate of thingy"
+                description: "Clock rate (in `Hz`) for the encoding."
               ],
               time_window: [
                 spec: pos_integer(),
