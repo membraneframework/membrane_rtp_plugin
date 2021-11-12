@@ -62,6 +62,7 @@ defmodule Membrane.RTP.Serializer do
     {{:ok, demand: {:input, size}}, state}
   end
 
+  @impl true
   def handle_process(:input, %Buffer{payload: payload, metadata: metadata}, _ctx, state) do
     {rtp_metadata, metadata} = Map.pop(metadata, :rtp, %{})
 
