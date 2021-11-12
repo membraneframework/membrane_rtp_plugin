@@ -137,6 +137,9 @@ defmodule Membrane.RTP.VADTest do
                audio_levels_sum: -177,
                vad: :silence
              } = new_state
+
+      new_state = iterate_for(buffers: 100, volume: 0, initial: new_state, time_delta: time_delta)
+      assert %{audio_levels_count: 101, audio_levels_sum: -50, vad: :speech} = new_state
     end
 
     test "changes between :speech and :silence based on a running average", ctx do
