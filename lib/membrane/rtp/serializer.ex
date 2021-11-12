@@ -67,7 +67,7 @@ defmodule Membrane.RTP.Serializer do
 
     rtp_offset =
       rtp_metadata
-      |> buffer_timestamp(Buffer.get_dts_or_pts(buffer))
+      |> buffer_timestamp(buffer.pts)
       |> Ratio.mult(state.clock_rate)
       |> Membrane.Time.to_seconds()
 
@@ -89,9 +89,9 @@ defmodule Membrane.RTP.Serializer do
     payload = RTP.Packet.serialize(packet, align_to: state.alignment)
 
     buffer = %Buffer{
-      pts: Buffer.get_dts_or_pts(buffer),
-      payload: payload,
-      metadata: Map.put(metadata, :rtp, %{timestamp: rtp_timestamp})
+      buffer
+      | payload: payload,
+        metadata: Map.put(metadata, :rtp, %{timestamp: rtp_timestamp})
     }
 
     {{:ok, buffer: {:output, buffer}}, state}

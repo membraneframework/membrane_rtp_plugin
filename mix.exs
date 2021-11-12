@@ -85,7 +85,7 @@ defmodule Membrane.RTP.Plugin.MixProject do
       {:membrane_rtp_mpegaudio_plugin, "~> 0.6.0", only: :test},
       {:membrane_h264_ffmpeg_plugin,
        github: "membraneframework/membrane_h264_ffmpeg_plugin",
-       branch: "migration-to-buffer-with-pts-dts",
+       branch: "decoder-adds-pts-and-dts",
        only: :test},
       {:membrane_element_pcap, github: "membraneframework/membrane-element-pcap", only: :test},
       {:membrane_element_udp, "~> 0.5.0", only: :test},
