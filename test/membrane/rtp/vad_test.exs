@@ -99,6 +99,11 @@ defmodule Membrane.RTP.VADTest do
     end)
   end
 
+  defp process_buffer(buffer, state) do
+    {{:ok, _actions}, new_state} = VAD.handle_process(:input, buffer, %{}, state)
+    new_state
+  end
+
   describe "handle_process" do
     setup [
       :setup_vad_options,
@@ -116,7 +121,7 @@ defmodule Membrane.RTP.VADTest do
 
       buffer = rtp_buffer(-127, initial_timestamp)
 
-      {{:ok, [buffer: _]}, new_state} = VAD.handle_process(:input, buffer, %{}, state)
+      new_state = process_buffer(buffer, state)
 
       assert %{
                audio_levels_count: 1,
@@ -125,8 +130,7 @@ defmodule Membrane.RTP.VADTest do
              } = new_state
 
       buffer = rtp_buffer(-50, initial_timestamp + time_delta)
-
-      {{:ok, [buffer: _]}, new_state} = VAD.handle_process(:input, buffer, %{}, new_state)
+      new_state = process_buffer(buffer, new_state)
 
       assert %{
                audio_levels_count: 2,
@@ -142,8 +146,7 @@ defmodule Membrane.RTP.VADTest do
         initial_timestamp: initial_timestamp
       } = ctx
 
-      {{:ok, [buffer: _]}, state} =
-        VAD.handle_process(:input, rtp_buffer(-127, initial_timestamp), %{}, state)
+      state = process_buffer(rtp_buffer(-127, initial_timestamp), state)
 
       assert %{vad: :silence} = state
 
@@ -166,8 +169,7 @@ defmodule Membrane.RTP.VADTest do
         initial_timestamp: initial_timestamp
       } = ctx
 
-      {{:ok, [buffer: _]}, state} =
-        VAD.handle_process(:input, rtp_buffer(-127, initial_timestamp), %{}, state)
+      state = process_buffer(rtp_buffer(-127, initial_timestamp), state)
 
       new_state = iterate_for(buffers: 5, volume: -50, initial: state, time_delta: time_delta)
       assert %{audio_levels_count: 3, audio_levels_sum: -150} = new_state
@@ -185,9 +187,7 @@ defmodule Membrane.RTP.VADTest do
         initial_timestamp: initial_timestamp
       } = ctx
 
-      {{:ok, [buffer: _]}, state} =
-        VAD.handle_process(:input, rtp_buffer(-127, initial_timestamp), %{}, state)
-
+      state = process_buffer(rtp_buffer(-127, initial_timestamp), state)
       assert state.vad == :silence
 
       new_state = iterate_for(buffers: 5, volume: -50, initial: state, time_delta: time_delta)
@@ -206,9 +206,7 @@ defmodule Membrane.RTP.VADTest do
         initial_timestamp: initial_timestamp
       } = ctx
 
-      {{:ok, [buffer: _]}, state} =
-        VAD.handle_process(:input, rtp_buffer(-127, initial_timestamp), %{}, state)
-
+      state = process_buffer(rtp_buffer(-127, initial_timestamp), state)
       assert state.vad == :silence
 
       new_state = iterate_for(buffers: 5, volume: -50, initial: state, time_delta: time_delta)
@@ -226,13 +224,26 @@ defmodule Membrane.RTP.VADTest do
         initial_timestamp: initial_timestamp
       } = ctx
 
-      {{:ok, [buffer: _]}, state} =
-        VAD.handle_process(:input, rtp_buffer(-127, initial_timestamp), %{}, state)
-
+      state = process_buffer(rtp_buffer(-127, initial_timestamp), state)
       assert state.vad == :silence
 
       new_state = iterate_for(buffers: 5, volume: -50, initial: state, time_delta: time_delta)
       assert %{audio_levels_count: 3, audio_levels_sum: -150, vad: :silence} = new_state
+    end
+
+    @tag :skip
+    @clock_rate 1000
+    @min_packet_num 4
+    @buffer_interval 1000
+    test "resets when RTP timestamps rollover", ctx do
+      %{state: state} = ctx
+
+      state = process_buffer(rtp_buffer(-127, 4_294_966_370), state)
+      state = process_buffer(rtp_buffer(-127, 4_294_967_290), state)
+      state = process_buffer(rtp_buffer(-5, 915), state)
+      state = process_buffer(rtp_buffer(-5, 1835), state)
+
+      assert %{audio_levels_count: 2, audio_levels_sum: -10, vad: :silence} = state
     end
   end
 end
