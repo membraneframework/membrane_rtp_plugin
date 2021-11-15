@@ -33,10 +33,20 @@ defmodule Membrane.RTP.Serializer do
     @moduledoc false
     use Bunch.Access
 
-    defstruct sequence_number: 0,
-              init_timestamp: 0
+    defstruct [
+      :ssrc,
+      :payload_type,
+      :clock_rate,
+      :alignment,
+      sequence_number: 0,
+      init_timestamp: 0
+    ]
 
     @type t :: %__MODULE__{
+            ssrc: RTP.ssrc_t(),
+            payload_type: RTP.payload_type_t(),
+            clock_rate: RTP.clock_rate_t(),
+            alignment: pos_integer(),
             sequence_number: non_neg_integer(),
             init_timestamp: non_neg_integer()
           }
@@ -44,12 +54,15 @@ defmodule Membrane.RTP.Serializer do
 
   @impl true
   def handle_init(options) do
-    state = %State{
-      sequence_number: Enum.random(0..@max_seq_num),
-      init_timestamp: Enum.random(0..@max_timestamp)
-    }
+    state =
+      options
+      |> Map.from_struct()
+      |> Map.merge(%{
+        sequence_number: Enum.random(0..@max_seq_num),
+        init_timestamp: Enum.random(0..@max_timestamp)
+      })
 
-    {:ok, Map.merge(Map.from_struct(options), state)}
+    {:ok, struct!(State, state)}
   end
 
   @impl true
