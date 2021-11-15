@@ -49,10 +49,10 @@ defmodule Membrane.RTP.PacketTest do
   end
 
   test "reads and serializes extension header" do
-    extension_header = <<190::8, 222::8, 1::16, 1::4, 0::4, 190::8, 0::16>>
+    extension_header = <<0xBE::8, 0xDE::8, 1::16, 1::4, 0::4, 0xBE::8, 0::16>>
 
     expected_parsed_extensions = [
-      %Membrane.RTP.Header.Extension{data: <<190>>, profile_specific: 1}
+      %Membrane.RTP.Header.Extension{data: <<0xBE>>, profile_specific: 1}
     ]
 
     # Extension is stored on 4th bit of header
@@ -76,7 +76,7 @@ defmodule Membrane.RTP.PacketTest do
       Fixtures.sample_packet()
       | header: %Header{
           Fixtures.sample_header()
-          | extensions: [%Membrane.RTP.Header.Extension{data: <<190, 0>>, profile_specific: 1}]
+          | extensions: [%Membrane.RTP.Header.Extension{data: <<0xBE, 0>>, profile_specific: 1}]
         }
     }
 
