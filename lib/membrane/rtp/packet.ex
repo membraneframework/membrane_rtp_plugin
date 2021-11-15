@@ -15,7 +15,7 @@ defmodule Membrane.RTP.Packet do
   defstruct @enforce_keys
 
   # 0xBEDE for Venerable Bede from RFC 8285
-  @one_byte_header_identifier <<190::8, 222::8>>
+  @one_byte_header_identifier <<0xBE, 0xDE>>
 
   @spec identify(binary()) :: :rtp | :rtcp
   def identify(<<_first_byte, _marker::1, payload_type::7, _rest::binary>>)
@@ -29,7 +29,7 @@ defmodule Membrane.RTP.Packet do
     %__MODULE__{header: header, payload: payload} = packet
     %Header{version: 2} = header
     has_padding = 0
-    has_extension = if Enum.empty?(header.extensions), do: 0, else: 1
+    has_extension = if header.extensions == [], do: 0, else: 1
     marker = if header.marker, do: 1, else: 0
     csrcs = Enum.map_join(header.csrcs, &<<&1::32>>)
 
@@ -56,15 +56,14 @@ defmodule Membrane.RTP.Packet do
         acc <> serialize_header_extension(extension)
       end)
 
-    identifer = @one_byte_header_identifier
-    padding = calculate_padding_size(byte_size(extensions)) * 8
     extensions_size = byte_size(extensions)
+    padding = calculate_padding_size(extensions_size) * 8
 
     extension_header_size =
       div(extensions_size, 4) + if rem(extensions_size, 4) == 0, do: 0, else: 1
 
-    <<identifer::binary-size(2), extension_header_size::16>> <>
-      extensions <> <<0::integer-size(padding)>>
+    <<@one_byte_header_identifier, extension_header_size::16,
+      extensions::binary-size(extensions_size), 0::integer-size(padding)>>
   end
 
   defp calculate_padding_size(extensions_size) do
