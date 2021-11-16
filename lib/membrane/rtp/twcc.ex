@@ -38,7 +38,7 @@ defmodule Membrane.RTP.TWCC do
             packet_info_store: PacketInfoStore.t(),
             feedback_packet_count: non_neg_integer(),
             local_seq_num: non_neg_integer(),
-            last_ssrc: RTP.ssrc_t()
+            media_ssrc: RTP.ssrc_t()
           }
 
     @enforce_keys [:sender_ssrc, :report_interval]
@@ -47,7 +47,7 @@ defmodule Membrane.RTP.TWCC do
                   packet_info_store: %PacketInfoStore{},
                   feedback_packet_count: 0,
                   local_seq_num: 0,
-                  last_ssrc: nil
+                  media_ssrc: nil
                 ]
   end
 
@@ -82,9 +82,9 @@ defmodule Membrane.RTP.TWCC do
   end
 
   @impl true
-  def handle_pad_removed(Pad.ref(_direction, ssrc), _ctx, %State{last_ssrc: last_ssrc} = state) do
+  def handle_pad_removed(Pad.ref(_direction, ssrc), _ctx, %State{media_ssrc: media_ssrc} = state) do
     case ssrc do
-      ^last_ssrc -> {:ok, %State{state | last_ssrc: nil}}
+      ^media_ssrc -> {:ok, %State{state | media_ssrc: nil}}
       _other_ssrc -> {:ok, state}
     end
   end
@@ -94,7 +94,7 @@ defmodule Membrane.RTP.TWCC do
     %State{
       packet_info_store: store,
       local_seq_num: local_seq_num,
-      last_ssrc: last_ssrc
+      media_ssrc: media_ssrc
     } = state
 
     # TODO: match on ID proposed by membrane_webrtc_plugin in SDP offer
@@ -117,7 +117,7 @@ defmodule Membrane.RTP.TWCC do
       Map.merge(state, %{
         packet_info_store: store,
         local_seq_num: rem(local_seq_num + 1, @seq_number_limit),
-        last_ssrc: last_ssrc || ssrc
+        media_ssrc: media_ssrc || ssrc
       })
 
     {{:ok, buffer: {Pad.ref(:output, ssrc), %Buffer{buffer | metadata: metadata}}}, state}
@@ -125,7 +125,7 @@ defmodule Membrane.RTP.TWCC do
 
   @impl true
   def handle_tick(:report_timer, _ctx, %State{packet_info_store: store} = state) do
-    if PacketInfoStore.empty?(store) or state.last_ssrc == nil do
+    if PacketInfoStore.empty?(store) or state.media_ssrc == nil do
       {:ok, state}
     else
       event = make_rtcp_event(state)
@@ -136,7 +136,7 @@ defmodule Membrane.RTP.TWCC do
           feedback_packet_count: rem(state.feedback_packet_count + 1, @feedback_count_limit)
         })
 
-      {{:ok, event: {Pad.ref(:input, state.last_ssrc), event}}, state}
+      {{:ok, event: {Pad.ref(:input, state.media_ssrc), event}}, state}
     end
   end
 
@@ -150,7 +150,7 @@ defmodule Membrane.RTP.TWCC do
       packet_info_store: store,
       feedback_packet_count: feedback_packet_count,
       sender_ssrc: sender_ssrc,
-      last_ssrc: last_ssrc
+      media_ssrc: media_ssrc
     } = state
 
     stats =
@@ -161,7 +161,7 @@ defmodule Membrane.RTP.TWCC do
     %RTCPEvent{
       rtcp: %TransportFeedbackPacket{
         sender_ssrc: sender_ssrc,
-        media_ssrc: last_ssrc,
+        media_ssrc: media_ssrc,
         payload: struct!(TransportFeedbackPacket.TWCC, stats)
       }
     }

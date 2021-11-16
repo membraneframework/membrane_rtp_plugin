@@ -3,7 +3,7 @@ defmodule Membrane.RTP.TWCC.PacketInfoStore do
 
   # The module stores TWCC sequence number along with their arrival timestamps, handling sequence
   # number rollovers if necessary. Stored packet info can used for generating statistics used for
-  # assembling TWCC feedback packet.
+  # assembling a TWCC feedback packet.
 
   alias Membrane.Time
 
@@ -17,6 +17,13 @@ defmodule Membrane.RTP.TWCC.PacketInfoStore do
           base_seq_num: non_neg_integer(),
           max_seq_num: non_neg_integer(),
           seq_to_timestamp: %{non_neg_integer() => Time.t()}
+        }
+
+  @type stats_t :: %{
+          base_seq_num: non_neg_integer(),
+          packet_status_count: non_neg_integer(),
+          receive_deltas: [Time.t() | nil],
+          reference_time: Time.t()
         }
 
   @seq_number_limit Bitwise.bsl(1, 16)
@@ -38,21 +45,16 @@ defmodule Membrane.RTP.TWCC.PacketInfoStore do
     }
   end
 
-  @spec get_stats(__MODULE__.t()) :: %{
-          base_seq_num: non_neg_integer(),
-          packet_status_count: non_neg_integer(),
-          receive_deltas: [Time.t() | nil],
-          reference_time: Time.t()
-        }
+  @spec get_stats(__MODULE__.t()) :: stats_t()
   def get_stats(store) do
     {reference_time, receive_deltas} = make_receive_deltas(store)
     packet_status_count = store.max_seq_num - store.base_seq_num + 1
 
     %{
       base_seq_num: store.base_seq_num,
+      packet_status_count: packet_status_count,
       reference_time: reference_time,
-      receive_deltas: receive_deltas,
-      packet_status_count: packet_status_count
+      receive_deltas: receive_deltas
     }
   end
 
@@ -72,9 +74,11 @@ defmodule Membrane.RTP.TWCC.PacketInfoStore do
 
       :previous ->
         shifted_seq_to_timestamp =
-          Enum.map(seq_to_timestamp, fn {seq_num, timestamp} ->
+          seq_to_timestamp
+          |> Enum.map(fn {seq_num, timestamp} ->
             {seq_num + @seq_number_limit, timestamp}
           end)
+          |> Enum.into(%{})
 
         store = %{
           store
@@ -139,7 +143,10 @@ defmodule Membrane.RTP.TWCC.PacketInfoStore do
   defp rollover?(l_seq_num, r_seq_num) do
     {smaller_seq, greater_seq} = Enum.min_max([l_seq_num, r_seq_num])
 
-    smaller_seq + (@seq_number_limit - greater_seq) < greater_seq - smaller_seq
+    distance = greater_seq - smaller_seq
+    distance_through_0 = smaller_seq + (@seq_number_limit - greater_seq)
+
+    distance_through_0 < distance
   end
 
   defp make_divisible_by_64ms(timestamp) do
