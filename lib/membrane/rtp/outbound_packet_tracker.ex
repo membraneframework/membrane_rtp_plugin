@@ -8,6 +8,7 @@ defmodule Membrane.RTP.OutboundPacketTracker do
   use Membrane.Filter
 
   alias Membrane.{Buffer, RTP, Payload, Time}
+  alias Membrane.RTP.Session.SenderReport
 
   def_input_pad :input,
     caps: :any,
