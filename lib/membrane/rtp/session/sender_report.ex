@@ -9,14 +9,14 @@ defmodule Membrane.RTP.Session.SenderReport do
   Mapping from `ssrc` to its sender statistics.
   """
   @type sender_stats_t :: %{
-    non_neg_integer() => %{
-      clock_rate: non_neg_integer(),
-      timestamp: non_neg_integer(),
-      rtp_timestamp: non_neg_integer(),
-      sender_packet_count: non_neg_integer(),
-      sender_octet_count: non_neg_integer()
-    }
-  }
+          non_neg_integer() => %{
+            clock_rate: non_neg_integer(),
+            timestamp: non_neg_integer(),
+            rtp_timestamp: non_neg_integer(),
+            sender_packet_count: non_neg_integer(),
+            sender_octet_count: non_neg_integer()
+          }
+        }
 
   defmodule Data do
     @moduledoc false
