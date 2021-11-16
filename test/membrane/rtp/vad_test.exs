@@ -234,17 +234,49 @@ defmodule Membrane.RTP.VADTest do
       assert %{audio_levels_count: 3, audio_levels_sum: -150, vad: :silence} = new_state
     end
 
-    @tag :skip
     @clock_rate 1000
-    @min_packet_num 4
+    @min_packet_num 3
     @buffer_interval 1000
-    test "resets when RTP timestamps rollover", ctx do
+    test "resets the state when RTP timestamps roll over", ctx do
       %{state: state} = ctx
 
-      state = process_buffer(rtp_buffer(-127, 4_294_966_370), state)
-      state = process_buffer(rtp_buffer(-127, 4_294_967_290), state)
-      state = process_buffer(rtp_buffer(-5, 915), state)
-      state = process_buffer(rtp_buffer(-5, 1835), state)
+      max_32bit_int = 4_294_967_295
+      initial_timestamp = max_32bit_int - 5 - 2000
+
+      state = process_buffer(rtp_buffer(-127, initial_timestamp), state)
+      state = process_buffer(rtp_buffer(-127, initial_timestamp + 1000), state)
+      state = process_buffer(rtp_buffer(-5, 995), state)
+      state = process_buffer(rtp_buffer(-5, 1995), state)
+
+      assert %{audio_levels_count: 2, audio_levels_sum: -10, vad: :silence} = state
+    end
+
+    test "ignore RTP packets that arrive out of order", ctx do
+      %{
+        time_delta: time_delta,
+        state: state,
+        initial_timestamp: initial_timestamp
+      } = ctx
+
+      state = process_buffer(rtp_buffer(-127, initial_timestamp), state)
+      state = process_buffer(rtp_buffer(-127, initial_timestamp - time_delta), state)
+      state = process_buffer(rtp_buffer(-50, initial_timestamp + time_delta * 2), state)
+
+      assert %{audio_levels_count: 2, audio_levels_sum: -177, vad: :silence} = state
+    end
+
+    @clock_rate 1000
+    @min_packet_num 3
+    @buffer_interval 1000
+    test "ignore RTP packets that arrive out of order, from before a rollover", ctx do
+      %{state: state} = ctx
+
+      max_32bit_int = 4_294_967_295
+      initial_timestamp = max_32bit_int - 5 - 1000
+
+      state = process_buffer(rtp_buffer(-5, 995), state)
+      state = process_buffer(rtp_buffer(-127, initial_timestamp + 1000), state)
+      state = process_buffer(rtp_buffer(-5, 1995), state)
 
       assert %{audio_levels_count: 2, audio_levels_sum: -10, vad: :silence} = state
     end

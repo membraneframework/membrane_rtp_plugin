@@ -16,6 +16,12 @@ defmodule Membrane.RTP.VAD do
   dependent on the clock rate used by the encoding. For `OPUS` the clock rate is `48kHz` and
   packets are sent every `20ms`, so the RTP timestamp delta between sequential packets should
   be `48000 / 1000 * 20`, or `960`.
+
+  When calculating the epoch of the timestamp, we need to account for 32bit integer wrapping.
+  * `:current` - the difference between timestamps is low: the timestamp has not wrapped around.
+  * `:next` - the timestamp has wrapped around to 0. To simplify queue processing we reset the state.
+  * `:prev` - the timestamp has recently wrapped around. We might receive an out-of-order packet
+    from before the rollover, which we ignore.
   """
   use Membrane.Filter
 
@@ -85,6 +91,7 @@ defmodule Membrane.RTP.VAD do
       current_timestamp: 0,
       rtp_timestamp_increment: opts.time_window * opts.clock_rate / 1000,
       min_packet_num: opts.min_packet_num,
+      time_window: opts.time_window,
       vad_threshold: opts.vad_threshold,
       vad_silence_time: opts.vad_silence_time,
       audio_levels_sum: 0,
@@ -104,13 +111,45 @@ defmodule Membrane.RTP.VAD do
     <<_id::4, _len::4, _v::1, level::7, _rest::binary-size(2)>> =
       buffer.metadata.rtp.extension.data
 
-    state = %{state | current_timestamp: buffer.metadata.rtp.timestamp}
-    state = filter_old_audio_levels(state)
-    state = add_new_audio_level(state, level)
-    audio_levels_vad = get_audio_levels_vad(state)
-    actions = [buffer: {:output, buffer}] ++ maybe_notify(audio_levels_vad, state)
-    state = update_vad_state(audio_levels_vad, state)
-    {{:ok, actions}, state}
+    rtp_timestamp = buffer.metadata.rtp.timestamp
+    epoch = timestamp_epoch(state.current_timestamp, rtp_timestamp)
+
+    cond do
+      epoch == :current && rtp_timestamp > state.current_timestamp ->
+        state = %{state | current_timestamp: rtp_timestamp}
+        state = filter_old_audio_levels(state)
+        state = add_new_audio_level(state, level)
+        audio_levels_vad = get_audio_levels_vad(state)
+        actions = [buffer: {:output, buffer}] ++ maybe_notify(audio_levels_vad, state)
+        state = update_vad_state(audio_levels_vad, state)
+        {{:ok, actions}, state}
+
+      epoch == :next ->
+        {:ok, state} = handle_init(state)
+        {{:ok, buffer: {:output, buffer}}, state}
+
+      true ->
+        {{:ok, buffer: {:output, buffer}}, state}
+    end
+  end
+
+  @timestamp_limit 4_294_967_295
+
+  defp timestamp_epoch(prev_timestamp, timestamp) do
+    # a) current epoch
+    distance_if_current = abs(timestamp - prev_timestamp)
+    # b) the new timestamp is from the previous epoch
+    distance_if_prev = abs(prev_timestamp - (timestamp - @timestamp_limit))
+    # c) the new timestamp is in the next epoch
+    distance_if_next = abs(prev_timestamp - (timestamp + @timestamp_limit))
+
+    [
+      {:current, distance_if_current},
+      {:next, distance_if_next},
+      {:prev, distance_if_prev}
+    ]
+    |> Enum.min_by(fn {_atom, distance} -> distance end)
+    |> then(fn {result, _value} -> result end)
   end
 
   defp filter_old_audio_levels(state) do
