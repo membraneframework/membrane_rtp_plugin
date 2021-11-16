@@ -77,7 +77,7 @@ defmodule Membrane.RTP.Packet do
 
   defp serialize_header_extension(%Header.Extension{data: data} = extension) do
     data_size = byte_size(data) - 1
-    <<extension.profile_specific::integer-size(4), data_size::integer-size(4), data::binary>>
+    <<extension.identifier::integer-size(4), data_size::integer-size(4), data::binary>>
   end
 
   @spec parse(binary(), boolean()) ::
@@ -134,6 +134,7 @@ defmodule Membrane.RTP.Packet do
          true
        ) do
     extensions = parse_data_while_possible(data, [])
+    extensions = Enum.reverse(extensions)
     {:ok, {extensions, rest}}
   end
 
@@ -156,7 +157,7 @@ defmodule Membrane.RTP.Packet do
     else
       len_data = len_data + 1
       <<data::binary-size(len_data), next_extensions::binary>> = extensions
-      extension = %Header.Extension{profile_specific: local_identifier, data: data}
+      extension = %Header.Extension{identifier: local_identifier, data: data}
       {:ok, {extension, next_extensions}}
     end
   end
