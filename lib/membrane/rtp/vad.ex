@@ -116,21 +116,28 @@ defmodule Membrane.RTP.VAD do
 
     cond do
       epoch == :current && rtp_timestamp > state.current_timestamp ->
-        state = %{state | current_timestamp: rtp_timestamp}
-        state = filter_old_audio_levels(state)
-        state = add_new_audio_level(state, level)
-        audio_levels_vad = get_audio_levels_vad(state)
-        actions = [buffer: {:output, buffer}] ++ maybe_notify(audio_levels_vad, state)
-        state = update_vad_state(audio_levels_vad, state)
-        {{:ok, actions}, state}
+        handle_vad(buffer, rtp_timestamp, level, state)
 
       epoch == :next ->
         {:ok, state} = handle_init(state)
         {{:ok, buffer: {:output, buffer}}, state}
 
+      state.audio_levels_sum == 0 ->
+        handle_vad(buffer, rtp_timestamp, level, state)
+
       true ->
         {{:ok, buffer: {:output, buffer}}, state}
     end
+  end
+
+  defp handle_vad(buffer, rtp_timestamp, level, state) do
+    state = %{state | current_timestamp: rtp_timestamp}
+    state = filter_old_audio_levels(state)
+    state = add_new_audio_level(state, level)
+    audio_levels_vad = get_audio_levels_vad(state)
+    actions = [buffer: {:output, buffer}] ++ maybe_notify(audio_levels_vad, state)
+    state = update_vad_state(audio_levels_vad, state)
+    {{:ok, actions}, state}
   end
 
   @timestamp_limit 4_294_967_295
