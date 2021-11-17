@@ -136,19 +136,19 @@ defmodule Membrane.RTP.Packet do
            rest::binary>>,
          true
        ) do
-    extensions = parse_data_while_possible(data, [])
+    extensions = parse_extension_data(data, [])
     extensions = Enum.reverse(extensions)
     {:ok, {extensions, rest}}
   end
 
   defp parse_header_extension(_binary, true), do: :error
 
-  defp parse_data_while_possible(<<>>, acc), do: acc
+  defp parse_extension_data(<<>>, acc), do: acc
 
-  defp parse_data_while_possible(data, acc) do
+  defp parse_extension_data(data, acc) do
     case parse_one_byte_header(data) do
-      {data, rest} -> parse_data_while_possible(rest, [data | acc])
-      {rest} -> parse_data_while_possible(rest, acc)
+      {data, rest} -> parse_extension_data(rest, [data | acc])
+      rest -> parse_extension_data(rest, acc)
     end
   end
 
@@ -156,7 +156,7 @@ defmodule Membrane.RTP.Packet do
     <<local_identifier::integer-size(4), len_data::integer-size(4)>> = extension_header
 
     if local_identifier == 0 do
-      {extensions}
+      extensions
     else
       len_data = len_data + 1
       <<data::binary-size(len_data), next_extensions::binary>> = extensions
