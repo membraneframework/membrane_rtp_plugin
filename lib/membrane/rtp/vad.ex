@@ -9,6 +9,19 @@ defmodule Membrane.RTP.VAD do
 
   When avg falls below `vad_threshold` and doesn't exceed it in the next `vad_silence_timer`
   it emits notification `t:silence_notification_t/0`.
+
+  Buffers that are processed by this element may or may not have been processed by
+  a depayloader and passed through a jitter buffer. If they have not, then the only timestamp
+  available for time comparison is the RTP timestamp. The delta between RTP timestamps is
+  dependent on the clock rate used by the encoding. For `OPUS` the clock rate is `48kHz` and
+  packets are sent every `20ms`, so the RTP timestamp delta between sequential packets should
+  be `48000 / 1000 * 20`, or `960`.
+
+  When calculating the epoch of the timestamp, we need to account for 32bit integer wrapping.
+  * `:current` - the difference between timestamps is low: the timestamp has not wrapped around.
+  * `:next` - the timestamp has wrapped around to 0. To simplify queue processing we reset the state.
+  * `:prev` - the timestamp has recently wrapped around. We might receive an out-of-order packet
+    from before the rollover, which we ignore.
   """
   use Membrane.Filter
 
@@ -21,10 +34,15 @@ defmodule Membrane.RTP.VAD do
     availability: :always,
     caps: :any
 
-  def_options time_window: [
+  def_options clock_rate: [
+                spec: Membrane.RTP.clock_rate_t(),
+                default: 48_000,
+                description: "Clock rate (in `Hz`) for the encoding."
+              ],
+              time_window: [
                 spec: pos_integer(),
-                default: 2_000_000_000,
-                description: "Time window (in `ns`) in which avg audio level is measured."
+                default: 2_000,
+                description: "Time window (in `ms`) in which avg audio level is measured."
               ],
               min_packet_num: [
                 spec: pos_integer(),
@@ -67,11 +85,13 @@ defmodule Membrane.RTP.VAD do
   def handle_init(opts) do
     state = %{
       audio_levels: Qex.new(),
+      clock_rate: opts.clock_rate,
       vad: :silence,
       vad_silence_timestamp: 0,
       current_timestamp: 0,
-      time_window: opts.time_window,
+      rtp_timestamp_increment: opts.time_window * opts.clock_rate / 1000,
       min_packet_num: opts.min_packet_num,
+      time_window: opts.time_window,
       vad_threshold: opts.vad_threshold,
       vad_silence_time: opts.vad_silence_time,
       audio_levels_sum: 0,
@@ -91,18 +111,51 @@ defmodule Membrane.RTP.VAD do
     <<_id::4, _len::4, _v::1, level::7, _rest::binary-size(2)>> =
       buffer.metadata.rtp.extension.data
 
-    state = %{state | current_timestamp: buffer.metadata.timestamp}
-    state = filter_old_audio_levels(state)
-    state = add_new_audio_level(state, level)
-    audio_levels_vad = get_audio_levels_vad(state)
-    actions = [buffer: {:output, buffer}] ++ maybe_notify(audio_levels_vad, state)
-    state = update_vad_state(audio_levels_vad, state)
-    {{:ok, actions}, state}
+    rtp_timestamp = buffer.metadata.rtp.timestamp
+    epoch = timestamp_epoch(state.current_timestamp, rtp_timestamp)
+
+    cond do
+      epoch == :current && rtp_timestamp > state.current_timestamp ->
+        state = %{state | current_timestamp: rtp_timestamp}
+        state = filter_old_audio_levels(state)
+        state = add_new_audio_level(state, level)
+        audio_levels_vad = get_audio_levels_vad(state)
+        actions = [buffer: {:output, buffer}] ++ maybe_notify(audio_levels_vad, state)
+        state = update_vad_state(audio_levels_vad, state)
+        {{:ok, actions}, state}
+
+      epoch == :next ->
+        {:ok, state} = handle_init(state)
+        {{:ok, buffer: {:output, buffer}}, state}
+
+      true ->
+        {{:ok, buffer: {:output, buffer}}, state}
+    end
+  end
+
+  @timestamp_limit 4_294_967_295
+
+  defp timestamp_epoch(prev_timestamp, timestamp) do
+    # a) current epoch
+    distance_if_current = abs(timestamp - prev_timestamp)
+    # b) the new timestamp is from the previous epoch
+    distance_if_prev = abs(prev_timestamp - (timestamp - @timestamp_limit))
+    # c) the new timestamp is in the next epoch
+    distance_if_next = abs(prev_timestamp - (timestamp + @timestamp_limit))
+
+    [
+      {:current, distance_if_current},
+      {:next, distance_if_next},
+      {:prev, distance_if_prev}
+    ]
+    |> Enum.min_by(fn {_atom, distance} -> distance end)
+    |> then(fn {result, _value} -> result end)
   end
 
   defp filter_old_audio_levels(state) do
     Enum.reduce_while(state.audio_levels, state, fn {level, timestamp}, state ->
-      if Ratio.sub(state.current_timestamp, timestamp) |> Ratio.gt?(state.time_window) do
+      if Ratio.sub(state.current_timestamp, timestamp)
+         |> Ratio.gt?(state.rtp_timestamp_increment) do
         {_level, audio_levels} = Qex.pop(state.audio_levels)
 
         state = %{
@@ -121,9 +174,13 @@ defmodule Membrane.RTP.VAD do
 
   defp add_new_audio_level(state, level) do
     audio_levels = Qex.push(state.audio_levels, {-level, state.current_timestamp})
-    state = %{state | audio_levels: audio_levels}
-    state = %{state | audio_levels_sum: state.audio_levels_sum + -level}
-    %{state | audio_levels_count: state.audio_levels_count + 1}
+
+    %{
+      state
+      | audio_levels: audio_levels,
+        audio_levels_sum: state.audio_levels_sum + -level,
+        audio_levels_count: state.audio_levels_count + 1
+    }
   end
 
   defp get_audio_levels_vad(state) do
