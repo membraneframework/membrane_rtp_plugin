@@ -2,6 +2,9 @@ defmodule Membrane.RTP.Packet do
   @moduledoc """
   Defines a struct describing an RTP packet and a way to parse and serialize it.
   Based on [RFC3550](https://tools.ietf.org/html/rfc3550#page-13)
+
+  Support only one-byte header from [RFC8285](https://www.rfc-editor.org/rfc/pdfrfc/rfc8285.txt.pdf), as according to document
+  this form is preferred and it must be supported by all receivers.
   """
 
   alias Membrane.RTP.{Header, Utils}
@@ -144,8 +147,8 @@ defmodule Membrane.RTP.Packet do
 
   defp parse_data_while_possible(data, acc) do
     case parse_one_byte_header(data) do
-      {:ok, {data, rest}} -> parse_data_while_possible(rest, [data | acc])
-      {:ok, rest} -> parse_data_while_possible(rest, acc)
+      {data, rest} -> parse_data_while_possible(rest, [data | acc])
+      {rest} -> parse_data_while_possible(rest, acc)
     end
   end
 
@@ -153,12 +156,12 @@ defmodule Membrane.RTP.Packet do
     <<local_identifier::integer-size(4), len_data::integer-size(4)>> = extension_header
 
     if local_identifier == 0 do
-      {:ok, extensions}
+      {extensions}
     else
       len_data = len_data + 1
       <<data::binary-size(len_data), next_extensions::binary>> = extensions
       extension = %Header.Extension{identifier: local_identifier, data: data}
-      {:ok, {extension, next_extensions}}
+      {extension, next_extensions}
     end
   end
 end

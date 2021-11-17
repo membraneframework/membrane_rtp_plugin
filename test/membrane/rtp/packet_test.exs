@@ -49,7 +49,7 @@ defmodule Membrane.RTP.PacketTest do
   end
 
   test "reads and serializes extension header" do
-    extension_header = <<0xBE::8, 0xDE::8, 1::16, 1::4, 0::4, 0xBE::8, 0::16>>
+    extension_header = <<0xBE, 0xDE, 1::16, 1::4, 0::4, 0xBE, 0::16>>
 
     expected_parsed_extensions = [
       %Membrane.RTP.Header.Extension{data: <<0xBE>>, identifier: 1}
