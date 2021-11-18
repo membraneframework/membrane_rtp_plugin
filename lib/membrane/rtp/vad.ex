@@ -88,7 +88,7 @@ defmodule Membrane.RTP.VAD do
       clock_rate: opts.clock_rate,
       vad: :silence,
       vad_silence_timestamp: 0,
-      current_timestamp: 0,
+      current_timestamp: nil,
       rtp_timestamp_increment: opts.time_window * opts.clock_rate / 1000,
       min_packet_num: opts.min_packet_num,
       time_window: opts.time_window,
@@ -113,17 +113,15 @@ defmodule Membrane.RTP.VAD do
 
     rtp_timestamp = buffer.metadata.rtp.timestamp
     epoch = timestamp_epoch(state.current_timestamp, rtp_timestamp)
+    current_timestamp = state.current_timestamp || 0
 
     cond do
-      epoch == :current && rtp_timestamp > state.current_timestamp ->
+      epoch == :current && rtp_timestamp > current_timestamp ->
         handle_vad(buffer, rtp_timestamp, level, state)
 
       epoch == :next ->
         {:ok, state} = handle_init(state)
         {{:ok, buffer: {:output, buffer}}, state}
-
-      state.audio_levels_sum == 0 ->
-        handle_vad(buffer, rtp_timestamp, level, state)
 
       true ->
         {{:ok, buffer: {:output, buffer}}, state}
@@ -141,6 +139,8 @@ defmodule Membrane.RTP.VAD do
   end
 
   @timestamp_limit 4_294_967_295
+
+  defp timestamp_epoch(nil, _timestamp), do: :current
 
   defp timestamp_epoch(prev_timestamp, timestamp) do
     # a) current epoch
