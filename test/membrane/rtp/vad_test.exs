@@ -62,14 +62,16 @@ defmodule Membrane.RTP.VADTest do
 
   defp rtp_buffer(volume, timestamp) when volume in -127..0 do
     level = -volume
-    data = <<16, 1::1, level::7, 0, 0>>
+    data = <<1::1, level::7>>
 
     rtp_metadata = %{
       csrcs: [],
-      extension: %Membrane.RTP.Header.Extension{
-        data: data,
-        profile_specific: <<190, 222>>
-      },
+      extensions: [
+        %Membrane.RTP.Header.Extension{
+          data: data,
+          identifier: 1
+        }
+      ],
       has_padding?: false,
       marker: false,
       payload_type: 111,
