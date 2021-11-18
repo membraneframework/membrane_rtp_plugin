@@ -152,16 +152,17 @@ defmodule Membrane.RTP.Packet do
     end
   end
 
-  defp parse_one_byte_header(<<extension_header::bits-size(8), extensions::binary>>) do
-    <<local_identifier::integer-size(4), len_data::integer-size(4)>> = extension_header
+  defp parse_one_byte_header(
+         <<0::4, _len_data::integer-size(4), extension_header::bits-size(8), extensions::binary>>
+       ),
+       do: extensions
 
-    if local_identifier == 0 do
-      extensions
-    else
-      len_data = len_data + 1
-      <<data::binary-size(len_data), next_extensions::binary>> = extensions
-      extension = %Header.Extension{identifier: local_identifier, data: data}
-      {extension, next_extensions}
-    end
+  defp parse_one_byte_header(
+         <<local_identifier::integer-size(4), len_data::integer-size(4), extensions::binary>>
+       ) do
+    len_data = len_data + 1
+    <<data::binary-size(len_data), next_extensions::binary>> = extensions
+    extension = %Header.Extension{identifier: local_identifier, data: data}
+    {extension, next_extensions}
   end
 end
