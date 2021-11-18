@@ -153,7 +153,7 @@ defmodule Membrane.RTP.Packet do
   end
 
   defp parse_one_byte_header(
-         <<0::4, _len_data::integer-size(4), extension_header::bits-size(8), extensions::binary>>
+         <<0::4, _len_data::integer-size(4), _extension_header::bits-size(8), extensions::binary>>
        ),
        do: extensions
 
