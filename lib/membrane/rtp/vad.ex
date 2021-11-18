@@ -108,8 +108,8 @@ defmodule Membrane.RTP.VAD do
 
   @impl true
   def handle_process(:input, %Membrane.Buffer{} = buffer, _ctx, state) do
-    <<_id::4, _len::4, _v::1, level::7, _rest::binary-size(2)>> =
-      buffer.metadata.rtp.extension.data
+    vad_extension = Enum.find(buffer.metadata.rtp.extensions, &(&1.identifier == 1))
+    <<_v::1, level::7>> = vad_extension.data
 
     rtp_timestamp = buffer.metadata.rtp.timestamp
     epoch = timestamp_epoch(state.current_timestamp, rtp_timestamp)

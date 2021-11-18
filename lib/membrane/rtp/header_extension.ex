@@ -17,7 +17,7 @@ defmodule Membrane.RTP.Header.Extension do
   defstruct @enforce_keys
 
   @type t :: %__MODULE__{
-          identifier: binary(),
+          identifier: 1..14,
           data: binary()
         }
 end
