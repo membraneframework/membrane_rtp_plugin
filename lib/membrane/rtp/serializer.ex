@@ -96,7 +96,7 @@ defmodule Membrane.RTP.Serializer do
       timestamp: rtp_timestamp,
       sequence_number: state.sequence_number,
       csrcs: Map.get(rtp_metadata, :csrcs, []),
-      extension: Map.get(rtp_metadata, :extension)
+      extensions: Map.get(rtp_metadata, :extensions, [])
     }
 
     buffer = %Membrane.Buffer{

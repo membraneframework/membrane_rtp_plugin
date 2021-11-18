@@ -39,7 +39,8 @@ defmodule Membrane.RTP.Fixtures do
       payload_type: 14,
       sequence_number: 3983,
       ssrc: 3_919_876_492,
-      timestamp: 1_653_702_647
+      timestamp: 1_653_702_647,
+      extensions: []
     }
 
   @spec fake_packet_list(Range.t()) :: [binary()]

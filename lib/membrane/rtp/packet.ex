@@ -2,6 +2,9 @@ defmodule Membrane.RTP.Packet do
   @moduledoc """
   Defines a struct describing an RTP packet and a way to parse and serialize it.
   Based on [RFC3550](https://tools.ietf.org/html/rfc3550#page-13)
+
+  Support only one-byte header from [RFC8285](https://www.rfc-editor.org/rfc/pdfrfc/rfc8285.txt.pdf), as according to document
+  this form is preferred and it must be supported by all receivers.
   """
 
   alias Membrane.RTP.{Header, Utils}
@@ -13,6 +16,9 @@ defmodule Membrane.RTP.Packet do
 
   @enforce_keys [:header, :payload]
   defstruct @enforce_keys
+
+  # 0xBEDE for Venerable Bede from RFC 8285
+  @one_byte_header_identifier <<0xBE, 0xDE>>
 
   @spec identify(binary()) :: :rtp | :rtcp
   def identify(<<_first_byte, _marker::1, payload_type::7, _rest::binary>>)
@@ -26,14 +32,14 @@ defmodule Membrane.RTP.Packet do
     %__MODULE__{header: header, payload: payload} = packet
     %Header{version: 2} = header
     has_padding = 0
-    has_extension = if header.extension, do: 1, else: 0
+    has_extension = if header.extensions == [], do: 0, else: 1
     marker = if header.marker, do: 1, else: 0
     csrcs = Enum.map_join(header.csrcs, &<<&1::32>>)
 
     serialized =
       <<header.version::2, has_padding::1, has_extension::1, length(header.csrcs)::4, marker::1,
         header.payload_type::7, header.sequence_number::16, header.timestamp::32, header.ssrc::32,
-        csrcs::binary, serialize_header_extension(header.extension)::binary, payload::binary>>
+        csrcs::binary, serialize_header_extensions(header.extensions)::binary, payload::binary>>
 
     case Utils.align(serialized, align_to) do
       {serialized, 0} ->
@@ -45,13 +51,36 @@ defmodule Membrane.RTP.Packet do
     end
   end
 
+  defp serialize_header_extensions([]), do: <<>>
+
+  defp serialize_header_extensions(extensions) do
+    extensions =
+      Enum.reduce(extensions, <<>>, fn extension, acc ->
+        acc <> serialize_header_extension(extension)
+      end)
+
+    extensions_size = byte_size(extensions)
+    padding = calculate_padding_size(extensions_size) * 8
+
+    extension_header_size =
+      div(extensions_size, 4) + if rem(extensions_size, 4) == 0, do: 0, else: 1
+
+    <<@one_byte_header_identifier, extension_header_size::16,
+      extensions::binary-size(extensions_size), 0::integer-size(padding)>>
+  end
+
+  defp calculate_padding_size(extensions_size) do
+    how_many_bytes_over_32 = rem(extensions_size, 4)
+    if how_many_bytes_over_32 == 0, do: 0, else: 4 - how_many_bytes_over_32
+  end
+
   defp serialize_header_extension(nil) do
     <<>>
   end
 
-  defp serialize_header_extension(%Header.Extension{data: data} = extension)
-       when byte_size(data) |> rem(4) == 0 do
-    <<extension.profile_specific::bitstring, byte_size(data) |> div(4)::16, data::binary>>
+  defp serialize_header_extension(%Header.Extension{data: data} = extension) do
+    data_size = byte_size(data) - 1
+    <<extension.identifier::integer-size(4), data_size::integer-size(4), data::binary>>
   end
 
   @spec parse(binary(), boolean()) ::
@@ -68,7 +97,7 @@ defmodule Membrane.RTP.Packet do
           rest::binary>> = original_packet,
         encrypted?
       ) do
-    with {:ok, {extension, payload}} <-
+    with {:ok, {extensions, payload}} <-
            parse_header_extension(rest, has_extension == 1),
          {:ok, {payload, padding}} =
            Utils.strip_padding(payload, not encrypted? and has_padding == 1) do
@@ -80,7 +109,7 @@ defmodule Membrane.RTP.Packet do
         payload_type: payload_type,
         timestamp: timestamp,
         csrcs: for(<<csrc::32 <- csrcs>>, do: csrc),
-        extension: extension
+        extensions: extensions
       }
 
       {:ok,
@@ -100,17 +129,40 @@ defmodule Membrane.RTP.Packet do
   def parse(_binary, _parse_payload?), do: {:error, :malformed_packet}
 
   defp parse_header_extension(binary, header_present?)
-  defp parse_header_extension(binary, false), do: {:ok, {nil, binary}}
+  defp parse_header_extension(binary, false), do: {:ok, {[], binary}}
 
   defp parse_header_extension(
-         <<profile_specific::binary-size(2), data_len::16, data::binary-size(data_len)-unit(32),
+         <<_profile_specific::binary-size(2), data_len::16, data::binary-size(data_len)-unit(32),
            rest::binary>>,
          true
        ) do
-    extension = %Header.Extension{profile_specific: profile_specific, data: data}
-
-    {:ok, {extension, rest}}
+    extensions = parse_extension_data(data, [])
+    extensions = Enum.reverse(extensions)
+    {:ok, {extensions, rest}}
   end
 
   defp parse_header_extension(_binary, true), do: :error
+
+  defp parse_extension_data(<<>>, acc), do: acc
+
+  defp parse_extension_data(data, acc) do
+    case parse_one_byte_header(data) do
+      {data, rest} -> parse_extension_data(rest, [data | acc])
+      rest -> parse_extension_data(rest, acc)
+    end
+  end
+
+  defp parse_one_byte_header(
+         <<0::4, _len_data::integer-size(4), _extension_header::bits-size(8), extensions::binary>>
+       ),
+       do: extensions
+
+  defp parse_one_byte_header(
+         <<local_identifier::integer-size(4), len_data::integer-size(4), extensions::binary>>
+       ) do
+    len_data = len_data + 1
+    <<data::binary-size(len_data), next_extensions::binary>> = extensions
+    extension = %Header.Extension{identifier: local_identifier, data: data}
+    {extension, next_extensions}
+  end
 end
