@@ -88,7 +88,7 @@ defmodule Membrane.RTP.VAD do
       clock_rate: opts.clock_rate,
       vad: :silence,
       vad_silence_timestamp: 0,
-      current_timestamp: 0,
+      current_timestamp: nil,
       rtp_timestamp_increment: opts.time_window * opts.clock_rate / 1000,
       min_packet_num: opts.min_packet_num,
       time_window: opts.time_window,
@@ -113,16 +113,11 @@ defmodule Membrane.RTP.VAD do
 
     rtp_timestamp = buffer.metadata.rtp.timestamp
     epoch = timestamp_epoch(state.current_timestamp, rtp_timestamp)
+    current_timestamp = state.current_timestamp || 0
 
     cond do
-      epoch == :current && rtp_timestamp > state.current_timestamp ->
-        state = %{state | current_timestamp: rtp_timestamp}
-        state = filter_old_audio_levels(state)
-        state = add_new_audio_level(state, level)
-        audio_levels_vad = get_audio_levels_vad(state)
-        actions = [buffer: {:output, buffer}] ++ maybe_notify(audio_levels_vad, state)
-        state = update_vad_state(audio_levels_vad, state)
-        {{:ok, actions}, state}
+      epoch == :current && rtp_timestamp > current_timestamp ->
+        handle_vad(buffer, rtp_timestamp, level, state)
 
       epoch == :next ->
         {:ok, state} = handle_init(state)
@@ -133,7 +128,19 @@ defmodule Membrane.RTP.VAD do
     end
   end
 
+  defp handle_vad(buffer, rtp_timestamp, level, state) do
+    state = %{state | current_timestamp: rtp_timestamp}
+    state = filter_old_audio_levels(state)
+    state = add_new_audio_level(state, level)
+    audio_levels_vad = get_audio_levels_vad(state)
+    actions = [buffer: {:output, buffer}] ++ maybe_notify(audio_levels_vad, state)
+    state = update_vad_state(audio_levels_vad, state)
+    {{:ok, actions}, state}
+  end
+
   @timestamp_limit 4_294_967_295
+
+  defp timestamp_epoch(nil, _timestamp), do: :current
 
   defp timestamp_epoch(prev_timestamp, timestamp) do
     # a) current epoch

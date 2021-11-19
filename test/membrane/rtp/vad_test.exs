@@ -28,7 +28,7 @@ defmodule Membrane.RTP.VADTest do
   end
 
   defp generate_initial_timestamp(_ctx),
-    do: [initial_timestamp: :rand.uniform(2_147_483_647)]
+    do: [initial_timestamp: :rand.uniform(4_294_967_295)]
 
   defp get_vad_attribute_or_default(ctx, attribute) do
     Map.get(ctx.registered, attribute) ||
@@ -249,6 +249,7 @@ defmodule Membrane.RTP.VADTest do
       state = process_buffer(rtp_buffer(-127, initial_timestamp + 1000), state)
       state = process_buffer(rtp_buffer(-5, 995), state)
       state = process_buffer(rtp_buffer(-5, 1995), state)
+      state = process_buffer(rtp_buffer(-5, 2995), state)
 
       assert %{audio_levels_count: 2, audio_levels_sum: -10, vad: :silence} = state
     end
