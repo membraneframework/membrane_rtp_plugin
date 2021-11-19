@@ -152,10 +152,18 @@ defmodule Membrane.RTP.Packet do
     end
   end
 
-  defp parse_one_byte_header(
-         <<0::4, _len_data::integer-size(4), _extension_header::bits-size(8), extensions::binary>>
-       ),
-       do: extensions
+  # According to RFC8285:
+  #   - ID=0 and length=0 is a padding byte
+  #   - ID=0 and length>0 must terminate further parsing
+  #   - ID=15 must terminate further parsing
+  defp parse_one_byte_header(<<0::4, 0::4, extensions::binary>>),
+    do: extensions
+
+  defp parse_one_byte_header(<<0::4, _length::4, _extensions::binary>>),
+    do: <<>>
+
+  defp parse_one_byte_header(<<15::4, _length::4, _extensions::binary>>),
+    do: <<>>
 
   defp parse_one_byte_header(
          <<local_identifier::integer-size(4), len_data::integer-size(4), extensions::binary>>
