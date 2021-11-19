@@ -159,10 +159,10 @@ defmodule Membrane.RTP.Packet do
   defp parse_one_byte_header(<<0::4, 0::4, extensions::binary>>),
     do: extensions
 
-  defp parse_one_byte_header(<<0::4, _length::4, _extensions::binary>>),
+  defp parse_one_byte_header(<<0::4, _len_data::4, _rest::binary>>),
     do: <<>>
 
-  defp parse_one_byte_header(<<15::4, _length::4, _extensions::binary>>),
+  defp parse_one_byte_header(<<15::4, _len_data::4, _rest::binary>>),
     do: <<>>
 
   defp parse_one_byte_header(
