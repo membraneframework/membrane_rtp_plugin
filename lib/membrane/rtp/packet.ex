@@ -70,7 +70,7 @@ defmodule Membrane.RTP.Packet do
       ) do
     with {:ok, {extension, payload}} <-
            parse_header_extension(rest, has_extension == 1),
-         {:ok, {payload, padding}} =
+         {:ok, {payload, padding}} <-
            Utils.strip_padding(payload, not encrypted? and has_padding == 1) do
       header = %Header{
         version: version,
