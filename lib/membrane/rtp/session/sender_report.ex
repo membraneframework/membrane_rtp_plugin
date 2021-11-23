@@ -45,9 +45,10 @@ defmodule Membrane.RTP.Session.SenderReport do
         "Not received sender stats from ssrcs: #{Enum.join(report_data.senders_ssrcs, ", ")}"
       )
 
-      with [] <- generate_report(report_data.stats) do
-        {:no_report, report_data}
-      else
+      case generate_report(report_data.stats) do
+        [] ->
+          {:no_report, report_data}
+
         sender_reports ->
           {{:report, sender_reports}, %{report_data | senders_ssrcs: MapSet.new(), stats: %{}}}
       end
@@ -62,9 +63,8 @@ defmodule Membrane.RTP.Session.SenderReport do
     data = %{data | stats: Map.put(data.stats, sender_ssrc, stats), senders_ssrcs: senders_ssrcs}
 
     if Enum.empty?(senders_ssrcs) do
-      with [] <- generate_report(data.stats) do
-        {:no_report, data}
-      else
+      case generate_report(data.stats) do
+        [] -> {:no_report, data}
         sender_reports -> {{:report, sender_reports}, data}
       end
     else

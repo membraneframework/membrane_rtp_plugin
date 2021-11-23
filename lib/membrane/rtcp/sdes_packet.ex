@@ -123,7 +123,7 @@ defmodule Membrane.RTCP.SdesPacket do
     {body, length(chunk_list)}
   end
 
-  @spec encode_chunk(chunk :: %__MODULE__.Chunk{}) :: binary()
+  @spec encode_chunk(chunk :: Chunk.t()) :: binary()
   defp encode_chunk(chunk) do
     body =
       chunk
