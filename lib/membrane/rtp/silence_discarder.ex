@@ -86,7 +86,7 @@ defmodule Membrane.RTP.SilenceDiscarder do
       %{
         extension: %Header.Extension{
           # profile specific for one-byte extensions
-          profile_specific: <<0xBE, 0xDE>>,
+          identifier: <<0xBE, 0xDE>>,
           data: data
         }
       } ->

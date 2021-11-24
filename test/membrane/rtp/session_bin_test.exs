@@ -169,7 +169,7 @@ defmodule Membrane.RTP.Session.BinTest do
     end
 
     @impl true
-    def handle_notification({:new_rtp_stream, ssrc, pt}, :rtp, _ctx, state) do
+    def handle_notification({:new_rtp_stream, ssrc, pt, _extensions}, :rtp, _ctx, state) do
       {encoding, _clock_rate} = Map.fetch!(state.fmt_mapping, pt)
 
       depayloader =

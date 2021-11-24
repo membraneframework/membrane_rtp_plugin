@@ -13,11 +13,11 @@ defmodule Membrane.RTP.Header.Extension do
 
   ```
   """
-  @enforce_keys [:profile_specific, :data]
+  @enforce_keys [:identifier, :data]
   defstruct @enforce_keys
 
   @type t :: %__MODULE__{
-          profile_specific: binary(),
+          identifier: 1..14,
           data: binary()
         }
 end

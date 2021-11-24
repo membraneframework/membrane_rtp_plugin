@@ -26,7 +26,7 @@ defmodule Membrane.RTP.ParserTest do
                           payload_type: 14,
                           ssrc: 3_919_876_492,
                           csrcs: [],
-                          extension: nil,
+                          extensions: [],
                           marker: false,
                           has_padding?: false,
                           total_header_size: 12

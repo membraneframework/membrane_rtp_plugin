@@ -518,9 +518,14 @@ defmodule Membrane.RTP.SessionBin do
   end
 
   @impl true
-  def handle_notification({:new_rtp_stream, ssrc, payload_type}, :ssrc_router, _ctx, state) do
+  def handle_notification(
+        {:new_rtp_stream, ssrc, payload_type, extensions},
+        :ssrc_router,
+        _ctx,
+        state
+      ) do
     state = put_in(state.ssrc_pt_mapping[ssrc], payload_type)
-    {{:ok, notify: {:new_rtp_stream, ssrc, payload_type}}, state}
+    {{:ok, notify: {:new_rtp_stream, ssrc, payload_type, extensions}}, state}
   end
 
   @impl true
