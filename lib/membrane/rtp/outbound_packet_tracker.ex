@@ -69,6 +69,11 @@ defmodule Membrane.RTP.OutboundPacketTracker do
   end
 
   @impl true
+  def handle_demand(_pad, _size, _type, _ctx, state) do
+    {:ok, state}
+  end
+
+  @impl true
   def handle_pad_added(Pad.ref(:rtcp_input, _id), _ctx, state) do
     {:ok, state}
   end

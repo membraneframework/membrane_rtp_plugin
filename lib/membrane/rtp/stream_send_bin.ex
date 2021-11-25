@@ -55,7 +55,7 @@ defmodule Membrane.RTP.StreamSendBin do
   @impl true
   def handle_pad_added(Pad.ref(:rtcp_output, _id) = pad, _ctx, state) do
     links = [
-      link(:serializer)
+      link(:packet_tracker)
       |> via_out(Pad.ref(:rtcp_output, make_ref()))
       |> to_bin_output(pad)
     ]
@@ -79,13 +79,6 @@ defmodule Membrane.RTP.StreamSendBin do
 
   @impl true
   def handle_tick(:report_timer, _ctx, state) do
-    {{:ok, forward: {:packet_tracker, :send_stats}}, state}
-
-    {:ok, state}
-  end
-
-  @impl true
-  def handle_other(:send_stats, _ctx, state) do
     {{:ok, forward: {:packet_tracker, :send_stats}}, state}
   end
 end

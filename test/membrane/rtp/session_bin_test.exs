@@ -109,7 +109,7 @@ defmodule Membrane.RTP.Session.BinTest do
             end
           },
           hackney: %Membrane.Hackney.Source{
-            location: "https://membraneframework.github.io/static/video-samples/test-video.h264"
+            location: "https://membraneframework.github.io/static/samples/big-buck-bunny/bun33s_720x480.h264"
           },
           parser: %Membrane.H264.FFmpeg.Parser{framerate: {30, 1}, alignment: :nal},
           rtp_sink: Testing.Sink,
