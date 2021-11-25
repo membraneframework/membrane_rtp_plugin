@@ -104,7 +104,7 @@ defmodule Membrane.RTP.OutboundPacketTracker do
 
     buffer = %Buffer{payload: payload, metadata: metadata}
 
-    {{:ok, buffer: {:output, buffer}}, state}
+    {{:ok, buffer: {:output, buffer}}, %{state | any_buffer_sent?: true}}
   end
 
   @impl true
