@@ -69,7 +69,7 @@ defmodule Membrane.RTP.VADTest do
       extensions: [
         %Membrane.RTP.Header.Extension{
           data: data,
-          identifier: 1
+          identifier: nil
         }
       ],
       has_padding?: false,

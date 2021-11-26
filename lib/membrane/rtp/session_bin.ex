@@ -52,21 +52,33 @@ defmodule Membrane.RTP.SessionBin do
   @type new_stream_notification_t :: Membrane.RTP.SSRCRouter.new_stream_notification_t()
 
   @typedoc """
+  An atom that identifies an extension in the bin. It will be used by the module implementing it
+  to mark its header extension under `Membrane.RTP.Header.Extension`'s `identifier` key.
+  """
+  @type extension_name_t :: atom()
+
+  @typedoc """
   A module that will be spawned and linked just before a newly created `:output` pad representing
   a single RTP stream.
 
   Given extension config must be a valid `Membrane.Filter`.
 
-  An extension will be spawned inside the bin under `{extension_name :: atom(), ssrc}` name.
+  An extension will be spawned inside the bin under `{extension_name, ssrc}` name.
 
   ### Currently supported extensions are:
   * `Membrane.RTP.VAD`
 
   ### Example usage
-  `{:vad, %Mebrane.RTP.VAD{time_window: 1_000_000}}`
+  `{:vad, 1, %Mebrane.RTP.VAD{time_window: 1_000_000}}`
   """
   @type extension_t ::
-          {extension_name :: atom(), extension_config :: Membrane.ParentSpec.child_spec_t()}
+          {extension_name :: extension_name_t(), header_extension_id :: 1..14,
+           extension_config :: Membrane.ParentSpec.child_spec_t()}
+
+  @typedoc """
+  A mapping between internally used `extension_name_t()` and extension identifiers expected by RTP stream receiver.
+  """
+  @type extension_mapping_t :: %{extension_name_t() => 1..14}
 
   @typedoc """
   A definition of a child that will be responsible for arbitrary packet filtering
@@ -236,6 +248,14 @@ defmodule Membrane.RTP.SessionBin do
         description: """
         Clock rate to use. If not provided, determined from `:payload_type`.
         """
+      ],
+      extension_mapping: [
+        spec: extension_mapping_t(),
+        default: nil,
+        description: """
+        Mapping from locally used `extension_name_t()` to integer identifiers expected by
+        the receiver of a RTP stream.
+        """
       ]
     ]
 
@@ -361,23 +381,27 @@ defmodule Membrane.RTP.SessionBin do
       |> via_out(Pad.ref(:output, ssrc))
       |> to(rtp_stream_name)
 
-    acc = {new_children, router_link}
+    acc = {new_children, router_link, []}
 
-    {new_children, router_link} =
+    {new_children, router_link, children_actions} =
       extensions
-      |> Enum.reduce(acc, fn {extension_name, config}, {new_children, new_link} ->
+      |> Enum.reduce(acc, fn {extension_name, header_extension_id, config},
+                             {new_children, new_link, actions} ->
         extension_id = {extension_name, ssrc}
 
         {
           Map.merge(new_children, %{extension_id => config}),
-          new_link |> to(extension_id)
+          new_link |> to(extension_id),
+          actions ++ [forward: {extension_id, {:header_extension_id, header_extension_id}}]
         }
       end)
 
     new_links = [router_link |> to_bin_output(pad)]
 
     new_spec = %ParentSpec{children: new_children, links: new_links}
-    {{:ok, spec: new_spec}, state}
+    actions = [spec: new_spec] ++ children_actions
+
+    {{:ok, actions}, state}
   end
 
   @impl true
@@ -402,7 +426,9 @@ defmodule Membrane.RTP.SessionBin do
       {:ok, state}
     else
       %{payloader: payloader} = ctx.pads[input_pad].options
-      %{clock_rate: clock_rate} = ctx.pads[output_pad].options
+
+      %{clock_rate: clock_rate, extension_mapping: extension_mapping} =
+        ctx.pads[output_pad].options
 
       payload_type = get_output_payload_type!(ctx, ssrc)
       clock_rate = clock_rate || get_from_register!(:clock_rate, payload_type, state)
@@ -416,7 +442,8 @@ defmodule Membrane.RTP.SessionBin do
           ssrc: ssrc,
           payload_type: payload_type,
           payloader: payloader,
-          clock_rate: clock_rate
+          clock_rate: clock_rate,
+          extension_mapping: extension_mapping || %{}
         })
         |> then(if state.secure?, do: maybe_link_encryptor, else: & &1)
         |> to_bin_output(output_pad)

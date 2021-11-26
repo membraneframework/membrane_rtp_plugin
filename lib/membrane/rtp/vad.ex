@@ -25,6 +25,8 @@ defmodule Membrane.RTP.VAD do
   """
   use Membrane.Filter
 
+  alias Membrane.RTP.Header
+
   def_input_pad :input,
     availability: :always,
     caps: :any,
@@ -84,6 +86,7 @@ defmodule Membrane.RTP.VAD do
   @impl true
   def handle_init(opts) do
     state = %{
+      header_extension_id: nil,
       audio_levels: Qex.new(),
       clock_rate: opts.clock_rate,
       vad: :silence,
@@ -108,8 +111,21 @@ defmodule Membrane.RTP.VAD do
 
   @impl true
   def handle_process(:input, %Membrane.Buffer{} = buffer, _ctx, state) do
-    vad_extension = Enum.find(buffer.metadata.rtp.extensions, &(&1.identifier == 1))
-    <<_v::1, level::7>> = vad_extension.data
+    {extension, buffer} = Header.Extension.pop(buffer, state.header_extension_id)
+    handle_if_present(buffer, extension, state)
+  end
+
+  defp handle_if_present(buffer, nil, state), do: {{:ok, buffer: {:output, buffer}}, state}
+
+  defp handle_if_present(buffer, extension, state) do
+    <<_v::1, level::7>> = extension.data
+
+    new_extension = %Header.Extension{
+      identifier: :vad,
+      data: extension.data
+    }
+
+    buffer = Header.Extension.put(buffer, new_extension)
 
     rtp_timestamp = buffer.metadata.rtp.timestamp
     epoch = timestamp_epoch(state.current_timestamp, rtp_timestamp)
@@ -126,6 +142,11 @@ defmodule Membrane.RTP.VAD do
       true ->
         {{:ok, buffer: {:output, buffer}}, state}
     end
+  end
+
+  @impl true
+  def handle_other({:header_extension_id, id}, _ctx, state) do
+    {:ok, %{state | header_extension_id: id}}
   end
 
   defp handle_vad(buffer, rtp_timestamp, level, state) do
