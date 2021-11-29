@@ -53,10 +53,18 @@ defmodule Membrane.RTP.StreamSendBin do
   end
 
   @impl true
+  def handle_prepared_to_stopped(_context, %{rtcp_report_interval: nil} = state), do: {:ok, state}
+
+  @impl true
+  def handle_prepared_to_stopped(_context, state) do
+    {{:ok, stop_timer: :report_timer}, state}
+  end
+
+  @impl true
   def handle_pad_added(Pad.ref(:rtcp_output, _id) = pad, _ctx, state) do
     links = [
       link(:packet_tracker)
-      |> via_out(Pad.ref(:rtcp_output, make_ref()))
+      |> via_out(:rtcp_output)
       |> to_bin_output(pad)
     ]
 

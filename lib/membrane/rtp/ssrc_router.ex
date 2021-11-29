@@ -20,7 +20,6 @@ defmodule Membrane.RTP.SSRCRouter do
   def_input_pad :rtcp_input, demand_unit: :buffers, caps: :any, availability: :on_request
 
   def_output_pad :output, caps: RTP, availability: :on_request
-  # def_output_pad :rtcp_output, caps: :any, availability: :on_request
 
   defmodule State do
     @moduledoc false

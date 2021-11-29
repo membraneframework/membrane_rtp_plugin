@@ -72,7 +72,9 @@ defmodule Membrane.RTCP.Parser do
 
   defp process_rtcp(%RTCP.SenderReportPacket{ssrc: ssrc} = packet, metadata) do
     event = %RTCPEvent{
-      # NOTE: why are reports assigned to empty array?
+      # FIXME: reports get assigned to empty array
+      # to avoid copying it when sending to other processes, they are currently not used
+      # anywhere  but once they are the reassignment should be removed
       rtcp: %{packet | reports: []},
       ssrcs: [ssrc],
       arrival_timestamp: Map.get(metadata, :arrival_ts, Membrane.Time.vm_time())

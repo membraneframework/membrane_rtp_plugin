@@ -41,11 +41,13 @@ defmodule Membrane.RTP.OutboundPacketTracker do
     use Bunch.Access
 
     @type t :: %__MODULE__{
+            ssrc: RTP.ssrc_t(),
             any_buffer_sent?: boolean(),
             stats_acc: %{}
           }
 
-    defstruct any_buffer_sent?: false,
+    defstruct ssrc: 0,
+              any_buffer_sent?: false,
               rtcp_output_pad: nil,
               stats_acc: %{
                 clock_rate: 0,
@@ -69,7 +71,7 @@ defmodule Membrane.RTP.OutboundPacketTracker do
   end
 
   @impl true
-  def handle_demand(_pad, _size, _type, _ctx, state) do
+  def handle_demand(pad, _size, _type, _ctx, %State{rtcp_output_pad: pad} = state) do
     {:ok, state}
   end
 
@@ -125,7 +127,7 @@ defmodule Membrane.RTP.OutboundPacketTracker do
     {{:ok, actions ++ [redemand: state.rtcp_output_pad]}, %{state | any_buffer_sent?: false}}
   end
 
-  @spec get_stats(State.t()) :: %{} | :no_stats
+  @spec get_stats(State.t()) :: SenderReport.sender_stats_t() | :no_stats
   defp get_stats(%State{any_buffer_sent?: false}), do: :no_stats
   defp get_stats(%State{stats_acc: stats}), do: stats
 

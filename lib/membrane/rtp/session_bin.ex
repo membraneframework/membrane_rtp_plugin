@@ -456,8 +456,8 @@ defmodule Membrane.RTP.SessionBin do
 
           [
             link({:stream_send_bin, ssrc})
-            |> via_out(Pad.ref(:rtcp_output, make_ref()))
-            |> then(if state.secure?, do: maybe_link_srtcp_encryptor)
+            |> via_out(:rtcp_output)
+            |> then(if state.secure?, do: maybe_link_srtcp_encryptor, else: & &1)
             |> to_bin_output(rtcp_sender_output),
             link(:ssrc_router)
             |> via_out(Pad.ref(:output, ssrc))
