@@ -26,8 +26,8 @@ defmodule Membrane.RTP.Header.Extension do
           data: binary()
         }
 
-  @spec pop_identifier(Buffer.t(), identifier_t()) :: {t() | nil, Buffer.t()}
-  def pop_identifier(buffer, identifier) do
+  @spec pop(Buffer.t(), identifier_t()) :: {t() | nil, Buffer.t()}
+  def pop(buffer, identifier) do
     extension = Enum.find(buffer.metadata.rtp.extensions, &(&1.identifier == identifier))
 
     if extension do

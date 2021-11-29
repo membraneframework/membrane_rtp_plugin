@@ -34,7 +34,7 @@ defmodule Membrane.RTP.StreamSendBin do
         ssrc: opts.ssrc,
         payload_type: opts.payload_type,
         clock_rate: opts.clock_rate,
-        rtp_extension_mapping: opts.rtp_extension_mapping || %{}
+        extension_mapping: opts.rtp_extension_mapping || %{}
       })
       |> to_bin_output()
     ]

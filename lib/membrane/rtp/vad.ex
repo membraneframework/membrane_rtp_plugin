@@ -86,7 +86,7 @@ defmodule Membrane.RTP.VAD do
   @impl true
   def handle_init(opts) do
     state = %{
-      header_extension_id: nil,
+      vad_id: nil,
       audio_levels: Qex.new(),
       clock_rate: opts.clock_rate,
       vad: :silence,
@@ -111,7 +111,7 @@ defmodule Membrane.RTP.VAD do
 
   @impl true
   def handle_process(:input, %Membrane.Buffer{} = buffer, _ctx, state) do
-    {extension, buffer} = Header.Extension.pop_identifier(buffer, state.header_extension_id)
+    {extension, buffer} = Header.Extension.pop(buffer, state.vad_id)
     handle_if_present(buffer, extension, state)
   end
 
@@ -146,7 +146,7 @@ defmodule Membrane.RTP.VAD do
 
   @impl true
   def handle_other({:header_extension_id, id}, _ctx, state) do
-    {:ok, %{state | header_extension_id: id}}
+    {:ok, %{state | vad_id: id}}
   end
 
   defp handle_vad(buffer, rtp_timestamp, level, state) do
