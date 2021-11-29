@@ -20,7 +20,7 @@ defmodule Membrane.RTP.OutboundPacketTracker do
   def_options ssrc: [spec: RTP.ssrc_t()],
               payload_type: [spec: RTP.payload_type_t()],
               clock_rate: [spec: RTP.clock_rate_t()],
-              extension_mapping: [spec: RTP.SessionBin.extension_mapping_t()],
+              rtp_extension_mapping: [spec: RTP.SessionBin.rtp_extension_mapping_t()],
               alignment: [
                 default: 1,
                 spec: pos_integer(),
@@ -69,9 +69,11 @@ defmodule Membrane.RTP.OutboundPacketTracker do
 
     extensions =
       rtp_metadata.extensions
-      |> Enum.filter(fn extension -> extension.identifier in Map.keys(state.extension_mapping) end)
+      |> Enum.filter(fn extension ->
+        extension.identifier in Map.keys(state.rtp_extension_mapping)
+      end)
       |> Enum.map(fn extension ->
-        %{extension | identifier: Map.fetch!(state.extension_mapping, extension.identifier)}
+        %{extension | identifier: Map.fetch!(state.rtp_extension_mapping, extension.identifier)}
       end)
 
     header =

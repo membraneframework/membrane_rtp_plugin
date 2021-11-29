@@ -19,15 +19,15 @@ defmodule Membrane.RTP.Header.Extension do
   @enforce_keys [:identifier, :data]
   defstruct @enforce_keys
 
-  @type identifier_t :: 1..14 | SessionBin.extension_name_t()
+  @type identifier_t :: 1..14 | SessionBin.rtp_extension_name_t()
 
   @type t :: %__MODULE__{
           identifier: identifier_t(),
           data: binary()
         }
 
-  @spec pop(Buffer.t(), identifier_t()) :: {t() | nil, Buffer.t()}
-  def pop(buffer, identifier) do
+  @spec pop_identifier(Buffer.t(), identifier_t()) :: {t() | nil, Buffer.t()}
+  def pop_identifier(buffer, identifier) do
     extension = Enum.find(buffer.metadata.rtp.extensions, &(&1.identifier == identifier))
 
     if extension do

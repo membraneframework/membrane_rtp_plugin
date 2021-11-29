@@ -111,7 +111,7 @@ defmodule Membrane.RTP.VAD do
 
   @impl true
   def handle_process(:input, %Membrane.Buffer{} = buffer, _ctx, state) do
-    {extension, buffer} = Header.Extension.pop(buffer, state.header_extension_id)
+    {extension, buffer} = Header.Extension.pop_identifier(buffer, state.header_extension_id)
     handle_if_present(buffer, extension, state)
   end
 

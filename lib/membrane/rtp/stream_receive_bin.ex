@@ -18,8 +18,8 @@ defmodule Membrane.RTP.StreamReceiveBin do
                 type: :boolean,
                 default: false
               ],
-              filters: [
-                spec: [Membrane.RTP.SessionBin.packet_filter_t()],
+              extensions: [
+                spec: [Membrane.RTP.SessionBin.extension_t()],
                 default: []
               ],
               clock_rate: [
@@ -48,7 +48,7 @@ defmodule Membrane.RTP.StreamReceiveBin do
 
     links = [
       link_bin_input()
-      |> to_filters(opts.filters)
+      |> to_extensions(opts.extensions)
       |> to(:rtcp_receiver, %Membrane.RTCP.Receiver{
         local_ssrc: opts.local_ssrc,
         remote_ssrc: opts.remote_ssrc,
@@ -71,9 +71,9 @@ defmodule Membrane.RTP.StreamReceiveBin do
     {{:ok, spec: spec}, %{}}
   end
 
-  defp to_filters(link_builder, filters) do
-    Enum.reduce(filters, link_builder, fn {filter_name, filter}, builder ->
-      builder |> to(filter_name, filter)
+  defp to_extensions(link_builder, extensions) do
+    Enum.reduce(extensions, link_builder, fn {extension_name, extension}, builder ->
+      builder |> to(extension_name, extension)
     end)
   end
 end

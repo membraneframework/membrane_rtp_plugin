@@ -13,7 +13,7 @@ defmodule Membrane.RTP.StreamSendBin do
               payload_type: [spec: RTP.payload_type_t()],
               ssrc: [spec: RTP.ssrc_t()],
               clock_rate: [spec: RTP.clock_rate_t()],
-              extension_mapping: [spec: RTP.SessionBin.extension_mapping_t()]
+              rtp_extension_mapping: [spec: RTP.SessionBin.rtp_extension_mapping_t()]
 
   @impl true
   def handle_init(opts) do
@@ -34,7 +34,7 @@ defmodule Membrane.RTP.StreamSendBin do
         ssrc: opts.ssrc,
         payload_type: opts.payload_type,
         clock_rate: opts.clock_rate,
-        extension_mapping: opts.extension_mapping || %{}
+        rtp_extension_mapping: opts.rtp_extension_mapping || %{}
       })
       |> to_bin_output()
     ]
