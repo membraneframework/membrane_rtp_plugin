@@ -36,7 +36,11 @@ defmodule Membrane.RTP.VAD do
     availability: :always,
     caps: :any
 
-  def_options clock_rate: [
+  def_options vad_id: [
+                spec: 1..14,
+                description: "ID of VAD header extension."
+              ],
+              clock_rate: [
                 spec: Membrane.RTP.clock_rate_t(),
                 default: 48_000,
                 description: "Clock rate (in `Hz`) for the encoding."
@@ -86,7 +90,7 @@ defmodule Membrane.RTP.VAD do
   @impl true
   def handle_init(opts) do
     state = %{
-      vad_id: nil,
+      vad_id: opts.vad_id,
       audio_levels: Qex.new(),
       clock_rate: opts.clock_rate,
       vad: :silence,
@@ -142,11 +146,6 @@ defmodule Membrane.RTP.VAD do
       true ->
         {{:ok, buffer: {:output, buffer}}, state}
     end
-  end
-
-  @impl true
-  def handle_other({:header_extension_id, id}, _ctx, state) do
-    {:ok, %{state | vad_id: id}}
   end
 
   defp handle_vad(buffer, rtp_timestamp, level, state) do

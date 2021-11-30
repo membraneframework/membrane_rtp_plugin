@@ -20,6 +20,7 @@ defmodule Membrane.RTP.VADTest do
   ExUnit.Case.register_attribute(__MODULE__, :vad_silence_time)
   ExUnit.Case.register_attribute(__MODULE__, :vad_threshold)
 
+  @default_vad_id 1
   @default_buffer_interval 20
 
   defp calculate_buffer_time_delta(ctx) do
@@ -50,6 +51,7 @@ defmodule Membrane.RTP.VADTest do
   defp setup_initial_vad_state(ctx) do
     {:ok, state} =
       VAD.handle_init(%{
+        vad_id: @default_vad_id,
         clock_rate: ctx.clock_rate,
         min_packet_num: ctx.min_packet_num,
         time_window: ctx.time_window,
@@ -68,8 +70,8 @@ defmodule Membrane.RTP.VADTest do
       csrcs: [],
       extensions: [
         %Membrane.RTP.Header.Extension{
-          data: data,
-          identifier: nil
+          identifier: @default_vad_id,
+          data: data
         }
       ],
       has_padding?: false,

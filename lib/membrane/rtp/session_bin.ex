@@ -69,10 +69,10 @@ defmodule Membrane.RTP.SessionBin do
   * `Membrane.RTP.VAD`
 
   ### Example usage
-  `{:vad, 1, %Mebrane.RTP.VAD{time_window: 1_000_000}}`
+  `{:vad, %Mebrane.RTP.VAD{vad_id: 1, time_window: 1_000_000}}`
   """
   @type rtp_extension_options_t ::
-          {extension_name :: rtp_extension_name_t(), rtp_extension_id :: 1..14,
+          {extension_name :: rtp_extension_name_t(),
            extension_config :: Membrane.ParentSpec.child_spec_t()}
 
   @typedoc """
@@ -380,27 +380,22 @@ defmodule Membrane.RTP.SessionBin do
       |> via_out(Pad.ref(:output, ssrc))
       |> to(rtp_stream_name)
 
-    acc = {new_children, router_link, []}
+    acc = {new_children, router_link}
 
-    {new_children, router_link, children_actions} =
+    {new_children, router_link} =
       rtp_extensions
-      |> Enum.reduce(acc, fn {extension_name, header_extension_id, config},
-                             {new_children, new_link, actions} ->
+      |> Enum.reduce(acc, fn {extension_name, config}, {new_children, new_link} ->
         extension_id = {extension_name, ssrc}
 
         {
           Map.merge(new_children, %{extension_id => config}),
-          new_link |> to(extension_id),
-          actions ++ [forward: {extension_id, {:header_extension_id, header_extension_id}}]
+          new_link |> to(extension_id)
         }
       end)
 
     new_links = [router_link |> to_bin_output(pad)]
 
-    new_spec = %ParentSpec{children: new_children, links: new_links}
-    actions = [spec: new_spec] ++ children_actions
-
-    {{:ok, actions}, state}
+    {{:ok, spec: %ParentSpec{children: new_children, links: new_links}}, state}
   end
 
   @impl true
