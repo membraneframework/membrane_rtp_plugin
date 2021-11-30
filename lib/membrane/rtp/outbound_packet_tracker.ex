@@ -2,8 +2,9 @@ defmodule Membrane.RTP.OutboundPacketTracker do
   @moduledoc """
   Tracks statistics of outband packets.
 
-  Besides tracking statistics, tracker can also serialize packet's header and payload stored inside an incoming buffer into
-  a a proper RTP packet.
+  Besides tracking statistics, tracker can also serialize packet's header and payload stored inside an incoming buffer
+  into a proper RTP packet. When encountering header extensions, it remaps its identifiers from locally used extension
+  names to integer values expected by the receiver.
   """
   use Membrane.Filter
 
@@ -19,6 +20,7 @@ defmodule Membrane.RTP.OutboundPacketTracker do
   def_options ssrc: [spec: RTP.ssrc_t()],
               payload_type: [spec: RTP.payload_type_t()],
               clock_rate: [spec: RTP.clock_rate_t()],
+              extension_mapping: [spec: RTP.SessionBin.rtp_extension_mapping_t()],
               alignment: [
                 default: 1,
                 spec: pos_integer(),
@@ -65,8 +67,22 @@ defmodule Membrane.RTP.OutboundPacketTracker do
 
     {rtp_metadata, metadata} = Map.pop(buffer.metadata, :rtp, %{})
 
+    supported_extensions = Map.keys(state.extension_mapping)
+
+    extensions =
+      rtp_metadata.extensions
+      |> Enum.filter(fn extension -> extension.identifier in supported_extensions end)
+      |> Enum.map(fn extension ->
+        %{extension | identifier: Map.fetch!(state.extension_mapping, extension.identifier)}
+      end)
+
     header =
-      struct(RTP.Header, %{rtp_metadata | ssrc: state.ssrc, payload_type: state.payload_type})
+      struct(RTP.Header, %{
+        rtp_metadata
+        | ssrc: state.ssrc,
+          payload_type: state.payload_type,
+          extensions: extensions
+      })
 
     payload =
       RTP.Packet.serialize(%RTP.Packet{header: header, payload: buffer.payload},

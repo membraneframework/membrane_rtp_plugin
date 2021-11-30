@@ -52,31 +52,42 @@ defmodule Membrane.RTP.SessionBin do
   @type new_stream_notification_t :: Membrane.RTP.SSRCRouter.new_stream_notification_t()
 
   @typedoc """
-  A module that will be spawned and linked just before a newly created `:output` pad representing
-  a single RTP stream.
+  An atom that identifies an RTP extension in the bin. It will be used by the module implementing it
+  to mark its header extension under `Membrane.RTP.Header.Extension`'s `identifier` key.
+  """
+  @type rtp_extension_name_t :: atom()
+
+  @typedoc """
+  A module representing an RTP extension that will be spawned and linked just before a newly created
+  `:output` pad representing a single RTP stream.
 
   Given extension config must be a valid `Membrane.Filter`.
 
-  An extension will be spawned inside the bin under `{extension_name :: atom(), ssrc}` name.
+  An extension will be spawned inside the bin under `{extension_name, ssrc}` name.
 
-  ### Currently supported extensions are:
+  ### Currently supported RTP extensions are:
   * `Membrane.RTP.VAD`
 
   ### Example usage
-  `{:vad, %Mebrane.RTP.VAD{time_window: 1_000_000}}`
+  `{:vad, %Mebrane.RTP.VAD{vad_id: 1, time_window: 1_000_000}}`
   """
-  @type extension_t ::
-          {extension_name :: atom(), extension_config :: Membrane.ParentSpec.child_spec_t()}
+  @type rtp_extension_options_t ::
+          {extension_name :: rtp_extension_name_t(),
+           extension_config :: Membrane.ParentSpec.child_spec_t()}
 
   @typedoc """
-  A definition of a child that will be responsible for arbitrary packet filtering
-  inside `Membrane.RTP.StreamReceiveBin`. Each filter should have just a single input and output
-  pad named accordingly.
-
-  A filter can be responsible e.g. for dropping silent audio packets when encountered VAD extension data in the
-  packet header.
+  A mapping between internally used `rtp_extension_name_t()` and extension identifiers expected by RTP stream receiver.
   """
-  @type packet_filter_t :: {Membrane.Child.name_t(), Membrane.ParentSpec.child_spec_t()}
+  @type rtp_extension_mapping_t :: %{rtp_extension_name_t() => 1..14}
+
+  @typedoc """
+  A definition of a general extension inside `Membrane.RTP.StreamReceiveBin`. Each extension should
+  have just a single input and output pad named accordingly.
+
+  Extensions can implement different functionalities, for example a filter can be responsible for dropping silent
+  audio packets when encountered VAD extension data in header extensions of a packet.
+  """
+  @type extension_t :: {Membrane.Child.name_t(), Membrane.ParentSpec.child_spec_t()}
 
   @ssrc_boundaries 2..(Bitwise.bsl(1, 32) - 1)
 
@@ -181,26 +192,26 @@ defmodule Membrane.RTP.SessionBin do
         `Membrane.RTP.X.Plugin` where X is the name of codec corresponding to `encoding`.
         """
       ],
+      rtp_extensions: [
+        spec: [rtp_extension_options_t()],
+        default: [],
+        description: """
+        List of RTP extension options. Currently only `:vad` is supported.
+        * `:vad` will turn on Voice Activity Detection mechanism firing appropriate notifications when needed.
+        Should be set only for audio tracks. For more information refer to `Membrane.RTP.VAD` module documentation.
+
+        RTP extensions are applied in the same order as passed to the pad options.
+        """
+      ],
       extensions: [
         spec: [extension_t()],
         default: [],
         description: """
-        List of extensions. Currently `:vad` is only supported.
-        * `:vad` will turn on Voice Activity Detection mechanism firing appropriate notifications when needed.
-        Should be set only for audio tracks. For more information refer to `Membrane.RTP.VAD` module documentation.
+        A list of general extensions that will be attached to the packets flow (added inside `Membrane.RTP.StreamReceiveBin`).
+        In case of SRTP extensions are placed before the Decryptor. The order of provided elements is important
+        as the extensions are applied in FIFO order.
 
-        Extensions are applied in the same order as passed to the pad options.
-        """
-      ],
-      packet_filters: [
-        spec: [packet_filter_t()],
-        default: [],
-        description: """
-        A list of filter elements that will be attached to the packets flow (added inside `Membrane.RTP.StreamReceiveBin`).
-        In case of SRTP filters are placed before the Decryptor. The order of provided elements is important
-        as the filters are applied in FIFO order.
-
-        A filter can be responsible e.g. for dropping silent audio packets when encountered VAD extension data in the
+        An extension can be responsible e.g. for dropping silent audio packets when encountered VAD extension data in the
         packet header.
         """
       ],
@@ -235,6 +246,14 @@ defmodule Membrane.RTP.SessionBin do
         default: nil,
         description: """
         Clock rate to use. If not provided, determined from `:payload_type`.
+        """
+      ],
+      rtp_extension_mapping: [
+        spec: rtp_extension_mapping_t(),
+        default: nil,
+        description: """
+        Mapping from locally used `rtp_extension_name_t()` to integer identifiers expected by
+        the receiver of a RTP stream.
         """
       ]
     ]
@@ -330,9 +349,9 @@ defmodule Membrane.RTP.SessionBin do
     %{
       depayloader: depayloader,
       clock_rate: clock_rate,
-      extensions: extensions,
+      rtp_extensions: rtp_extensions,
       rtcp_fir_interval: fir_interval,
-      packet_filters: filters
+      extensions: extensions
     } = ctx.pads[pad].options
 
     payload_type = Map.fetch!(state.ssrc_pt_mapping, ssrc)
@@ -346,7 +365,7 @@ defmodule Membrane.RTP.SessionBin do
       rtp_stream_name => %RTP.StreamReceiveBin{
         clock_rate: clock_rate,
         depayloader: depayloader,
-        filters: filters,
+        extensions: extensions,
         local_ssrc: local_ssrc,
         remote_ssrc: ssrc,
         rtcp_fir_interval: fir_interval,
@@ -364,7 +383,7 @@ defmodule Membrane.RTP.SessionBin do
     acc = {new_children, router_link}
 
     {new_children, router_link} =
-      extensions
+      rtp_extensions
       |> Enum.reduce(acc, fn {extension_name, config}, {new_children, new_link} ->
         extension_id = {extension_name, ssrc}
 
@@ -376,8 +395,7 @@ defmodule Membrane.RTP.SessionBin do
 
     new_links = [router_link |> to_bin_output(pad)]
 
-    new_spec = %ParentSpec{children: new_children, links: new_links}
-    {{:ok, spec: new_spec}, state}
+    {{:ok, spec: %ParentSpec{children: new_children, links: new_links}}, state}
   end
 
   @impl true
@@ -402,7 +420,9 @@ defmodule Membrane.RTP.SessionBin do
       {:ok, state}
     else
       %{payloader: payloader} = ctx.pads[input_pad].options
-      %{clock_rate: clock_rate} = ctx.pads[output_pad].options
+
+      %{clock_rate: clock_rate, rtp_extension_mapping: rtp_extension_mapping} =
+        ctx.pads[output_pad].options
 
       payload_type = get_output_payload_type!(ctx, ssrc)
       clock_rate = clock_rate || get_from_register!(:clock_rate, payload_type, state)
@@ -416,7 +436,8 @@ defmodule Membrane.RTP.SessionBin do
           ssrc: ssrc,
           payload_type: payload_type,
           payloader: payloader,
-          clock_rate: clock_rate
+          clock_rate: clock_rate,
+          rtp_extension_mapping: rtp_extension_mapping || %{}
         })
         |> then(if state.secure?, do: maybe_link_encryptor, else: & &1)
         |> to_bin_output(output_pad)
