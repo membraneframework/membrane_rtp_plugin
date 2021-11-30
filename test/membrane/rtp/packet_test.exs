@@ -49,12 +49,11 @@ defmodule Membrane.RTP.PacketTest do
   end
 
   test "reads and serializes extension header" do
-    extension_header = <<0::16, 4::16, 1::32, 2::32, 3::32, 4::32>>
+    extension_header = <<0xBE, 0xDE, 1::16, 1::4, 0::4, 0xBE, 0::16>>
 
-    expected_parsed_extension = %Header.Extension{
-      data: <<1::32, 2::32, 3::32, 4::32>>,
-      profile_specific: <<0, 0>>
-    }
+    expected_parsed_extensions = [
+      %Membrane.RTP.Header.Extension{data: <<0xBE>>, identifier: 1}
+    ]
 
     # Extension is stored on 4th bit of header
     <<header_1::3, _extension::1, header_2::92, payload::binary>> =
@@ -65,10 +64,30 @@ defmodule Membrane.RTP.PacketTest do
 
     packet = %Packet{
       Fixtures.sample_packet()
-      | header: %Header{Fixtures.sample_header() | extension: expected_parsed_extension}
+      | header: %Header{Fixtures.sample_header() | extensions: expected_parsed_extensions}
     }
 
     assert {:ok, %{packet: ^packet}} = Packet.parse(packet_binary, @encrypted?)
     assert Packet.serialize(packet) == packet_binary
+  end
+
+  test "Serialize and then parse return same packet" do
+    packet = %Packet{
+      Fixtures.sample_packet()
+      | header: %Header{
+          Fixtures.sample_header()
+          | extensions: [
+              %Membrane.RTP.Header.Extension{data: <<0xBE, 0>>, identifier: 1},
+              %Membrane.RTP.Header.Extension{data: <<0xDE, 0>>, identifier: 2}
+            ]
+        }
+    }
+
+    serialized = Packet.serialize(packet)
+
+    {:ok, %{packet: parsed}} = Packet.parse(serialized, @encrypted?)
+
+    assert ^packet = parsed
+    assert Packet.serialize(parsed) == serialized
   end
 end

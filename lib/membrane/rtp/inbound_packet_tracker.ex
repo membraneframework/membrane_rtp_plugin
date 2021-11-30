@@ -27,7 +27,7 @@ defmodule Membrane.RTP.InboundPacketTracker do
               ],
               repair_sequence_numbers?: [
                 spec: boolean(),
-                default: false,
+                default: true,
                 description: "Defines if tracker should try to repair packet's sequence number"
               ]
 
@@ -97,9 +97,8 @@ defmodule Membrane.RTP.InboundPacketTracker do
         {{:ok, buffer: {:output, repair_sequence_number(buffer, state)}}, state}
 
       # the packets is either too old or too new
-      # TODO: decide if this type of incident should increment the discarded counter
       delta <= @max_seq_num - @max_unordered ->
-        {{:ok, redemand: :output}, state}
+        {{:ok, redemand: :output}, update_received(state)}
 
       # packet is old but within dropout threshold
       true ->

@@ -30,7 +30,7 @@ defmodule Membrane.RTCP.ByePacket do
   @impl true
   def encode(%{ssrcs: ssrcs, reason: reason}) do
     count = ssrcs |> length()
-    ssrcs = ssrcs |> Enum.map(&<<&1::32>>) |> Enum.join()
+    ssrcs = ssrcs |> Enum.map_join(&<<&1::32>>)
 
     reason =
       case reason do

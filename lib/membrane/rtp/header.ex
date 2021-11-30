@@ -53,7 +53,7 @@ defmodule Membrane.RTP.Header do
           timestamp: timestamp_t(),
           sequence_number: sequence_number_t(),
           csrcs: [RTP.ssrc_t()],
-          extension: __MODULE__.Extension.t() | nil
+          extensions: [__MODULE__.Extension.t()]
         }
 
   @enforce_keys [
@@ -67,6 +67,6 @@ defmodule Membrane.RTP.Header do
                 version: 2,
                 marker: false,
                 csrcs: [],
-                extension: nil
+                extensions: []
               ]
 end

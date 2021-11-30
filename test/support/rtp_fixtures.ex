@@ -25,13 +25,22 @@ defmodule Membrane.RTP.Fixtures do
       }
     }
 
+  @spec sample_rtcp_buffer() :: Membrane.Buffer.t()
+  def sample_rtcp_buffer,
+    do: %Membrane.Buffer{
+      metadata: %{},
+      payload:
+        <<128, 201, 0, 1, 0, 0, 0, 1, 128, 0, 0, 23, 204, 45, 91, 116, 43, 191, 84, 170, 205, 20>>
+    }
+
   @spec sample_header() :: Header.t()
   def sample_header,
     do: %Header{
       payload_type: 14,
       sequence_number: 3983,
       ssrc: 3_919_876_492,
-      timestamp: 1_653_702_647
+      timestamp: 1_653_702_647,
+      extensions: []
     }
 
   @spec fake_packet_list(Range.t()) :: [binary()]

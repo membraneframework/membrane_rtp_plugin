@@ -40,7 +40,7 @@ defmodule Membrane.RTP.SSRCRouter do
   Notification sent when an RTP packet with new SSRC arrives and new output pad should be linked
   """
   @type new_stream_notification_t ::
-          {:new_rtp_stream, RTP.ssrc_t(), RTP.payload_type_t()}
+          {:new_rtp_stream, RTP.ssrc_t(), RTP.payload_type_t(), [RTP.Header.Extension.t()]}
 
   @impl true
   def handle_init(_opts) do
@@ -99,9 +99,13 @@ defmodule Membrane.RTP.SSRCRouter do
 
   @impl true
   def handle_process(Pad.ref(:input, _id) = pad, buffer, _ctx, state) do
-    %Membrane.Buffer{metadata: %{rtp: %{ssrc: ssrc, payload_type: payload_type}}} = buffer
+    %Membrane.Buffer{
+      metadata: %{rtp: %{ssrc: ssrc, payload_type: payload_type, extensions: extensions}}
+    } = buffer
 
-    {new_stream_actions, state} = maybe_handle_new_stream(pad, ssrc, payload_type, state)
+    {new_stream_actions, state} =
+      maybe_handle_new_stream(pad, ssrc, payload_type, extensions, state)
+
     {actions, state} = maybe_add_to_linking_buffer(:buffer, buffer, ssrc, state)
     {{:ok, new_stream_actions ++ actions}, state}
   end
@@ -159,12 +163,13 @@ defmodule Membrane.RTP.SSRCRouter do
     super(pad, event, ctx, state)
   end
 
-  defp maybe_handle_new_stream(pad, ssrc, payload_type, state) do
+  defp maybe_handle_new_stream(pad, ssrc, payload_type, extensions, state) do
     if Map.has_key?(state.pads, ssrc) do
       {[], state}
     else
       state = state |> put_in([:pads, ssrc], pad) |> put_in([:linking_buffers, ssrc], [])
-      {[notify: {:new_rtp_stream, ssrc, payload_type}], state}
+
+      {[notify: {:new_rtp_stream, ssrc, payload_type, extensions}], state}
     end
   end
 

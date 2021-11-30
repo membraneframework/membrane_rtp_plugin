@@ -15,22 +15,26 @@ defmodule Membrane.RTP.SessionBin do
 
   ## Payloaders and depayloaders
   Payloaders are Membrane elements that transform stream so that it can be put into RTP packets, while depayloaders
-  work the other way round. Different codecs require different payloaders and depayloaders. Thus, to send or receive
-  given codec via this bin, proper payloader/depayloader is needed. Payloaders and depayloaders can be found in
-  `membrane_rtp_X_plugin` packages, where X stands for codec name. It's enough when such plugin is added to
-  dependencies.
+  work the other way round. Different codecs require different payloaders and depayloaders.
 
-  #### Jitter Buffer
-  Some depayloaders may need the incoming packets to be in a correct order therefore one needs to not only
-  use depayloader but also include a jitter buffer. It can be specified via pad's option `use_jitter_buffer?` when
-  adding `Pad.ref(:output, ssrc)` pad.
+  By default `SessionBin` will neither payload nor depayload incoming/outgoing streams, to do so a payloader/depayloader needs to be
+  passed via `Pad.ref(:input, ssrc)` and `Pad.ref(:output, ssrc)` pads options.
 
+  Payloading/Depayloading is necessary if we need to somehow transform the streams. If `SessionBin`s main role is to route packets
+  then depayloading and payloading processes are redundant.
+
+  Payloaders and depayloaders can be found in `membrane_rtp_X_plugin` packages, where X stands for codec name.
+  It's enough when such a plugin is added to dependencies. To determine which payloader/depayloader to use, one can use `Membrane.RTP.PayloadFormatResolver`
+  which given an encoding name should resolve to proper payloader/depayloader modules (if those previously have been registered via mentioned plugins).
+
+  For payloading and depayloading, `SessionBin` uses respective bins `Membrane.RTP.PayloaderBin` and `Membrane.RTP.DepayloaderBin`
+  which will be spawned once payloader/depayloader are passed explicitly via pads' options.
 
   #### Important note
   Payloaders and depayloaders are mostly needed when working with external media sources (in different formats than RTP).
-  For applications such an SFU it is not needed to either payload or depayload the RTP stream as we are always dealing with RTP format.
+  For applications such as an SFU it is not needed to either payload or depayload the RTP stream as we are always dealing with RTP format.
   In such a case, SessionBin will receive payloaded packets and work as a simple proxy just forwarding the packets (and decrypting them if necessary).
-  Therefore it is possible to specify in newly added pads if payloaders/depayloaders should be used for the correlated stream.
+  Therefore it is possible to specify in newly added pads if payloaders/depayloaders should be used for the certain stream.
 
   ## RTCP
   RTCP packets for inbound stream can be provided either in-band or via a separate `rtp_input` pad instance. Corresponding
@@ -82,16 +86,6 @@ defmodule Membrane.RTP.SessionBin do
                 spec: %{RTP.payload_type_t() => {RTP.encoding_name_t(), RTP.clock_rate_t()}},
                 default: %{},
                 description: "Mapping of the custom payload types ( > 95)"
-              ],
-              custom_payloaders: [
-                spec: %{RTP.encoding_name_t() => module()},
-                default: %{},
-                description: "Mapping from encoding names to custom payloader modules"
-              ],
-              custom_depayloaders: [
-                spec: %{RTP.encoding_name_t() => module()},
-                default: %{},
-                description: "Mapping from encoding names to custom depayloader modules"
               ],
               rtcp_report_interval: [
                 spec: Membrane.Time.t() | nil,
@@ -149,11 +143,13 @@ defmodule Membrane.RTP.SessionBin do
     caps: :any,
     availability: :on_request,
     options: [
-      use_payloader?: [
-        spec: boolean(),
-        default: true,
+      payloader: [
+        spec: module() | nil,
+        default: nil,
         description: """
-        Defines whether paylaoder should be used for incoming stream.
+        Payloader's module that should be used for a media stream flowing through the pad.
+
+        If set to nil then the payloading process gets skipped.
         """
       ]
     ]
@@ -168,21 +164,13 @@ defmodule Membrane.RTP.SessionBin do
     caps: :any,
     availability: :on_request,
     options: [
-      encoding: [
-        spec: RTP.encoding_name_t() | nil,
+      depayloader: [
+        spec: module() | nil,
         default: nil,
         description: """
-        Encoding name determining depayloader which will be used to produce output stream from RTP stream.
-        """
-      ],
-      use_depayloader?: [
-        spec: boolean(),
-        default: true,
-        description: """
-        Defines whether the incoming stream should be depayloaded from RTP stream.
+        Depayloader's module that should be used for an outgoing media stream flowing through the pad.
 
-        Depayloading stream goes through `Membrane.RTP.DepayloaderBin` which besides creating a depayloader instance will
-        also use a jitter buffer.
+        If set to nil then the depayloading process gets skipped.
         """
       ],
       clock_rate: [
@@ -340,8 +328,7 @@ defmodule Membrane.RTP.SessionBin do
   @impl true
   def handle_pad_added(Pad.ref(:output, ssrc) = pad, ctx, state) do
     %{
-      encoding: encoding_name,
-      use_depayloader?: use_depayloader?,
+      depayloader: depayloader,
       clock_rate: clock_rate,
       extensions: extensions,
       rtcp_fir_interval: fir_interval,
@@ -349,10 +336,7 @@ defmodule Membrane.RTP.SessionBin do
     } = ctx.pads[pad].options
 
     payload_type = Map.fetch!(state.ssrc_pt_mapping, ssrc)
-    encoding_name = encoding_name || get_from_register!(:encoding_name, payload_type, state)
     clock_rate = clock_rate || get_from_register!(:clock_rate, payload_type, state)
-
-    depayloader = if use_depayloader?, do: get_depayloader!(encoding_name, state), else: nil
 
     {local_ssrc, state} = add_ssrc(ssrc, state)
 
@@ -417,13 +401,11 @@ defmodule Membrane.RTP.SessionBin do
     if not pads_present? or Map.has_key?(ctx.children, {:stream_send_bin, ssrc}) do
       {:ok, state}
     else
-      %{use_payloader?: use_payloader?} = ctx.pads[input_pad].options
-      %{encoding: encoding_name, clock_rate: clock_rate} = ctx.pads[output_pad].options
+      %{payloader: payloader} = ctx.pads[input_pad].options
+      %{clock_rate: clock_rate} = ctx.pads[output_pad].options
 
       payload_type = get_output_payload_type!(ctx, ssrc)
-      encoding_name = encoding_name || get_from_register!(:encoding_name, payload_type, state)
       clock_rate = clock_rate || get_from_register!(:clock_rate, payload_type, state)
-      payloader = if use_payloader?, do: get_payloader!(encoding_name, state), else: nil
 
       maybe_link_encryptor =
         &to(&1, {:srtp_encryptor, ssrc}, %SRTP.Encryptor{policies: state.srtp_policies})
@@ -472,14 +454,15 @@ defmodule Membrane.RTP.SessionBin do
   @impl true
   def handle_pad_removed(Pad.ref(name, ssrc), ctx, state)
       when name in [:input, :rtp_output] do
-    case Map.fetch(ctx.children, {:stream_send_bin, ssrc}) do
-      {:ok, %{terminating?: false}} ->
-        state = %{state | senders_ssrcs: MapSet.delete(state.senders_ssrcs, ssrc)}
-        {{:ok, remove_child: {:stream_send_bin, ssrc}}, state}
+    children =
+      for {child_name, child} <-
+            Map.take(ctx.children, [{:stream_send_bin, ssrc}, {:srtp_encryptor, ssrc}]),
+          !child.terminating?,
+          into: [] do
+        child_name
+      end
 
-      _result ->
-        {:ok, state}
-    end
+    {{:ok, remove_child: children}, state}
   end
 
   @impl true
@@ -488,9 +471,14 @@ defmodule Membrane.RTP.SessionBin do
   end
 
   @impl true
-  def handle_notification({:new_rtp_stream, ssrc, payload_type}, :ssrc_router, _ctx, state) do
+  def handle_notification(
+        {:new_rtp_stream, ssrc, payload_type, extensions},
+        :ssrc_router,
+        _ctx,
+        state
+      ) do
     state = put_in(state.ssrc_pt_mapping[ssrc], payload_type)
-    {{:ok, notify: {:new_rtp_stream, ssrc, payload_type}}, state}
+    {{:ok, notify: {:new_rtp_stream, ssrc, payload_type, extensions}}, state}
   end
 
   @impl true
@@ -518,20 +506,6 @@ defmodule Membrane.RTP.SessionBin do
       pt_mapping
     else
       raise "Unknown RTP payload type #{payload_type}"
-    end
-  end
-
-  defp get_payloader!(encoding_name, state) do
-    case state.custom_payloaders[encoding_name] || PayloadFormat.get(encoding_name).payloader do
-      nil -> raise "Cannot find payloader for encoding #{encoding_name}"
-      payloader -> payloader
-    end
-  end
-
-  defp get_depayloader!(encoding_name, state) do
-    case state.custom_depayloaders[encoding_name] || PayloadFormat.get(encoding_name).depayloader do
-      nil -> raise "Cannot find depayloader for encoding #{encoding_name}"
-      depayloader -> depayloader
     end
   end
 

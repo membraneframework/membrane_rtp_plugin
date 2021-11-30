@@ -30,7 +30,6 @@ defmodule Membrane.RTP.StreamSendBin do
       link_bin_input()
       |> then(if use_payloader, do: maybe_link_payloader_bin, else: & &1)
       |> to(:packet_tracker, %RTP.OutboundPacketTracker{
-        serialize_packets?: not use_payloader,
         ssrc: opts.ssrc,
         payload_type: opts.payload_type,
         clock_rate: opts.clock_rate
