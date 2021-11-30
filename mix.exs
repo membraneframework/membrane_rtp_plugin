@@ -73,20 +73,14 @@ defmodule Membrane.RTP.Plugin.MixProject do
 
   defp deps do
     [
-      {:membrane_core,
-       github: "membraneframework/membrane-core",
-       branch: "add-timestamps-to-buffer",
-       override: true},
+      {:membrane_core, "~> 0.8.0", override: true},
       {:membrane_rtp_format, "~> 0.3.1"},
       {:membrane_rtp_h264_plugin,
        github: "membraneframework/membrane_rtp_h264_plugin",
        branch: "migration-to-buffer-with-pts-dts",
        only: :test},
       {:membrane_rtp_mpegaudio_plugin, "~> 0.6.0", only: :test},
-      {:membrane_h264_ffmpeg_plugin,
-       github: "membraneframework/membrane_h264_ffmpeg_plugin",
-       branch: "decoder-adds-pts-and-dts",
-       only: :test},
+      {:membrane_h264_ffmpeg_plugin, "~> 0.15.0", only: :test},
       {:membrane_element_pcap, github: "membraneframework/membrane-element-pcap", only: :test},
       {:membrane_element_udp, "~> 0.5.0", only: :test},
       {:membrane_hackney_plugin, "~> 0.5.0", only: :test},
