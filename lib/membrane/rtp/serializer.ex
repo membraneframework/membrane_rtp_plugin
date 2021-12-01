@@ -9,7 +9,7 @@ defmodule Membrane.RTP.Serializer do
   """
   use Membrane.Filter
 
-  alias Membrane.{Buffer, RTP, RemoteStream}
+  alias Membrane.{RTP, RemoteStream}
 
   @max_seq_num 65_535
   @max_timestamp 0xFFFFFFFF
