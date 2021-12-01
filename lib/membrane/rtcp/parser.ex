@@ -72,7 +72,8 @@ defmodule Membrane.RTCP.Parser do
 
   defp process_rtcp(%RTCP.SenderReportPacket{ssrc: ssrc} = packet, metadata) do
     event = %RTCPEvent{
-      # FIXME: reports get assigned to empty array
+      # TODO: remove empty array assignment of reports
+      # reports get assigned to empty array
       # to avoid copying it when sending to other processes, they are currently not used
       # anywhere  but once they are the reassignment should be removed
       rtcp: %{packet | reports: []},
