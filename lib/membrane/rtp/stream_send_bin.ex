@@ -16,7 +16,10 @@ defmodule Membrane.RTP.StreamSendBin do
               ssrc: [spec: RTP.ssrc_t()],
               clock_rate: [spec: RTP.clock_rate_t()],
               rtcp_report_interval: [spec: Membrane.Time.t() | nil],
-              rtp_extension_mapping: [spec: RTP.SessionBin.rtp_extension_mapping_t()]
+              rtp_extension_mapping: [
+                default: nil,
+                spec: RTP.SessionBin.rtp_extension_mapping_t()
+              ]
 
   @impl true
   def handle_init(opts) do
