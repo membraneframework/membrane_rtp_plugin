@@ -100,8 +100,9 @@ defmodule Membrane.RTP.Serializer do
     }
 
     buffer = %Membrane.Buffer{
-      metadata: Map.put(metadata, :rtp, header),
-      payload: buffer.payload
+      buffer
+      | metadata: Map.put(metadata, :rtp, header),
+        payload: buffer.payload
     }
 
     {{:ok, buffer: {:output, buffer}}, state}
