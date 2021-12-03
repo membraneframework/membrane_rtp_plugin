@@ -1,8 +1,8 @@
-defmodule Membrane.RTP.TWCC.PacketInfoStoreTest do
+defmodule Membrane.RTP.TWCCReceiver.PacketInfoStoreTest do
   use ExUnit.Case, async: true
   use Bunch
 
-  alias Membrane.RTP.TWCC.PacketInfoStore
+  alias Membrane.RTP.TWCCReceiver.PacketInfoStore
 
   @max_seq_number 65_535
 
