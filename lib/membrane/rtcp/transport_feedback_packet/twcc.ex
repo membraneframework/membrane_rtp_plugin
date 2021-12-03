@@ -12,20 +12,12 @@ defmodule Membrane.RTCP.TransportFeedbackPacket.TWCC do
 
   defmodule RunLength do
     @moduledoc false
-
-    defstruct [
-      :packet_status,
-      :packet_count
-    ]
+    defstruct [:packet_status, :packet_count]
   end
 
   defmodule StatusVector do
     @moduledoc false
-
-    defstruct [
-      :vector,
-      :packet_count
-    ]
+    defstruct [:vector, :packet_count]
   end
 
   @enforce_keys [
@@ -87,11 +79,9 @@ defmodule Membrane.RTCP.TransportFeedbackPacket.TWCC do
     scaled_receive_deltas = Enum.map(receive_deltas, &scale_delta/1)
     packet_status_chunks = make_packet_status_chunks(scaled_receive_deltas)
 
-    reference_time =
-      reference_time
-      |> Time.as_milliseconds()
-      |> Ratio.div(64)
-      |> Ratio.floor()
+    # reference time is to be interpreted in multiples of 64ms
+    # https://datatracker.ietf.org/doc/html/draft-holmer-rmcat-transport-wide-cc-extensions-01#section-3.1
+    reference_time = reference_time |> Time.as_milliseconds() |> Ratio.div(64) |> Ratio.floor()
 
     payload =
       <<base_seq_num::16, packet_status_count::16, reference_time::24, feedback_packet_count::8>> <>
@@ -199,7 +189,7 @@ defmodule Membrane.RTCP.TransportFeedbackPacket.TWCC do
   defp scale_delta(delta) do
     # Deltas are represented as multiples of 250us
     # https://datatracker.ietf.org/doc/html/draft-holmer-rmcat-transport-wide-cc-extensions-01#section-3.1.5
-    (delta * 4) |> Time.as_milliseconds() |> Ratio.floor()
+    Time.to_milliseconds(delta * 4)
   end
 
   defp delta_to_packet_status(scaled_delta) do
