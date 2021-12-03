@@ -1,4 +1,4 @@
-defmodule Membrane.RTP.TWCC.PacketInfoStore do
+defmodule Membrane.RTP.TWCCReceiver.PacketInfoStore do
   @moduledoc false
 
   # The module stores TWCC sequence number along with their arrival timestamps, handling sequence
@@ -34,7 +34,6 @@ defmodule Membrane.RTP.TWCC.PacketInfoStore do
   @spec insert_packet_info(__MODULE__.t(), non_neg_integer()) :: __MODULE__.t()
   def insert_packet_info(store, seq_num) do
     arrival_ts = Time.monotonic_time()
-
     {store, seq_num} = maybe_handle_rollover(store, seq_num)
 
     %{
@@ -74,11 +73,9 @@ defmodule Membrane.RTP.TWCC.PacketInfoStore do
 
       :previous ->
         shifted_seq_to_timestamp =
-          seq_to_timestamp
-          |> Enum.map(fn {seq_num, timestamp} ->
+          Map.new(seq_to_timestamp, fn {seq_num, timestamp} ->
             {seq_num + @seq_number_limit, timestamp}
           end)
-          |> Enum.into(%{})
 
         store = %{
           store
@@ -144,9 +141,9 @@ defmodule Membrane.RTP.TWCC.PacketInfoStore do
     {smaller_seq, greater_seq} = Enum.min_max([l_seq_num, r_seq_num])
 
     distance = greater_seq - smaller_seq
-    distance_through_0 = smaller_seq + (@seq_number_limit - greater_seq)
+    distance_through_zero = smaller_seq + (@seq_number_limit - greater_seq)
 
-    distance_through_0 < distance
+    distance_through_zero < distance
   end
 
   defp make_divisible_by_64ms(timestamp) do

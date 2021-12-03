@@ -112,7 +112,7 @@ defmodule Membrane.RTCP.TransportFeedbackPacket.TWCC do
         [%RunLength{packet_status: ^status, packet_count: count} | rest] ->
           [%RunLength{packet_status: status, packet_count: count + 1} | rest]
 
-        # Got a differrent packet status and the current chunk is of run length type.
+        # Got a different packet status and the current chunk is of run length type.
         # If the condition is fulfilled, it's viable to convert it to a status vector.
         [%RunLength{packet_count: count} = run_length | rest] when count < @status_vector_capacity ->
           %StatusVector{vector: vector} = run_length_to_status_vector(run_length)
@@ -129,8 +129,7 @@ defmodule Membrane.RTCP.TransportFeedbackPacket.TWCC do
   end
 
   defp encode_receive_deltas(scaled_receive_deltas) do
-    scaled_receive_deltas
-    |> Enum.map(fn delta ->
+    Enum.map_join(scaled_receive_deltas, fn delta ->
       case delta_to_packet_status(delta) do
         :not_received ->
           <<>>
@@ -146,12 +145,10 @@ defmodule Membrane.RTCP.TransportFeedbackPacket.TWCC do
           <<cap_delta(delta)::16>>
       end
     end)
-    |> Enum.join()
   end
 
   defp encode_packet_status(packet_status_chunks) do
-    packet_status_chunks
-    |> Enum.map(fn chunk ->
+    Enum.map_join(packet_status_chunks, fn chunk ->
       case chunk do
         %RunLength{} ->
           encode_run_length(chunk)
@@ -162,11 +159,9 @@ defmodule Membrane.RTCP.TransportFeedbackPacket.TWCC do
         %StatusVector{} ->
           chunk
           |> status_vector_to_run_length()
-          |> Enum.map(&encode_run_length/1)
-          |> Enum.join()
+          |> Enum.map_join(&encode_run_length/1)
       end
     end)
-    |> Enum.join()
   end
 
   defp encode_run_length(%RunLength{packet_status: status, packet_count: count}),
@@ -185,7 +180,7 @@ defmodule Membrane.RTCP.TransportFeedbackPacket.TWCC do
   defp run_length_to_status_vector(%RunLength{packet_status: status, packet_count: count}),
     do: %StatusVector{vector: Enum.map(1..count, fn _i -> status end), packet_count: count}
 
-  defp status_vector_to_run_length(%StatusVector{vector: vector, packet_count: _count}) do
+  defp status_vector_to_run_length(%StatusVector{vector: vector}) do
     vector
     |> Enum.reduce([], fn status, acc ->
       case acc do
@@ -202,6 +197,7 @@ defmodule Membrane.RTCP.TransportFeedbackPacket.TWCC do
   defp scale_delta(nil), do: nil
 
   defp scale_delta(delta) do
+    # Deltas are represented as multiples of 250us
     # https://datatracker.ietf.org/doc/html/draft-holmer-rmcat-transport-wide-cc-extensions-01#section-3.1.5
     (delta * 4) |> Time.as_milliseconds() |> Ratio.floor()
   end

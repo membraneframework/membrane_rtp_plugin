@@ -1,59 +1,62 @@
-defmodule Membrane.RTP.TWCC do
+defmodule Membrane.RTP.TWCCReceiver do
   @moduledoc """
   The module defines an element responsible for recording transport-wide statistics of incoming packets.
   """
   use Membrane.Filter
 
-  alias Membrane.{Buffer, RTP, RTCPEvent, Time}
+  alias Membrane.{RTP, RTCPEvent, Time}
+  alias Membrane.RTP.Header
   alias Membrane.RTCP.TransportFeedbackPacket
   alias __MODULE__.PacketInfoStore
 
   require Bitwise
 
-  # taken from Chromium SDP offer
-  @sdp_extension_id 3
-
   @feedback_count_limit Bitwise.bsl(1, 8)
-  @seq_number_limit Bitwise.bsl(1, 16)
 
   def_input_pad :input, demand_unit: :buffers, caps: RTP, availability: :on_request
   def_output_pad :output, caps: RTP, availability: :on_request
 
-  def_options sender_ssrc: [
-                spec: RTP.ssrc_t(),
-                description: "Sender SSRC for generated feedback packets."
+  def_options twcc_id: [
+                spec: 1..14,
+                description: "ID of TWCC header extension."
               ],
               report_interval: [
                 spec: Membrane.Time.t(),
+                default: Membrane.Time.milliseconds(250),
                 description: "How often to generate feedback packets."
+              ],
+              sender_ssrc: [
+                spec: RTP.ssrc_t(),
+                default: nil,
+                description:
+                  "Sender SSRC for generated feedback packets, that will be supplied by `RTP.SessionBin`."
               ]
 
   defmodule State do
     @moduledoc false
-    alias Membrane.RTP.TWCC.PacketInfoStore
+    alias Membrane.RTP.TWCCReceiver.PacketInfoStore
 
     @type t :: %__MODULE__{
+            twcc_id: 1..14,
             sender_ssrc: RTP.ssrc_t(),
             report_interval: Time.t(),
             packet_info_store: PacketInfoStore.t(),
             feedback_packet_count: non_neg_integer(),
-            local_seq_num: non_neg_integer(),
             media_ssrc: RTP.ssrc_t()
           }
 
-    @enforce_keys [:sender_ssrc, :report_interval]
+    @enforce_keys [:twcc_id, :report_interval, :sender_ssrc]
     defstruct @enforce_keys ++
                 [
                   packet_info_store: %PacketInfoStore{},
                   feedback_packet_count: 0,
-                  local_seq_num: 0,
                   media_ssrc: nil
                 ]
   end
 
   @impl true
-  def handle_init(opts) do
-    {:ok, %State{sender_ssrc: opts.sender_ssrc, report_interval: opts.report_interval}}
+  def handle_init(options) do
+    {:ok, struct!(State, Map.from_struct(options))}
   end
 
   @impl true
@@ -67,60 +70,45 @@ defmodule Membrane.RTP.TWCC do
   end
 
   @impl true
+  def handle_caps(Pad.ref(:input, ssrc), caps, _ctx, state) do
+    {{:ok, caps: {Pad.ref(:output, ssrc), caps}}, state}
+  end
+
+  @impl true
   def handle_demand(Pad.ref(:output, ssrc), size, :buffers, _ctx, state) do
     {{:ok, demand: {Pad.ref(:input, ssrc), size}}, state}
   end
 
   @impl true
-  def handle_event(Pad.ref(:input, ssrc), event, _ctx, state) do
-    {{:ok, event: {Pad.ref(:output, ssrc), event}}, state}
-  end
-
-  @impl true
-  def handle_event(Pad.ref(:output, ssrc), event, _ctx, state) do
-    {{:ok, event: {Pad.ref(:input, ssrc), event}}, state}
+  def handle_event(Pad.ref(direction, ssrc), event, _ctx, state) do
+    opposite_direction = if direction == :input, do: :output, else: :input
+    {{:ok, event: {Pad.ref(opposite_direction, ssrc), event}}, state}
   end
 
   @impl true
   def handle_pad_removed(Pad.ref(_direction, ssrc), _ctx, %State{media_ssrc: media_ssrc} = state) do
-    case ssrc do
-      ^media_ssrc -> {:ok, %State{state | media_ssrc: nil}}
-      _other_ssrc -> {:ok, state}
+    if media_ssrc == ssrc do
+      {:ok, %State{state | media_ssrc: nil}}
+    else
+      {:ok, state}
     end
   end
 
   @impl true
-  def handle_process(Pad.ref(:input, ssrc), %Buffer{metadata: metadata} = buffer, _ctx, state) do
-    %State{
-      packet_info_store: store,
-      local_seq_num: local_seq_num,
-      media_ssrc: media_ssrc
-    } = state
-
-    # TODO: match on ID proposed by membrane_webrtc_plugin in SDP offer
-    <<_id::4, _len::4, seq_num::16, _padding::8>> = metadata.rtp.extension.data
-
-    store = PacketInfoStore.insert_packet_info(store, seq_num)
-
-    # TODO: use ID proposed in browser's SDP offer (currently hardcoded to `@sdp_extension_id`)
-    # TODO: consider moving sequence number tagging closer to the end of the pipeline
-    header_extension = <<@sdp_extension_id::4, 1::4, local_seq_num::16, 0::8>>
-
-    metadata =
-      Bunch.Struct.put_in(
-        metadata,
-        [:rtp, :extension, :data],
-        header_extension
-      )
+  def handle_process(Pad.ref(:input, ssrc), buffer, _ctx, state) do
+    {extension, buffer} = Header.Extension.pop(buffer, state.twcc_id)
 
     state =
-      Map.merge(state, %{
-        packet_info_store: store,
-        local_seq_num: rem(local_seq_num + 1, @seq_number_limit),
-        media_ssrc: media_ssrc || ssrc
-      })
+      if extension != nil do
+        <<seq_num::16>> = extension.data
+        store = PacketInfoStore.insert_packet_info(state.packet_info_store, seq_num)
 
-    {{:ok, buffer: {Pad.ref(:output, ssrc), %Buffer{buffer | metadata: metadata}}}, state}
+        %{state | packet_info_store: store, media_ssrc: state.media_ssrc || ssrc}
+      else
+        state
+      end
+
+    {{:ok, buffer: {Pad.ref(:output, ssrc), buffer}}, state}
   end
 
   @impl true
@@ -130,11 +118,11 @@ defmodule Membrane.RTP.TWCC do
     else
       event = make_rtcp_event(state)
 
-      state =
-        Map.merge(state, %{
-          packet_info_store: %PacketInfoStore{},
+      state = %{
+        state
+        | packet_info_store: %PacketInfoStore{},
           feedback_packet_count: rem(state.feedback_packet_count + 1, @feedback_count_limit)
-        })
+      }
 
       {{:ok, event: {Pad.ref(:input, state.media_ssrc), event}}, state}
     end
