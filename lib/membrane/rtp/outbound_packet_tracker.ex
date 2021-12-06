@@ -120,7 +120,7 @@ defmodule Membrane.RTP.OutboundPacketTracker do
         align_to: state.alignment
       )
 
-    buffer = %Buffer{payload: payload, metadata: metadata}
+    buffer = %Buffer{buffer | payload: payload, metadata: metadata}
 
     {{:ok, buffer: {:output, buffer}}, %{state | any_buffer_sent?: true}}
   end
