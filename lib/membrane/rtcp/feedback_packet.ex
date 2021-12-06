@@ -1,6 +1,7 @@
 defmodule Membrane.RTCP.FeedbackPacket do
   @moduledoc """
-  Abstraction and generic encoding and decoding functionality for [RTCP feedback packets](https://datatracker.ietf.org/doc/html/rfc5104).
+  Abstraction and generic encoding/decoding functionality for
+  [RTCP payload-specific feedback packets](https://datatracker.ietf.org/doc/html/rfc5104#section-4.3).
   """
 
   @behaviour Membrane.RTCP.Packet

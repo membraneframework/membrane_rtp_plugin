@@ -397,31 +397,13 @@ defmodule Membrane.RTP.SessionBin do
       }
     }
 
-    # workaround: as TWCC is a transport-wide extension, there should exist only one TWCC child
-    # that handles packets from all incoming streams that have declared support for it
-    {maybe_twcc, rtp_extensions} = Keyword.pop(rtp_extensions, :twcc)
-
-    should_link_twcc? = maybe_twcc != nil
-
-    {new_children, state} =
-      if should_link_twcc? and not Map.has_key?(ctx.children, :twcc) do
-        {twcc_ssrc, state} = add_ssrc(nil, state)
-
-        {Map.put(new_children, :twcc, %{maybe_twcc | sender_ssrc: twcc_ssrc}), state}
-      else
-        {new_children, state}
-      end
-
-    maybe_link_twcc =
-      &(&1
-        |> via_in(Pad.ref(:input, ssrc))
-        |> to(:twcc)
-        |> via_out(Pad.ref(:output, ssrc)))
+    {new_children, rtp_extensions, maybe_link_twcc, state} =
+      maybe_handle_twcc(new_children, rtp_extensions, ssrc, ctx, state)
 
     router_link =
       link(:ssrc_router)
       |> via_out(Pad.ref(:output, ssrc))
-      |> then(if should_link_twcc?, do: maybe_link_twcc, else: & &1)
+      |> then(maybe_link_twcc)
       |> to(rtp_stream_name)
 
     acc = {new_children, router_link}
@@ -619,5 +601,34 @@ defmodule Membrane.RTP.SessionBin do
 
     pt || PayloadFormat.get(encoding).payload_type ||
       raise "Cannot find default RTP payload type for encoding #{encoding}"
+  end
+
+  defp maybe_handle_twcc(new_children, rtp_extensions, pad_ssrc, ctx, state) do
+    # workaround: as TWCC is a transport-wide extension, there should exist only one TWCC child
+    # that handles packets from all incoming streams that have declared support for it
+    {maybe_twcc, rtp_extensions} = Keyword.pop(rtp_extensions, :twcc)
+
+    should_link_twcc? = maybe_twcc != nil
+
+    {new_children, state} =
+      if should_link_twcc? and not Map.has_key?(ctx.children, :twcc) do
+        {twcc_ssrc, state} = add_ssrc(nil, state)
+
+        {Map.put(new_children, :twcc, %{maybe_twcc | sender_ssrc: twcc_ssrc}), state}
+      else
+        {new_children, state}
+      end
+
+    maybe_link_twcc =
+      if should_link_twcc? do
+        &(&1
+          |> via_in(Pad.ref(:input, pad_ssrc))
+          |> to(:twcc)
+          |> via_out(Pad.ref(:output, pad_ssrc)))
+      else
+        & &1
+      end
+
+    {new_children, rtp_extensions, maybe_link_twcc, state}
   end
 end

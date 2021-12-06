@@ -9,7 +9,9 @@ defmodule Membrane.RTP.TWCCReceiver do
   alias Membrane.RTCP.TransportFeedbackPacket
   alias __MODULE__.PacketInfoStore
 
-  @feedback_count_limit 256
+  require Bitwise
+
+  @feedback_count_limit Bitwise.bsl(1, 8)
 
   def_input_pad :input, demand_unit: :buffers, caps: RTP, availability: :on_request
   def_output_pad :output, caps: RTP, availability: :on_request
@@ -24,7 +26,7 @@ defmodule Membrane.RTP.TWCCReceiver do
                 description: "How often to generate feedback packets."
               ],
               sender_ssrc: [
-                spec: RTP.ssrc_t(),
+                spec: RTP.ssrc_t() | nil,
                 default: nil,
                 description:
                   "Sender SSRC for generated feedback packets (will be supplied by `RTP.SessionBin`)."
@@ -36,11 +38,11 @@ defmodule Membrane.RTP.TWCCReceiver do
 
     @type t :: %__MODULE__{
             twcc_id: 1..14,
-            sender_ssrc: RTP.ssrc_t(),
+            sender_ssrc: RTP.ssrc_t() | nil,
             report_interval: Time.t(),
             packet_info_store: PacketInfoStore.t(),
             feedback_packet_count: non_neg_integer(),
-            media_ssrc: RTP.ssrc_t()
+            media_ssrc: RTP.ssrc_t() | nil
           }
 
     @enforce_keys [:twcc_id, :report_interval, :sender_ssrc]

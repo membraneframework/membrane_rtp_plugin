@@ -20,7 +20,7 @@ defmodule Membrane.RTCP.TransportFeedbackPacket.TWCC do
     defstruct [:vector, :packet_count]
   end
 
-  @enforce_keys [
+  defstruct [
     :base_seq_num,
     :reference_time,
     :packet_status_count,
@@ -28,7 +28,13 @@ defmodule Membrane.RTCP.TransportFeedbackPacket.TWCC do
     :feedback_packet_count
   ]
 
-  defstruct @enforce_keys
+  @type t :: %{
+          base_seq_num: non_neg_integer(),
+          reference_time: Time.t(),
+          packet_status_count: pos_integer(),
+          receive_deltas: [Time.t() | :not_received],
+          feedback_packet_count: non_neg_integer()
+        }
 
   @max_u8_val Bitwise.bsl(1, 8) - 1
   @max_u13_val Bitwise.bsl(1, 13) - 1
@@ -99,8 +105,8 @@ defmodule Membrane.RTCP.TransportFeedbackPacket.TWCC do
         [%RunLength{packet_count: @run_length_capacity} | _rest] ->
           [%RunLength{packet_status: status, packet_count: 1} | acc]
 
-        [%RunLength{packet_status: ^status, packet_count: count} | rest] ->
-          [%RunLength{packet_status: status, packet_count: count + 1} | rest]
+        [%RunLength{packet_status: ^status, packet_count: count} = run_length | rest] ->
+          [%{run_length | packet_count: count + 1} | rest]
 
         # Got a different packet status and the current chunk is of run length type.
         # If the condition is fulfilled, it's viable to convert it to a status vector.

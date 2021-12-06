@@ -26,7 +26,7 @@ defmodule Membrane.RTP.TWCCReceiver.PacketInfoStore do
           reference_time: Time.t()
         }
 
-  @seq_number_limit 65_536
+  @seq_number_limit Bitwise.bsl(1, 16)
 
   @spec empty?(__MODULE__.t()) :: boolean
   def empty?(%__MODULE__{base_seq_num: base_seq_num}), do: base_seq_num == nil

@@ -53,7 +53,6 @@ defmodule Membrane.RTCP.Packet do
   @spec serialize(t() | [t()]) :: binary()
   def serialize(%packet_module{} = packet) do
     {body, packet_specific} = packet_module.encode(packet)
-
     packet_type = BiMap.fetch_key!(@packet_type_module, packet_module)
 
     header =
