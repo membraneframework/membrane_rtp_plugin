@@ -75,10 +75,11 @@ defmodule Membrane.RTP.Plugin.MixProject do
     [
       {:membrane_core, "~> 0.8.0", override: true},
       {:membrane_rtp_format, "~> 0.3.1"},
-      {:membrane_rtp_h264_plugin, "~> 0.7.0"},
+      {:membrane_rtp_h264_plugin, "~> 0.7.1"},
       {:membrane_rtp_mpegaudio_plugin, "~> 0.7.0", only: :test},
       {:membrane_h264_ffmpeg_plugin, "~> 0.15.0", only: :test},
-      {:membrane_element_pcap, github: "membraneframework/membrane-element-pcap", only: :test},
+      {:membrane_element_pcap,
+       github: "membraneframework/membrane-element-pcap", tag: "v0.4.0", only: :test},
       {:membrane_element_udp, "~> 0.6.0", only: :test},
       {:membrane_hackney_plugin, "~> 0.6.0", only: :test},
       {:ex_libsrtp, "~> 0.3.0", optional: true},
