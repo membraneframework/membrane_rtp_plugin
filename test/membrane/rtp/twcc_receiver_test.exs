@@ -4,11 +4,13 @@ defmodule Membrane.RTP.TWCCReceiverTest do
 
   alias Membrane.RTP.{BufferFactory, Header, TWCCReceiver}
 
+  require Bitwise
+
   @default_twcc_id 1
   @sequence_number 12_345
 
   @feedback_packet_count 100
-  @max_feedback_packet_count 255
+  @max_feedback_packet_count Bitwise.bsl(1, 8) - 1
 
   @sender_ssrc 1_234_567_890
   @media_ssrc 9_876_543_210

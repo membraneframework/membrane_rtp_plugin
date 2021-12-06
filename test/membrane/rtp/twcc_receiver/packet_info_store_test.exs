@@ -4,7 +4,9 @@ defmodule Membrane.RTP.TWCCReceiver.PacketInfoStoreTest do
 
   alias Membrane.RTP.TWCCReceiver.PacketInfoStore
 
-  @max_seq_number 65_535
+  require Bitwise
+
+  @max_seq_number Bitwise.bsl(1, 16) - 1
 
   setup_all do
     [store: %PacketInfoStore{}]
