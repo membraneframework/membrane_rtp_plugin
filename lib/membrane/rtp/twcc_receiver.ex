@@ -9,9 +9,7 @@ defmodule Membrane.RTP.TWCCReceiver do
   alias Membrane.RTCP.TransportFeedbackPacket
   alias __MODULE__.PacketInfoStore
 
-  require Bitwise
-
-  @feedback_count_limit Bitwise.bsl(1, 8)
+  @feedback_count_limit 256
 
   def_input_pad :input, demand_unit: :buffers, caps: RTP, availability: :on_request
   def_output_pad :output, caps: RTP, availability: :on_request
