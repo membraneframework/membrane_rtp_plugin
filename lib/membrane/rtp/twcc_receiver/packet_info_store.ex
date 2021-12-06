@@ -22,7 +22,7 @@ defmodule Membrane.RTP.TWCCReceiver.PacketInfoStore do
   @type stats_t :: %{
           base_seq_num: non_neg_integer(),
           packet_status_count: non_neg_integer(),
-          receive_deltas: [Time.t() | nil],
+          receive_deltas: [Time.t() | :not_received],
           reference_time: Time.t()
         }
 
@@ -33,7 +33,7 @@ defmodule Membrane.RTP.TWCCReceiver.PacketInfoStore do
 
   @spec insert_packet_info(__MODULE__.t(), non_neg_integer()) :: __MODULE__.t()
   def insert_packet_info(store, seq_num) do
-    arrival_ts = Time.monotonic_time()
+    arrival_ts = Time.vm_time()
     {store, seq_num} = maybe_handle_rollover(store, seq_num)
 
     %{
@@ -107,7 +107,7 @@ defmodule Membrane.RTP.TWCCReceiver.PacketInfoStore do
       |> Enum.reduce({[], reference_time}, fn seq_num, {deltas, previous_timestamp} ->
         case Map.get(seq_to_timestamp, seq_num) do
           nil ->
-            {[nil | deltas], previous_timestamp}
+            {[:not_received | deltas], previous_timestamp}
 
           timestamp ->
             delta = timestamp - previous_timestamp
@@ -147,11 +147,6 @@ defmodule Membrane.RTP.TWCCReceiver.PacketInfoStore do
   end
 
   defp make_divisible_by_64ms(timestamp) do
-    timestamp
-    |> Time.as_milliseconds()
-    |> Ratio.div(64)
-    |> Ratio.floor()
-    |> then(&(&1 * 64))
-    |> Time.milliseconds()
+    timestamp - rem(timestamp, Time.milliseconds(64))
   end
 end

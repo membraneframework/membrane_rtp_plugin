@@ -59,7 +59,7 @@ defmodule Membrane.RTCP.TransportFeedbackPacket.TWCC do
     {:ok,
      %__MODULE__{
        base_seq_num: base_seq_num,
-       reference_time: Time.milliseconds(reference_time * 64),
+       reference_time: reference_time * Time.milliseconds(64),
        packet_status_count: packet_status_count,
        receive_deltas: [],
        feedback_packet_count: feedback_packet_count
@@ -79,9 +79,9 @@ defmodule Membrane.RTCP.TransportFeedbackPacket.TWCC do
     scaled_receive_deltas = Enum.map(receive_deltas, &scale_delta/1)
     packet_status_chunks = make_packet_status_chunks(scaled_receive_deltas)
 
-    # reference time is to be interpreted in multiples of 64ms
+    # reference time has to be in 64ms resolution
     # https://datatracker.ietf.org/doc/html/draft-holmer-rmcat-transport-wide-cc-extensions-01#section-3.1
-    reference_time = reference_time |> Time.as_milliseconds() |> Ratio.div(64) |> Ratio.floor()
+    reference_time = div(reference_time, Time.milliseconds(64))
 
     payload =
       <<base_seq_num::16, packet_status_count::16, reference_time::24, feedback_packet_count::8>> <>
@@ -129,7 +129,7 @@ defmodule Membrane.RTCP.TransportFeedbackPacket.TWCC do
 
         :large_or_negative_delta ->
           Membrane.Logger.warn(
-            "Reporting a packet with large or negative delta: (#{inspect(div(delta, 4))}ms)"
+            "Reporting a packet with large or negative delta: (#{inspect(delta / 4)}ms)"
           )
 
           <<cap_delta(delta)::16>>
@@ -184,17 +184,17 @@ defmodule Membrane.RTCP.TransportFeedbackPacket.TWCC do
     |> Enum.reverse()
   end
 
-  defp scale_delta(nil), do: nil
+  defp scale_delta(:not_received), do: :not_received
 
   defp scale_delta(delta) do
-    # Deltas are represented as multiples of 250us
+    # Deltas are represented as multiples of 250μs
     # https://datatracker.ietf.org/doc/html/draft-holmer-rmcat-transport-wide-cc-extensions-01#section-3.1.5
-    Time.to_milliseconds(delta * 4)
+    delta |> Time.to_microseconds() |> div(250)
   end
 
   defp delta_to_packet_status(scaled_delta) do
     cond do
-      scaled_delta == nil -> :not_received
+      scaled_delta == :not_received -> :not_received
       scaled_delta in @small_delta_range -> :small_delta
       true -> :large_or_negative_delta
     end
