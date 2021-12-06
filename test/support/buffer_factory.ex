@@ -22,13 +22,12 @@ defmodule Membrane.RTP.BufferFactory do
 
     %Buffer{
       payload: <<0, 255>>,
+      pts: div(seq_num_offset * @timestamp_increment * Membrane.Time.second(), @clock_rate),
       metadata: %{
         rtp: %{
           timestamp: seq_num_offset * @timestamp_increment,
           sequence_number: seq_num
-        },
-        timestamp:
-          Ratio.div(seq_num_offset * @timestamp_increment * Membrane.Time.second(), @clock_rate)
+        }
       }
     }
   end

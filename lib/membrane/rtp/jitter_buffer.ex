@@ -198,9 +198,8 @@ defmodule Membrane.RTP.JitterBuffer do
         :current -> timestamp_base
       end
 
-    timestamp = Ratio.div((rtp_timestamp - timestamp_base) * Time.second(), state.clock_rate)
-    buffer = Bunch.Struct.put_in(buffer, [:metadata, :timestamp], timestamp)
-    action = {:buffer, {:output, buffer}}
+    timestamp = div((rtp_timestamp - timestamp_base) * Time.second(), state.clock_rate)
+    action = {:buffer, {:output, %{buffer | pts: timestamp}}}
     state = %{state | timestamp_base: timestamp_base, previous_timestamp: rtp_timestamp}
     {action, state}
   end

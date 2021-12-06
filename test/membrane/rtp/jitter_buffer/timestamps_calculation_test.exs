@@ -14,7 +14,7 @@ defmodule Membrane.RTP.JitterBuffer.TimestampsCalculationTest do
   end
 
   defp buffers_timestamps(buffers) do
-    Enum.map(buffers, & &1.metadata.timestamp)
+    Enum.map(buffers, & &1.pts)
   end
 
   defp process_and_receive_buffer_timestamps(buffers, state) do

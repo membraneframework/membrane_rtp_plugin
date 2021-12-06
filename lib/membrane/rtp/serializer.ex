@@ -9,7 +9,7 @@ defmodule Membrane.RTP.Serializer do
   """
   use Membrane.Filter
 
-  alias Membrane.{Buffer, RTP, RemoteStream}
+  alias Membrane.{RTP, RemoteStream}
 
   @max_seq_num 65_535
   @max_timestamp 0xFFFFFFFF
@@ -77,11 +77,11 @@ defmodule Membrane.RTP.Serializer do
   end
 
   @impl true
-  def handle_process(:input, %Buffer{payload: payload, metadata: metadata}, _ctx, state) do
-    {rtp_metadata, metadata} = Map.pop(metadata, :rtp, %{})
+  def handle_process(:input, buffer, _ctx, state) do
+    {rtp_metadata, metadata} = Map.pop(buffer.metadata, :rtp, %{})
 
     rtp_offset =
-      metadata.timestamp
+      buffer.pts
       |> Ratio.mult(state.clock_rate)
       |> Membrane.Time.to_seconds()
 
@@ -100,8 +100,9 @@ defmodule Membrane.RTP.Serializer do
     }
 
     buffer = %Membrane.Buffer{
-      metadata: Map.put(metadata, :rtp, header),
-      payload: payload
+      buffer
+      | metadata: Map.put(metadata, :rtp, header),
+        payload: buffer.payload
     }
 
     {{:ok, buffer: {:output, buffer}}, state}
