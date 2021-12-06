@@ -1,6 +1,6 @@
 defmodule Membrane.RTP.OutboundPacketTracker do
   @moduledoc """
-  Tracks statistics of outband packets.
+  Tracks statistics of outbound packets.
 
   Besides tracking statistics, tracker can also serialize packet's header and payload stored inside an incoming buffer
   into a proper RTP packet. When encountering header extensions, it remaps its identifiers from locally used extension
@@ -73,7 +73,7 @@ defmodule Membrane.RTP.OutboundPacketTracker do
   end
 
   @impl true
-  def handle_demand(pad, _size, _type, _ctx, %State{rtcp_output_pad: pad} = state) do
+  def handle_demand(Pad.ref(:rtcp_output, _id), _size, _type, _ctx, state) do
     {:ok, state}
   end
 
@@ -143,7 +143,6 @@ defmodule Membrane.RTP.OutboundPacketTracker do
     {{:ok, actions ++ [redemand: state.rtcp_output_pad]}, %{state | any_buffer_sent?: false}}
   end
 
-  @spec get_stats(State.t()) :: SenderReport.sender_stats_t() | :no_stats
   defp get_stats(%State{any_buffer_sent?: false}), do: :no_stats
   defp get_stats(%State{stats_acc: stats}), do: stats
 

@@ -58,10 +58,10 @@ defmodule Membrane.RTP.StreamSendBin do
   end
 
   @impl true
-  def handle_prepared_to_stopped(_context, %{rtcp_report_interval: nil} = state), do: {:ok, state}
+  def handle_playing_to_prepared(_context, %{rtcp_report_interval: nil} = state), do: {:ok, state}
 
   @impl true
-  def handle_prepared_to_stopped(_context, state) do
+  def handle_playing_to_prepared(_context, state) do
     {{:ok, stop_timer: :report_timer}, state}
   end
 
