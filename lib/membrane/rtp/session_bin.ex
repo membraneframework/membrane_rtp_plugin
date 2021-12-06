@@ -39,7 +39,8 @@ defmodule Membrane.RTP.SessionBin do
   ## RTCP
   RTCP packets for inbound stream can be provided either in-band or via a separate `rtp_input` pad instance. Corresponding
   receiver report packets will be sent back through `rtcp_output` with the same id as `rtp_input` for the RTP stream.
-  RTCP for outbound stream is not yet supported.
+
+  RTCP for outbound stream is not yet supported. # But will be :)
   """
   use Membrane.Bin
 
@@ -98,10 +99,15 @@ defmodule Membrane.RTP.SessionBin do
                 default: %{},
                 description: "Mapping of the custom payload types ( > 95)"
               ],
-              rtcp_report_interval: [
+              rtcp_receiver_report_interval: [
                 spec: Membrane.Time.t() | nil,
                 default: nil,
                 description: "Interval between sending subseqent RTCP receiver reports."
+              ],
+              rtcp_sender_report_interval: [
+                spec: Membrane.Time.t() | nil,
+                default: nil,
+                description: "Interval between sending subseqent RTCP sender reports."
               ],
               receiver_ssrc_generator: [
                 type: :function,
@@ -258,7 +264,12 @@ defmodule Membrane.RTP.SessionBin do
       ]
     ]
 
-  def_output_pad :rtcp_output,
+  def_output_pad :rtcp_receiver_output,
+    demand_unit: :buffers,
+    caps: {RemoteStream, type: :packetized, content_format: RTCP},
+    availability: :on_request
+
+  def_output_pad :rtcp_sender_output,
     demand_unit: :buffers,
     caps: {RemoteStream, type: :packetized, content_format: RTCP},
     availability: :on_request
@@ -273,7 +284,8 @@ defmodule Membrane.RTP.SessionBin do
               depayloaders: nil,
               ssrcs: %{},
               senders_ssrcs: %MapSet{},
-              rtcp_report_interval: nil,
+              rtcp_receiver_report_interval: nil,
+              rtcp_sender_report_interval: nil,
               receiver_ssrc_generator: nil,
               rtcp_sender_report_data: %Session.SenderReport.Data{},
               secure?: nil,
@@ -306,8 +318,8 @@ defmodule Membrane.RTP.SessionBin do
 
   @impl true
   def handle_pad_added(Pad.ref(:rtp_input, ref) = pad, ctx, %{secure?: secure?} = state) do
-    rtcp_output = Pad.ref(:rtcp_output, ref)
-    rtcp? = Map.has_key?(ctx.pads, rtcp_output)
+    rtcp_receiver_output = Pad.ref(:rtcp_receiver_output, ref)
+    rtcp? = Map.has_key?(ctx.pads, rtcp_receiver_output)
 
     maybe_link_srtcp_decryptor =
       &to(&1, {:srtcp_decryptor, ref}, %Membrane.SRTCP.Decryptor{policies: state.srtp_policies})
@@ -332,7 +344,7 @@ defmodule Membrane.RTP.SessionBin do
             |> to({:rtcp_parser, ref}, RTCP.Parser)
             |> via_out(:rtcp_output)
             |> then(if secure?, do: maybe_link_srtcp_encryptor, else: & &1)
-            |> to_bin_output(rtcp_output),
+            |> to_bin_output(rtcp_receiver_output),
             link({:rtcp_parser, ref})
             |> via_in(Pad.ref(:input, {:rtcp, ref}))
             |> to(:ssrc_router)
@@ -368,8 +380,8 @@ defmodule Membrane.RTP.SessionBin do
         extensions: extensions,
         local_ssrc: local_ssrc,
         remote_ssrc: ssrc,
+        rtcp_report_interval: state.rtcp_receiver_report_interval,
         rtcp_fir_interval: fir_interval,
-        rtcp_report_interval: state.rtcp_report_interval,
         secure?: state.secure?,
         srtp_policies: state.srtp_policies
       }
@@ -399,9 +411,18 @@ defmodule Membrane.RTP.SessionBin do
   end
 
   @impl true
-  def handle_pad_added(Pad.ref(:rtcp_output, ref), ctx, state) do
+  def handle_pad_added(Pad.ref(:rtcp_receiver_output, ref), ctx, state) do
     if Map.has_key?(ctx.children, {:rtp_parser, ref}) do
-      raise "RTCP output has to be linked before corresponding RTP input"
+      raise "RTCP receiver output has to be linked before corresponding RTP input"
+    end
+
+    {:ok, state}
+  end
+
+  @impl true
+  def handle_pad_added(Pad.ref(:rtcp_sender_output, ssrc), ctx, state) do
+    if Map.has_key?(ctx.children, {:stream_send_bin, ssrc}) do
+      raise "RTCP sender output has to be linked before corresponding input"
     end
 
     {:ok, state}
@@ -415,7 +436,9 @@ defmodule Membrane.RTP.SessionBin do
 
     pads_present? = Enum.all?([input_pad, output_pad], &Map.has_key?(ctx.pads, &1))
 
-    # if one of the pads is missing do nothing and wait for the other pad to be added
+    rtcp_sender_output = Pad.ref(:rtcp_sender_output, ssrc)
+    rtcp? = Map.has_key?(ctx.pads, rtcp_sender_output)
+
     if not pads_present? or Map.has_key?(ctx.children, {:stream_send_bin, ssrc}) do
       {:ok, state}
     else
@@ -437,13 +460,36 @@ defmodule Membrane.RTP.SessionBin do
           payload_type: payload_type,
           payloader: payloader,
           clock_rate: clock_rate,
+          rtcp_report_interval: state.rtcp_sender_report_interval,
           rtp_extension_mapping: rtp_extension_mapping || %{}
         })
         |> then(if state.secure?, do: maybe_link_encryptor, else: & &1)
         |> to_bin_output(output_pad)
       ]
 
-      spec = %ParentSpec{links: links}
+      # if RTCP is present create all set of input and output pads for RTCP flow
+      rtcp_links =
+        if rtcp? do
+          maybe_link_srtcp_encryptor =
+            &to(&1, {:srtcp_sender_encryptor, ssrc}, %SRTP.Encryptor{
+              policies: state.srtp_policies
+            })
+
+          [
+            link({:stream_send_bin, ssrc})
+            |> via_out(:rtcp_output)
+            |> then(if state.secure?, do: maybe_link_srtcp_encryptor, else: & &1)
+            |> to_bin_output(rtcp_sender_output),
+            link(:ssrc_router)
+            |> via_out(Pad.ref(:output, ssrc))
+            |> via_in(:rtcp_input)
+            |> to({:stream_send_bin, ssrc})
+          ]
+        else
+          []
+        end
+
+      spec = %ParentSpec{links: links ++ rtcp_links}
       state = %{state | senders_ssrcs: MapSet.put(state.senders_ssrcs, ssrc)}
 
       {{:ok, spec: spec}, state}
@@ -487,7 +533,8 @@ defmodule Membrane.RTP.SessionBin do
   end
 
   @impl true
-  def handle_pad_removed(Pad.ref(:rtcp_output, _ref), _ctx, state) do
+  def handle_pad_removed(Pad.ref(name, _ref), _ctx, state)
+      when name in [:rtcp_receiver_output, :rtcp_sender_output] do
     {:ok, state}
   end
 

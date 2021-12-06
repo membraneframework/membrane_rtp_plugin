@@ -17,6 +17,8 @@ defmodule Membrane.RTP.SSRCRouter do
 
   def_input_pad :input, demand_unit: :buffers, caps: RTP, availability: :on_request
 
+  def_input_pad :rtcp_input, demand_unit: :buffers, caps: :any, availability: :on_request
+
   def_output_pad :output, caps: RTP, availability: :on_request
 
   defmodule State do
@@ -26,12 +28,14 @@ defmodule Membrane.RTP.SSRCRouter do
     alias Membrane.RTP
 
     @type t() :: %__MODULE__{
-            pads: %{RTP.ssrc_t() => [input_pad :: Pad.ref_t()]},
+            input_pads: %{RTP.ssrc_t() => [input_pad :: Pad.ref_t()]},
+            output_pad_ids: MapSet.t(),
             linking_buffers: %{RTP.ssrc_t() => [Membrane.Buffer.t()]},
             handshake_event: struct() | nil
           }
 
-    defstruct pads: %{},
+    defstruct input_pads: %{},
+              output_pad_ids: MapSet.new(),
               linking_buffers: %{},
               handshake_event: nil
   end
@@ -58,7 +62,8 @@ defmodule Membrane.RTP.SSRCRouter do
         []
       end
 
-    {{:ok, [caps: {pad, %RTP{}}] ++ events ++ Enum.reverse(buffered_actions)}, state}
+    {{:ok, [caps: {pad, %RTP{}}] ++ events ++ Enum.reverse(buffered_actions || [])},
+     %State{state | output_pad_ids: MapSet.put(state.output_pad_ids, ssrc)}}
   end
 
   @impl true
@@ -69,16 +74,16 @@ defmodule Membrane.RTP.SSRCRouter do
   @impl true
   def handle_pad_removed(Pad.ref(:input, _id) = pad, _ctx, state) do
     new_pads =
-      state.pads
+      state.input_pads
       |> Enum.filter(fn {_ssrc, p} -> p != pad end)
       |> Enum.into(%{})
 
-    {:ok, %State{state | pads: new_pads}}
+    {:ok, %State{state | input_pads: new_pads}}
   end
 
   @impl true
-  def handle_pad_removed(Pad.ref(:output, _ssrc), _ctx, state) do
-    {:ok, state}
+  def handle_pad_removed(Pad.ref(:output, ssrc), _ctx, state) do
+    {:ok, %State{state | output_pad_ids: MapSet.delete(state.output_pad_ids, ssrc)}}
   end
 
   @impl true
@@ -93,8 +98,13 @@ defmodule Membrane.RTP.SSRCRouter do
 
   @impl true
   def handle_demand(Pad.ref(:output, ssrc), _size, _unit, ctx, state) do
-    input_pad = state.pads[ssrc]
-    {{:ok, demand: {input_pad, &(&1 + ctx.incoming_demand)}}, state}
+    case state.input_pads do
+      %{^ssrc => input_pad} ->
+        {{:ok, demand: {input_pad, &(&1 + ctx.incoming_demand)}}, state}
+
+      _pads ->
+        {:ok, state}
+    end
   end
 
   @impl true
@@ -112,12 +122,10 @@ defmodule Membrane.RTP.SSRCRouter do
 
   @impl true
   def handle_event(Pad.ref(:input, _id), %RTCPEvent{} = event, _ctx, state) do
-    {actions, state} =
+    actions =
       event.ssrcs
-      |> Enum.filter(&Map.has_key?(state.pads, &1))
-      |> Enum.flat_map_reduce(state, fn ssrc, state ->
-        maybe_add_to_linking_buffer(:event, event, ssrc, state)
-      end)
+      |> Enum.filter(&MapSet.member?(state.output_pad_ids, &1))
+      |> Enum.map(&{:event, {Pad.ref(:output, &1), event}})
 
     {{:ok, actions}, state}
   end
@@ -125,7 +133,7 @@ defmodule Membrane.RTP.SSRCRouter do
   @impl true
   def handle_event(_pad, %{handshake_data: _data} = event, _ctx, state) do
     {actions, state} =
-      Enum.flat_map_reduce(state.pads, state, fn {ssrc, _input}, state ->
+      Enum.flat_map_reduce(state.input_pads, state, fn {ssrc, _input}, state ->
         maybe_add_to_linking_buffer(:event, event, ssrc, state)
       end)
 
@@ -135,7 +143,7 @@ defmodule Membrane.RTP.SSRCRouter do
   @impl true
   def handle_event(Pad.ref(:input, _id), event, _ctx, state) do
     {actions, state} =
-      Enum.flat_map_reduce(state.pads, state, fn {ssrc, _input}, state ->
+      Enum.flat_map_reduce(state.input_pads, state, fn {ssrc, _input}, state ->
         maybe_add_to_linking_buffer(:event, event, ssrc, state)
       end)
 
@@ -144,7 +152,7 @@ defmodule Membrane.RTP.SSRCRouter do
 
   @impl true
   def handle_event(Pad.ref(:output, ssrc), %RTCPEvent{} = event, ctx, state) do
-    with {:ok, Pad.ref(:input, id)} <- Map.fetch(state.pads, ssrc),
+    with {:ok, Pad.ref(:input, id)} <- Map.fetch(state.input_pads, ssrc),
          rtcp_pad = Pad.ref(:input, {:rtcp, id}),
          true <- Map.has_key?(ctx.pads, rtcp_pad) do
       {{:ok, event: {rtcp_pad, event}}, state}
@@ -164,10 +172,13 @@ defmodule Membrane.RTP.SSRCRouter do
   end
 
   defp maybe_handle_new_stream(pad, ssrc, payload_type, extensions, state) do
-    if Map.has_key?(state.pads, ssrc) do
+    if Map.has_key?(state.input_pads, ssrc) do
       {[], state}
     else
-      state = state |> put_in([:pads, ssrc], pad) |> put_in([:linking_buffers, ssrc], [])
+      state =
+        state
+        |> put_in([:input_pads, ssrc], pad)
+        |> put_in([:linking_buffers, ssrc], [])
 
       {[notify: {:new_rtp_stream, ssrc, payload_type, extensions}], state}
     end
@@ -178,7 +189,7 @@ defmodule Membrane.RTP.SSRCRouter do
 
     if waiting_for_linking?(ssrc, state) do
       state = update_in(state, [:linking_buffers, ssrc], &[action | &1])
-      actions = if type == :buffer, do: [demand: {state.pads[ssrc], &(&1 + 1)}], else: []
+      actions = if type == :buffer, do: [demand: {state.input_pads[ssrc], &(&1 + 1)}], else: []
       {actions, state}
     else
       {[action], state}

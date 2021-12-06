@@ -1,6 +1,6 @@
 defmodule Membrane.RTCP.Receiver do
   @moduledoc """
-  Element exchanging RTCP packets and jitter buffer statistics.
+  Element exchanging RTCP packets and RTCP receiver statistics.
   """
   use Membrane.Filter
 
@@ -70,8 +70,7 @@ defmodule Membrane.RTCP.Receiver do
   end
 
   @impl true
-  def handle_event(:input, %RTCPEvent{} = event, _ctx, state) do
-    Membrane.Logger.warn("Received unknown RTCP packet: #{inspect(event)}")
+  def handle_event(:input, %RTCPEvent{}, _ctx, state) do
     {:ok, state}
   end
 

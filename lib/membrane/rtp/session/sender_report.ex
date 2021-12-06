@@ -5,6 +5,19 @@ defmodule Membrane.RTP.Session.SenderReport do
 
   @max_timestamp 0xFFFFFFFF
 
+  @typedoc """
+  Mapping from `ssrc` to its sender statistics.
+  """
+  @type sender_stats_t :: %{
+          non_neg_integer() => %{
+            clock_rate: non_neg_integer(),
+            timestamp: non_neg_integer(),
+            rtp_timestamp: non_neg_integer(),
+            sender_packet_count: non_neg_integer(),
+            sender_octet_count: non_neg_integer()
+          }
+        }
+
   defmodule Data do
     @moduledoc false
     @type t :: %__MODULE__{
@@ -72,7 +85,8 @@ defmodule Membrane.RTP.Session.SenderReport do
     end
   end
 
-  defp generate_report(stats) do
+  @spec generate_report(sender_stats_t()) :: [RTCP.SenderReportPacket.t()]
+  def generate_report(stats) do
     stats
     |> Enum.filter(fn {_k, v} -> v != :no_stats end)
     |> Enum.flat_map(fn {sender_ssrc, sender_stats} ->

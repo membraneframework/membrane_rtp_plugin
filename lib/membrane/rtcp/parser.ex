@@ -72,7 +72,7 @@ defmodule Membrane.RTCP.Parser do
 
   defp process_rtcp(%RTCP.SenderReportPacket{ssrc: ssrc} = packet, metadata) do
     event = %RTCPEvent{
-      rtcp: %{packet | reports: []},
+      rtcp: packet,
       ssrcs: [ssrc],
       arrival_timestamp: Map.get(metadata, :arrival_ts, Membrane.Time.vm_time())
     }
@@ -80,7 +80,18 @@ defmodule Membrane.RTCP.Parser do
     [event: {:output, event}]
   end
 
-  defp process_rtcp(_unknown_rtcp_packet, _metadata) do
-    []
+  defp process_rtcp(%RTCP.ReceiverReportPacket{reports: reports}, metadata) do
+    reports
+    |> Enum.map(fn report ->
+      event = %RTCPEvent{
+        rtcp: report,
+        ssrcs: [report.ssrc],
+        arrival_timestamp: Map.get(metadata, :arrival_ts, Membrane.Time.vm_time())
+      }
+
+      {:event, {:output, event}}
+    end)
   end
+
+  defp process_rtcp(_unknown_packet, _metadata), do: []
 end

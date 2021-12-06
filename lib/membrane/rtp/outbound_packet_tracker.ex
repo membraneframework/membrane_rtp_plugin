@@ -1,6 +1,6 @@
 defmodule Membrane.RTP.OutboundPacketTracker do
   @moduledoc """
-  Tracks statistics of outband packets.
+  Tracks statistics of outbound packets.
 
   Besides tracking statistics, tracker can also serialize packet's header and payload stored inside an incoming buffer
   into a proper RTP packet. When encountering header extensions, it remaps its identifiers from locally used extension
@@ -9,6 +9,7 @@ defmodule Membrane.RTP.OutboundPacketTracker do
   use Membrane.Filter
 
   alias Membrane.{Buffer, RTP, Payload, Time}
+  alias Membrane.RTP.Session.SenderReport
 
   def_input_pad :input,
     caps: :any,
@@ -16,6 +17,13 @@ defmodule Membrane.RTP.OutboundPacketTracker do
 
   def_output_pad :output,
     caps: :any
+
+  def_input_pad :rtcp_input,
+    availability: :on_request,
+    caps: :any,
+    demand_unit: :buffers
+
+  def_output_pad :rtcp_output, availability: :on_request, caps: :any
 
   def_options ssrc: [spec: RTP.ssrc_t()],
               payload_type: [spec: RTP.payload_type_t()],
@@ -35,11 +43,14 @@ defmodule Membrane.RTP.OutboundPacketTracker do
     use Bunch.Access
 
     @type t :: %__MODULE__{
+            ssrc: RTP.ssrc_t(),
             any_buffer_sent?: boolean(),
             stats_acc: %{}
           }
 
-    defstruct any_buffer_sent?: false,
+    defstruct ssrc: 0,
+              any_buffer_sent?: false,
+              rtcp_output_pad: nil,
               stats_acc: %{
                 clock_rate: 0,
                 timestamp: 0,
@@ -59,6 +70,26 @@ defmodule Membrane.RTP.OutboundPacketTracker do
   @impl true
   def handle_demand(:output, size, :buffers, _ctx, state) do
     {{:ok, demand: {:input, size}}, state}
+  end
+
+  @impl true
+  def handle_demand(Pad.ref(:rtcp_output, _id), _size, _type, _ctx, state) do
+    {:ok, state}
+  end
+
+  @impl true
+  def handle_pad_added(Pad.ref(:rtcp_input, _id), _ctx, state) do
+    {:ok, state}
+  end
+
+  @impl true
+  def handle_pad_added(Pad.ref(:rtcp_output, _id) = pad, _ctx, %{rtcp_output_pad: nil} = state) do
+    {:ok, %{state | rtcp_output_pad: pad}}
+  end
+
+  @impl true
+  def handle_pad_added(Pad.ref(:rtcp_output, _id), _ctx, _state) do
+    raise "rtcp_output pad can get linked just once"
   end
 
   @impl true
@@ -91,17 +122,27 @@ defmodule Membrane.RTP.OutboundPacketTracker do
 
     buffer = %Buffer{buffer | payload: payload, metadata: metadata}
 
-    {{:ok, buffer: {:output, buffer}}, state}
+    {{:ok, buffer: {:output, buffer}}, %{state | any_buffer_sent?: true}}
+  end
+
+  @impl true
+  def handle_other(:send_stats, _ctx, %{rtcp_output_pad: nil} = state) do
+    {:ok, state}
   end
 
   @impl true
   def handle_other(:send_stats, _ctx, state) do
     stats = get_stats(state)
-    state = %{state | any_buffer_sent?: false}
-    {{:ok, notify: {:outband_stats, stats}}, state}
+
+    actions =
+      %{state.ssrc => stats}
+      |> SenderReport.generate_report()
+      |> Enum.map(&Membrane.RTCP.Packet.serialize(&1))
+      |> Enum.map(&{:buffer, {state.rtcp_output_pad, %Membrane.Buffer{payload: &1}}})
+
+    {{:ok, actions ++ [redemand: state.rtcp_output_pad]}, %{state | any_buffer_sent?: false}}
   end
 
-  @spec get_stats(State.t()) :: map() | :no_stats
   defp get_stats(%State{any_buffer_sent?: false}), do: :no_stats
   defp get_stats(%State{stats_acc: stats}), do: stats
 
