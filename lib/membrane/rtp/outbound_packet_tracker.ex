@@ -152,8 +152,7 @@ defmodule Membrane.RTP.OutboundPacketTracker do
       |> Enum.map(&Membrane.RTCP.Packet.serialize(&1))
       |> Enum.map(&{:buffer, {state.rtcp_output_pad, %Membrane.Buffer{payload: &1}}})
 
-    # {{:ok, actions ++ [redemand: state.rtcp_output_pad]}, %{state | any_buffer_sent?: false}}
-    {:ok, %{state | any_buffer_sent?: false}}
+    {{:ok, actions ++ [redemand: state.rtcp_output_pad]}, %{state | any_buffer_sent?: false}}
   end
 
   defp get_stats(%State{any_buffer_sent?: false}), do: :no_stats
