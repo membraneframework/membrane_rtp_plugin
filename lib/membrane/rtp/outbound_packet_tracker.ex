@@ -42,13 +42,22 @@ defmodule Membrane.RTP.OutboundPacketTracker do
     @moduledoc false
     use Bunch.Access
 
+    alias Membrane.RTP
+
     @type t :: %__MODULE__{
             ssrc: RTP.ssrc_t(),
+            payload_type: RTP.payload_type_t(),
+            extension_mapping: RTP.SessionBin.rtp_extension_mapping_t(),
+            alignment: pos_integer(),
             any_buffer_sent?: boolean(),
+            rtcp_output_pad: Membrane.Pad.ref_t() | nil,
             stats_acc: %{}
           }
 
     defstruct ssrc: 0,
+              payload_type: 0,
+              extension_mapping: %{},
+              alignment: 1,
               any_buffer_sent?: false,
               rtcp_output_pad: nil,
               stats_acc: %{
@@ -62,9 +71,12 @@ defmodule Membrane.RTP.OutboundPacketTracker do
 
   @impl true
   def handle_init(options) do
-    state = %State{} |> put_in([:stats_acc, :clock_rate], options.clock_rate)
+    state =
+      %State{}
+      |> put_in([:stats_acc, :clock_rate], options.clock_rate)
+      |> Map.merge(options |> Map.from_struct() |> Map.drop([:clock_rate]))
 
-    {:ok, Map.merge(Map.from_struct(options), state)}
+    {:ok, state}
   end
 
   @impl true
@@ -107,6 +119,8 @@ defmodule Membrane.RTP.OutboundPacketTracker do
         %{extension | identifier: Map.fetch!(state.extension_mapping, extension.identifier)}
       end)
 
+    IO.inspect(state.ssrc)
+
     header =
       struct(RTP.Header, %{
         rtp_metadata
@@ -140,7 +154,8 @@ defmodule Membrane.RTP.OutboundPacketTracker do
       |> Enum.map(&Membrane.RTCP.Packet.serialize(&1))
       |> Enum.map(&{:buffer, {state.rtcp_output_pad, %Membrane.Buffer{payload: &1}}})
 
-    {{:ok, actions ++ [redemand: state.rtcp_output_pad]}, %{state | any_buffer_sent?: false}}
+    # {{:ok, actions ++ [redemand: state.rtcp_output_pad]}, %{state | any_buffer_sent?: false}}
+    {:ok, %{state | any_buffer_sent?: false}}
   end
 
   defp get_stats(%State{any_buffer_sent?: false}), do: :no_stats
