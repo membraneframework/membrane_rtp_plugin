@@ -29,7 +29,7 @@ defmodule Membrane.RTP.TWCCReceiver do
                 spec: RTP.ssrc_t(),
                 default: nil,
                 description:
-                  "Sender SSRC for generated feedback packets, that will be supplied by `RTP.SessionBin`."
+                  "Sender SSRC for generated feedback packets (will be supplied by `RTP.SessionBin`)."
               ]
 
   defmodule State do

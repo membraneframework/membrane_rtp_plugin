@@ -182,10 +182,10 @@ defmodule Membrane.RTP.TWCCReceiver.PacketInfoStoreTest do
       assert packet_status_count == length(receive_deltas)
 
       Enum.each(lost_sequence_numbers, fn seq_num ->
-        assert Enum.at(receive_deltas, seq_num) == nil
+        assert Enum.at(receive_deltas, seq_num) == :not_received
       end)
 
-      assert Enum.count(receive_deltas, &is_nil/1) == length(lost_sequence_numbers)
+      assert Enum.count(receive_deltas, &(&1 == :not_received)) == length(lost_sequence_numbers)
     end
   end
 
