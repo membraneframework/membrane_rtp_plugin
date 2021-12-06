@@ -119,8 +119,6 @@ defmodule Membrane.RTP.OutboundPacketTracker do
         %{extension | identifier: Map.fetch!(state.extension_mapping, extension.identifier)}
       end)
 
-    IO.inspect(state.ssrc)
-
     header =
       struct(RTP.Header, %{
         rtp_metadata
