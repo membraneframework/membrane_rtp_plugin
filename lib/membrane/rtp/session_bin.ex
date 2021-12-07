@@ -606,20 +606,25 @@ defmodule Membrane.RTP.SessionBin do
     # that handles packets from all incoming streams that have declared support for it
     {maybe_twcc, rtp_extensions} = Keyword.pop(rtp_extensions, :twcc)
 
-    should_link_twcc? = maybe_twcc != nil
+    should_link? = maybe_twcc != nil
+    should_create_child? = not Map.has_key?(ctx.children, :twcc)
 
     {maybe_twcc_ssrc, state} =
-      if should_link_twcc? and not Map.has_key?(ctx.children, :twcc) do
+      if should_link? and should_create_child? do
         add_ssrc(nil, state)
       else
         {nil, state}
       end
 
     maybe_link_twcc =
-      if should_link_twcc? do
+      if should_link? do
         &(&1
           |> via_in(Pad.ref(:input, pad_ssrc))
-          |> to(:twcc, %{maybe_twcc | sender_ssrc: maybe_twcc_ssrc})
+          |> then(fn link ->
+            if should_create_child?,
+              do: to(link, :twcc, %{maybe_twcc | sender_ssrc: maybe_twcc_ssrc}),
+              else: to(link, :twcc)
+          end)
           |> via_out(Pad.ref(:output, pad_ssrc)))
       else
         & &1
