@@ -621,9 +621,11 @@ defmodule Membrane.RTP.SessionBin do
         &(&1
           |> via_in(Pad.ref(:input, pad_ssrc))
           |> then(fn link ->
-            if should_create_child?,
-              do: to(link, :twcc, %{maybe_twcc | sender_ssrc: maybe_twcc_ssrc}),
-              else: to(link, :twcc)
+            if should_create_child? do
+              to(link, :twcc, %{maybe_twcc | sender_ssrc: maybe_twcc_ssrc})
+            else
+              to(link, :twcc)
+            end
           end)
           |> via_out(Pad.ref(:output, pad_ssrc)))
       else
