@@ -31,15 +31,17 @@ defmodule Membrane.RTP.Utils do
   end
 
   @spec from_which_cycle(number() | nil, number(), number()) :: :current | :previous | :next
+  def from_which_cycle(previous_value, new_value, cycle_length)
+
   def from_which_cycle(nil, _new, _cycle_length), do: :current
 
-  def from_which_cycle(base, new, cycle_length) do
+  def from_which_cycle(previous_value, new_value, cycle_length) do
     # a) current cycle
-    distance_if_current = abs(base - new)
-    # b) new is from the previous cycle
-    distance_if_previous = abs(base - (new - cycle_length))
-    # c) new is in the next cycle
-    distance_if_next = abs(base - (new + cycle_length))
+    distance_if_current = abs(previous_value - new_value)
+    # b) new_value is from the previous cycle
+    distance_if_previous = abs(previous_value - (new_value - cycle_length))
+    # c) new_value is in the next cycle
+    distance_if_next = abs(previous_value - (new_value + cycle_length))
 
     [
       {:current, distance_if_current},

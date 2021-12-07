@@ -10,9 +10,11 @@ defmodule Membrane.RTP.JitterBuffer do
   alias Membrane.RTP.Utils
   alias __MODULE__.{BufferStore, Record}
 
+  require Bitwise
+
   @type packet_index :: non_neg_integer()
 
-  @max_timestamp 0xFFFFFFFF
+  @timestamp_limit Bitwise.bsl(1, 32)
 
   def_output_pad :output,
     caps: RTP
@@ -177,9 +179,9 @@ defmodule Membrane.RTP.JitterBuffer do
     # https://datatracker.ietf.org/doc/html/rfc3550#section-5.1
 
     timestamp_base =
-      case Utils.from_which_cycle(previous_timestamp, rtp_timestamp, @max_timestamp) do
-        :next -> timestamp_base - @max_timestamp - 1
-        :previous -> timestamp_base + @max_timestamp + 1
+      case Utils.from_which_cycle(previous_timestamp, rtp_timestamp, @timestamp_limit) do
+        :next -> timestamp_base - @timestamp_limit
+        :previous -> timestamp_base + @timestamp_limit
         :current -> timestamp_base
       end
 

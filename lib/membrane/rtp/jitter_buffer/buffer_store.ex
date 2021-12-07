@@ -17,7 +17,9 @@ defmodule Membrane.RTP.JitterBuffer.BufferStore do
   alias Membrane.RTP.{JitterBuffer, Utils}
   alias Membrane.RTP.JitterBuffer.Record
 
-  @seq_number_limit 65_536
+  require Bitwise
+
+  @seq_number_limit Bitwise.bsl(1, 16)
 
   defstruct prev_index: nil,
             end_index: nil,
@@ -72,10 +74,10 @@ defmodule Membrane.RTP.JitterBuffer.BufferStore do
          buffer,
          seq_num
        ) do
-    base_index = rem(prev_index, @seq_number_limit)
+    prev_seq_num = rem(prev_index, @seq_number_limit)
 
     index =
-      case Utils.from_which_cycle(base_index, seq_num, @seq_number_limit) do
+      case Utils.from_which_cycle(prev_seq_num, seq_num, @seq_number_limit) do
         :current -> seq_num + roc * @seq_number_limit
         :previous -> seq_num + (roc - 1) * @seq_number_limit
         :next -> seq_num + (roc + 1) * @seq_number_limit

@@ -121,7 +121,7 @@ defmodule Membrane.RTP.VAD do
 
   defp handle_if_present(buffer, nil, state), do: {{:ok, buffer: {:output, buffer}}, state}
 
-  @timestamp_limit 4_294_967_295
+  @timestamp_limit Bitwise.bsl(1, 32)
 
   defp handle_if_present(buffer, extension, state) do
     <<_v::1, level::7>> = extension.data

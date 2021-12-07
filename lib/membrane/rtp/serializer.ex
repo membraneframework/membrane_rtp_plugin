@@ -11,8 +11,10 @@ defmodule Membrane.RTP.Serializer do
 
   alias Membrane.{RTP, RemoteStream}
 
-  @max_seq_num 65_535
-  @max_timestamp 0xFFFFFFFF
+  require Bitwise
+
+  @max_seq_num Bitwise.bsl(1, 16) - 1
+  @max_timestamp Bitwise.bsl(1, 32) - 1
 
   def_input_pad :input, caps: RTP, demand_unit: :buffers
   def_output_pad :output, caps: {RemoteStream, type: :packetized, content_format: RTP}

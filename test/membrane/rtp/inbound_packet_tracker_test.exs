@@ -5,8 +5,10 @@ defmodule Membrane.RTP.InboundPacketTrackerTest do
   alias Membrane.RTP.InboundPacketTracker
   alias Membrane.RTP.BufferFactory
 
+  require Bitwise
+
+  @max_seq_number Bitwise.bsl(1, 16) - 1
   @base_seq_number BufferFactory.base_seq_number()
-  @max_seq_number 0xFFFF
 
   describe "InboundPacketTracker should" do
     setup do
