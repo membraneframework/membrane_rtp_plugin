@@ -7,6 +7,7 @@ defmodule Membrane.RTP.JitterBuffer do
   use Bunch
 
   alias Membrane.{RTP, Time}
+  alias Membrane.RTP.Utils
   alias __MODULE__.{BufferStore, Record}
 
   @type packet_index :: non_neg_integer()
@@ -175,26 +176,10 @@ defmodule Membrane.RTP.JitterBuffer do
     # than the previous one while not overflowing the timestamp number
     # https://datatracker.ietf.org/doc/html/rfc3550#section-5.1
 
-    # a) both timestamps within the same timestamp's cycle
-    distance_if_current = abs(previous_timestamp - rtp_timestamp)
-    # b) current timestamp from previous timestamp's  cycle
-    distance_if_prev = abs(previous_timestamp - (rtp_timestamp - @max_timestamp))
-    # c) current timestamp from new cycle
-    distance_if_next = abs(previous_timestamp - (rtp_timestamp + @max_timestamp))
-
-    cycle =
-      [
-        {:current, distance_if_current},
-        {:next, distance_if_next},
-        {:prev, distance_if_prev}
-      ]
-      |> Enum.min_by(fn {_atom, distance} -> distance end)
-      |> then(fn {result, _value} -> result end)
-
     timestamp_base =
-      case cycle do
+      case Utils.from_which_cycle(previous_timestamp, rtp_timestamp, @max_timestamp) do
         :next -> timestamp_base - @max_timestamp - 1
-        :prev -> timestamp_base + @max_timestamp + 1
+        :previous -> timestamp_base + @max_timestamp + 1
         :current -> timestamp_base
       end
 

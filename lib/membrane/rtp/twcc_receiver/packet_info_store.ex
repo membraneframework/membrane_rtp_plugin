@@ -6,6 +6,7 @@ defmodule Membrane.RTP.TWCCReceiver.PacketInfoStore do
   # assembling a TWCC feedback packet.
 
   alias Membrane.Time
+  alias Membrane.RTP.Utils
 
   require Bitwise
 
@@ -64,7 +65,7 @@ defmodule Membrane.RTP.TWCCReceiver.PacketInfoStore do
       seq_to_timestamp: seq_to_timestamp
     } = store
 
-    case from_which_cycle(base_seq_num, new_seq_num) do
+    case Utils.from_which_cycle(base_seq_num, new_seq_num, @seq_number_limit) do
       :current ->
         {store, new_seq_num}
 
@@ -118,32 +119,6 @@ defmodule Membrane.RTP.TWCCReceiver.PacketInfoStore do
       |> Enum.reverse()
 
     {reference_time, receive_deltas}
-  end
-
-  defp from_which_cycle(base_seq_num, new_seq_num) do
-    cond do
-      base_seq_num == nil ->
-        :current
-
-      rollover?(base_seq_num, new_seq_num) ->
-        if base_seq_num > new_seq_num do
-          :next
-        else
-          :previous
-        end
-
-      true ->
-        :current
-    end
-  end
-
-  defp rollover?(l_seq_num, r_seq_num) do
-    {smaller_seq, greater_seq} = Enum.min_max([l_seq_num, r_seq_num])
-
-    distance = greater_seq - smaller_seq
-    distance_through_zero = smaller_seq + (@seq_number_limit - greater_seq)
-
-    distance_through_zero < distance
   end
 
   defp make_divisible_by_64ms(timestamp) do

@@ -14,7 +14,7 @@ defmodule Membrane.RTP.JitterBuffer.BufferStore do
   use Bunch
   use Bunch.Access
   alias Membrane.{Buffer, RTP}
-  alias Membrane.RTP.JitterBuffer
+  alias Membrane.RTP.{JitterBuffer, Utils}
   alias Membrane.RTP.JitterBuffer.Record
 
   @seq_number_limit 65_536
@@ -72,10 +72,12 @@ defmodule Membrane.RTP.JitterBuffer.BufferStore do
          buffer,
          seq_num
        ) do
+    base_index = rem(prev_index, @seq_number_limit)
+
     index =
-      case from_which_cycle(prev_index, seq_num) do
+      case Utils.from_which_cycle(base_index, seq_num, @seq_number_limit) do
         :current -> seq_num + roc * @seq_number_limit
-        :prev -> seq_num + (roc - 1) * @seq_number_limit
+        :previous -> seq_num + (roc - 1) * @seq_number_limit
         :next -> seq_num + (roc + 1) * @seq_number_limit
       end
 
@@ -187,28 +189,6 @@ defmodule Membrane.RTP.JitterBuffer.BufferStore do
   end
 
   defp is_fresh_packet?(prev_index, index), do: index > prev_index
-
-  @spec from_which_cycle(JitterBuffer.packet_index(), RTP.Header.sequence_number_t()) ::
-          :current | :next | :prev
-  def from_which_cycle(prev_index, seq_num) do
-    prev_seq_num = rem(prev_index, @seq_number_limit)
-
-    # calculate the distance between prev_seq_num and new seq_num assuming it comes from:
-    # a) current cycle
-    distance_if_current = abs(prev_seq_num - seq_num)
-    # b) previous cycle
-    distance_if_prev = abs(prev_seq_num - (seq_num - @seq_number_limit))
-    # c) next cycle
-    distance_if_next = abs(prev_seq_num - (seq_num + @seq_number_limit))
-
-    [
-      {:current, distance_if_current},
-      {:next, distance_if_next},
-      {:prev, distance_if_prev}
-    ]
-    |> Enum.min_by(fn {_atom, distance} -> distance end)
-    ~> ({result, _value} -> result)
-  end
 
   @spec shift_while(t, (t, Record.t() -> boolean), [Record.t() | nil]) ::
           {[Record.t() | nil], t}
