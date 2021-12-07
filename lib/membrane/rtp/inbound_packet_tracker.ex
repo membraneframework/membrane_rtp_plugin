@@ -11,12 +11,14 @@ defmodule Membrane.RTP.InboundPacketTracker do
   alias Membrane.{Buffer, RTP, Time}
   alias Membrane.RTCP.ReceiverReport
 
-  @max_seq_num 0xFFFF
+  require Bitwise
+
   @max_dropout 3000
   @max_unordered 3000
 
-  @max_s24_val 8_388_607
-  @min_s24_val -8_388_608
+  @max_seq_num Bitwise.bsl(1, 16) - 1
+  @max_s24_val Bitwise.bsl(1, 23) - 1
+  @min_s24_val -Bitwise.bsl(1, 23)
 
   def_input_pad :input, demand_unit: :buffers, caps: :any
   def_output_pad :output, caps: :any

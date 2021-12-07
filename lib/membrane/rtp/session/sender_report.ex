@@ -1,9 +1,11 @@
 defmodule Membrane.RTP.Session.SenderReport do
   @moduledoc false
   alias Membrane.{RTP, RTCP, Time}
+
+  require Bitwise
   require Membrane.Logger
 
-  @max_timestamp 0xFFFFFFFF
+  @timestamp_limit Bitwise.bsl(1, 32)
 
   @typedoc """
   Mapping from `ssrc` to its sender statistics.
@@ -102,7 +104,7 @@ defmodule Membrane.RTP.Session.SenderReport do
       |> Ratio.mult(sender_stats.clock_rate)
       |> Time.to_seconds()
 
-    rtp_timestamp = rem(sender_stats.rtp_timestamp + rtp_offset, @max_timestamp + 1)
+    rtp_timestamp = rem(sender_stats.rtp_timestamp + rtp_offset, @timestamp_limit)
 
     sender_info = %{
       wallclock_timestamp: timestamp,

@@ -25,7 +25,7 @@ defmodule Membrane.RTP.VAD do
   """
   use Membrane.Filter
 
-  alias Membrane.RTP.Header
+  alias Membrane.RTP.{Header, Utils}
 
   def_input_pad :input,
     availability: :always,
@@ -121,6 +121,8 @@ defmodule Membrane.RTP.VAD do
 
   defp handle_if_present(buffer, nil, state), do: {{:ok, buffer: {:output, buffer}}, state}
 
+  @timestamp_limit Bitwise.bsl(1, 32)
+
   defp handle_if_present(buffer, extension, state) do
     <<_v::1, level::7>> = extension.data
 
@@ -132,7 +134,7 @@ defmodule Membrane.RTP.VAD do
     buffer = Header.Extension.put(buffer, new_extension)
 
     rtp_timestamp = buffer.metadata.rtp.timestamp
-    epoch = timestamp_epoch(state.current_timestamp, rtp_timestamp)
+    epoch = Utils.from_which_cycle(state.current_timestamp, rtp_timestamp, @timestamp_limit)
     current_timestamp = state.current_timestamp || 0
 
     cond do
@@ -156,27 +158,6 @@ defmodule Membrane.RTP.VAD do
     actions = [buffer: {:output, buffer}] ++ maybe_notify(audio_levels_vad, state)
     state = update_vad_state(audio_levels_vad, state)
     {{:ok, actions}, state}
-  end
-
-  @timestamp_limit 4_294_967_295
-
-  defp timestamp_epoch(nil, _timestamp), do: :current
-
-  defp timestamp_epoch(prev_timestamp, timestamp) do
-    # a) current epoch
-    distance_if_current = abs(timestamp - prev_timestamp)
-    # b) the new timestamp is from the previous epoch
-    distance_if_prev = abs(prev_timestamp - (timestamp - @timestamp_limit))
-    # c) the new timestamp is in the next epoch
-    distance_if_next = abs(prev_timestamp - (timestamp + @timestamp_limit))
-
-    [
-      {:current, distance_if_current},
-      {:next, distance_if_next},
-      {:prev, distance_if_prev}
-    ]
-    |> Enum.min_by(fn {_atom, distance} -> distance end)
-    |> then(fn {result, _value} -> result end)
   end
 
   defp filter_old_audio_levels(state) do

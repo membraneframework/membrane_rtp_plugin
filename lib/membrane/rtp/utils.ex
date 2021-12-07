@@ -29,4 +29,26 @@ defmodule Membrane.RTP.Utils do
         {<<payload::binary, 0::size(zeros_no)-unit(8), padding_size>>, padding_size}
     end
   end
+
+  @spec from_which_cycle(number() | nil, number(), number()) :: :current | :previous | :next
+  def from_which_cycle(previous_value, new_value, cycle_length)
+
+  def from_which_cycle(nil, _new, _cycle_length), do: :current
+
+  def from_which_cycle(previous_value, new_value, cycle_length) do
+    # a) current cycle
+    distance_if_current = abs(previous_value - new_value)
+    # b) new_value is from the previous cycle
+    distance_if_previous = abs(previous_value - (new_value - cycle_length))
+    # c) new_value is in the next cycle
+    distance_if_next = abs(previous_value - (new_value + cycle_length))
+
+    [
+      {:current, distance_if_current},
+      {:previous, distance_if_previous},
+      {:next, distance_if_next}
+    ]
+    |> Enum.min_by(fn {_atom, distance} -> distance end)
+    |> then(fn {result, _value} -> result end)
+  end
 end

@@ -68,9 +68,16 @@ defmodule Membrane.RTP.SessionBin do
 
   ### Currently supported RTP extensions are:
   * `Membrane.RTP.VAD`
+  * `Membrane.RTP.TWCCReceiver`
 
   ### Example usage
   `{:vad, %Mebrane.RTP.VAD{vad_id: 1, time_window: 1_000_000}}`
+  `{:twcc, %Mebrane.RTP.TWCCReceiver{twcc_id: 1, report_interval: Membrane.Time.milliseconds(250)}}`
+
+  ### TWCC
+  TWCC as a transport-wide extension is handled differently, and is linked from `RTP.SSRCRouter`
+  to possibly many `RTP.StreamReceiveBin`s. Only the first TWCC extension is initialized, and it
+  will handle all RTP streams that have declared support for it.
   """
   @type rtp_extension_options_t ::
           {extension_name :: rtp_extension_name_t(),
@@ -202,11 +209,13 @@ defmodule Membrane.RTP.SessionBin do
         spec: [rtp_extension_options_t()],
         default: [],
         description: """
-        List of RTP extension options. Currently only `:vad` is supported.
+        List of RTP extension options. Currently `:vad` and `:twcc` are supported.
         * `:vad` will turn on Voice Activity Detection mechanism firing appropriate notifications when needed.
         Should be set only for audio tracks. For more information refer to `Membrane.RTP.VAD` module documentation.
+        * `:twcc` will gather transport-wide information about received packets and generate feedbacks for sender.
+        For more information refer to `Membrane.RTP.TWCCReceiver` module documentation.
 
-        RTP extensions are applied in the same order as passed to the pad options.
+        RTP extensions (except `:twcc`) are applied in the same order as passed to the pad options.
         """
       ],
       extensions: [
@@ -387,9 +396,12 @@ defmodule Membrane.RTP.SessionBin do
       }
     }
 
+    {rtp_extensions, maybe_link_twcc, state} = maybe_handle_twcc(rtp_extensions, ssrc, ctx, state)
+
     router_link =
       link(:ssrc_router)
       |> via_out(Pad.ref(:output, ssrc))
+      |> then(maybe_link_twcc)
       |> to(rtp_stream_name)
 
     acc = {new_children, router_link}
@@ -587,5 +599,39 @@ defmodule Membrane.RTP.SessionBin do
 
     pt || PayloadFormat.get(encoding).payload_type ||
       raise "Cannot find default RTP payload type for encoding #{encoding}"
+  end
+
+  defp maybe_handle_twcc(rtp_extensions, pad_ssrc, ctx, state) do
+    # workaround: as TWCC is a transport-wide extension, there should exist only one TWCC child
+    # that handles packets from all incoming streams that have declared support for it
+    {maybe_twcc, rtp_extensions} = Keyword.pop(rtp_extensions, :twcc)
+
+    should_link? = maybe_twcc != nil
+    should_create_child? = not Map.has_key?(ctx.children, :twcc)
+
+    {maybe_twcc_ssrc, state} =
+      if should_link? and should_create_child? do
+        add_ssrc(nil, state)
+      else
+        {nil, state}
+      end
+
+    maybe_link_twcc =
+      if should_link? do
+        &(&1
+          |> via_in(Pad.ref(:input, pad_ssrc))
+          |> then(fn link ->
+            if should_create_child? do
+              to(link, :twcc, %{maybe_twcc | sender_ssrc: maybe_twcc_ssrc})
+            else
+              to(link, :twcc)
+            end
+          end)
+          |> via_out(Pad.ref(:output, pad_ssrc)))
+      else
+        & &1
+      end
+
+    {rtp_extensions, maybe_link_twcc, state}
   end
 end

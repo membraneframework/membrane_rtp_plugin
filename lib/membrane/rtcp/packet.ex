@@ -7,6 +7,7 @@ defmodule Membrane.RTCP.Packet do
     AppPacket,
     ByePacket,
     FeedbackPacket,
+    TransportFeedbackPacket,
     Header,
     ReceiverReportPacket,
     SdesPacket,
@@ -20,6 +21,7 @@ defmodule Membrane.RTCP.Packet do
           AppPacket.t()
           | ByePacket.t()
           | FeedbackPacket.t()
+          | TransportFeedbackPacket.t()
           | ReceiverReportPacket.t()
           | SenderReportPacket.t()
           | SdesPacket.t()
@@ -41,6 +43,7 @@ defmodule Membrane.RTCP.Packet do
                         202 => SdesPacket,
                         203 => ByePacket,
                         204 => AppPacket,
+                        205 => TransportFeedbackPacket,
                         206 => FeedbackPacket
                       })
 

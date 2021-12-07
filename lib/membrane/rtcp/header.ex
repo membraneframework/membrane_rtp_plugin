@@ -6,7 +6,7 @@ defmodule Membrane.RTCP.Header do
   @enforce_keys [:packet_type, :packet_specific]
   defstruct @enforce_keys
 
-  @type packet_type_t :: 200..204
+  @type packet_type_t :: 200..206
 
   @type packet_specific_t :: non_neg_integer()
 
