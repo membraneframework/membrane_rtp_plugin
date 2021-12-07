@@ -115,6 +115,7 @@ defmodule Membrane.RTP.SessionBin do
                 spec: Membrane.Time.t() | nil,
                 default: nil,
                 description: "Interval between sending subseqent RTCP sender reports."
+              ],
               receiver_ssrc_generator: [
                 type: :function,
                 spec:
@@ -294,7 +295,6 @@ defmodule Membrane.RTP.SessionBin do
               senders_ssrcs: %MapSet{},
               rtcp_receiver_report_interval: nil,
               rtcp_sender_report_interval: nil,
-              twcc_report_interval: nil,
               receiver_ssrc_generator: nil,
               rtcp_sender_report_data: %Session.SenderReport.Data{},
               secure?: nil,
@@ -391,7 +391,6 @@ defmodule Membrane.RTP.SessionBin do
         remote_ssrc: ssrc,
         rtcp_report_interval: state.rtcp_receiver_report_interval,
         rtcp_fir_interval: fir_interval,
-        rtcp_report_interval: state.rtcp_report_interval,
         secure?: state.secure?,
         srtp_policies: state.srtp_policies
       }
