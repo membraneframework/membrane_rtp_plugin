@@ -30,7 +30,7 @@ defmodule Membrane.RTP.SilenceDiscarder do
               ],
               silence_threshold: [
                 spec: 1..127,
-                default: 64,
+                default: 127,
                 description: """
                 Audio level threshold that will be compared against incoming packets. Packet will be dropped if its audio level
                 is above or equal to the given threshold.
@@ -70,20 +70,19 @@ defmodule Membrane.RTP.SilenceDiscarder do
 
   @impl true
   def handle_process(:input, buffer, _ctx, state) do
-    maybe_vad = Header.Extension.find(buffer, state.vad_id)
-    handle_vad(buffer, maybe_vad, state)
+    buffer
+    |> Header.Extension.find(state.vad_id)
+    |> handle_vad(buffer, state)
   end
 
-  defp handle_vad(buffer, nil, state), do: {{:ok, buffer: {:output, buffer}}, state}
+  defp handle_vad(nil, buffer, state), do: {{:ok, buffer: {:output, buffer}}, state}
 
-  defp handle_vad(buffer, vad, state) do
+  defp handle_vad(vad, buffer, state) do
     %{dropped: dropped, silence_threshold: silence_threshold} = state
     <<_v::1, audio_level::7>> = vad.data
 
-    silent? = audio_level >= silence_threshold
-
     cond do
-      silent? ->
+      audio_level >= silence_threshold ->
         {{:ok, redemand: :output}, %{state | dropped: dropped + 1}}
 
       dropped > 0 ->
