@@ -2,8 +2,8 @@ defmodule Membrane.RTP.SilenceDiscarder do
   @moduledoc """
   Element responsible for dropping silent audio packets.
 
-  For a packet to be discarded it needs to contain a `RTP.Header.Extension` struct in its
-  metadata under `:rtp` key. The header should contain information about audio level (VAD extension is required).
+  For a packet to be discarded it needs to contain a `RTP.Header.Extension` struct with identifier equal to `vad_id` in
+  its extensions list. The header extension will contain information about audio level (VAD extension is required).
   The element will only drop packets whose audio level is above given silence threshold (muted audio is of value 127).
 
   `#{__MODULE__}` will drop as many silent packets as possible and on reaching dropping limit it will send the current buffer,
