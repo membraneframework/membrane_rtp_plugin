@@ -4,7 +4,7 @@ defmodule Membrane.RTP.Serializer do
   incrementing timestamps and sequence numbers for each packet. Header information then is put
   inside buffer's metadata under `:rtp` key.
 
-  Accepts the following metadata under `:rtp` key: `:marker`, `:csrcs`, `:extension`.
+  Accepts the following metadata under `:rtp` key: `:marker`, `:csrcs`, `:extensions`.
   See `Membrane.RTP.Header` for their meaning and specifications.
   """
   use Membrane.Filter

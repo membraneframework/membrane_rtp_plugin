@@ -3,8 +3,8 @@ defmodule Membrane.RTP.Packet do
   Defines a struct describing an RTP packet and a way to parse and serialize it.
   Based on [RFC3550](https://tools.ietf.org/html/rfc3550#page-13)
 
-  Support only one-byte header from [RFC8285](https://www.rfc-editor.org/rfc/pdfrfc/rfc8285.txt.pdf), as according to document
-  this form is preferred and it must be supported by all receivers.
+  Supports only one-byte header from [RFC8285](https://datatracker.ietf.org/doc/html/rfc8285#section-4.2),
+  as according to the document this form is preferred and it must be supported by all receivers.
   """
 
   alias Membrane.RTP.{Header, Utils}
