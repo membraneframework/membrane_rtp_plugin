@@ -1,16 +1,14 @@
 defmodule Membrane.RTP.Header.Extension do
   @moduledoc """
-  Describes RTP Header Extension defined in [RFC3550](https://tools.ietf.org/html/rfc3550#section-5.3.1)
+  Describes RTP Header Extension defined in [RFC8285](https://datatracker.ietf.org/doc/html/rfc8285)
+  and provides common functions for interacting with extensions placed in buffers.
 
   ```
-   0                   1                   2                   3
-   0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
-  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-  |      defined by profile       |           length              |
-  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-  |                        header extension                       |
-  |                             ....                              |
-
+   0                   1                   2
+   0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 ...
+  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-
+  |  ID   |  len  |     data (len+1 bytes)   ...
+  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-
   ```
   """
   alias Membrane.Buffer
@@ -26,22 +24,9 @@ defmodule Membrane.RTP.Header.Extension do
           data: binary()
         }
 
-  @spec pop(Buffer.t(), identifier_t()) :: {t() | nil, Buffer.t()}
-  def pop(buffer, identifier) do
-    extension = Enum.find(buffer.metadata.rtp.extensions, &(&1.identifier == identifier))
-
-    if extension do
-      buffer =
-        Bunch.Struct.update_in(
-          buffer,
-          [:metadata, :rtp, :extensions],
-          &delete(&1, identifier)
-        )
-
-      {extension, buffer}
-    else
-      {nil, buffer}
-    end
+  @spec find(Buffer.t(), identifier_t()) :: t() | nil
+  def find(%Buffer{metadata: %{rtp: %{extensions: extensions}}}, identifier) do
+    Enum.find(extensions, &(&1.identifier == identifier))
   end
 
   @spec put(Buffer.t(), t()) :: Buffer.t()
@@ -49,7 +34,20 @@ defmodule Membrane.RTP.Header.Extension do
     Bunch.Struct.update_in(buffer, [:metadata, :rtp, :extensions], &[extension | &1])
   end
 
-  defp delete(extensions, identifier) do
-    Enum.reject(extensions, &(&1.identifier == identifier))
+  @spec delete(Buffer.t(), identifier_t()) :: Buffer.t()
+  def delete(buffer, identifier) do
+    Bunch.Struct.update_in(
+      buffer,
+      [:metadata, :rtp, :extensions],
+      &Enum.reject(&1, fn extension -> extension.identifier == identifier end)
+    )
+  end
+
+  @spec pop(Buffer.t(), identifier_t()) :: {t() | nil, Buffer.t()}
+  def pop(buffer, identifier) do
+    case find(buffer, identifier) do
+      nil -> {nil, buffer}
+      extension -> {extension, delete(buffer, identifier)}
+    end
   end
 end
