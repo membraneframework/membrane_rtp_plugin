@@ -60,18 +60,28 @@ defmodule Membrane.RTCP.TransportFeedbackPacket.TWCC do
   @impl true
   def decode(
         <<base_seq_num::16, packet_status_count::16, reference_time::24, feedback_packet_count::8,
-          payload::binary>>
+          payload::binary>> = packet
       ) do
-    receive_deltas = parse_feedback(payload, packet_status_count)
+    case parse_feedback(payload, packet_status_count) do
+      {:ok, receive_deltas} ->
+        {:ok,
+         %__MODULE__{
+           base_seq_num: base_seq_num,
+           reference_time: Time.milliseconds(reference_time) * 64,
+           packet_status_count: packet_status_count,
+           receive_deltas: receive_deltas,
+           feedback_packet_count: feedback_packet_count
+         }}
 
-    {:ok,
-     %__MODULE__{
-       base_seq_num: base_seq_num,
-       reference_time: Time.milliseconds(reference_time) * 64,
-       packet_status_count: packet_status_count,
-       receive_deltas: receive_deltas,
-       feedback_packet_count: feedback_packet_count
-     }}
+      {:error, reason} ->
+        Membrane.Logger.warn("""
+        An error occured while parsing TWCC feedback packet.
+        Reason: #{reason}
+        Packet: #{inspect(packet, limit: :infinity)}
+        """)
+
+        {:error, :malformed_packet}
+    end
   end
 
   @impl true
@@ -105,9 +115,14 @@ defmodule Membrane.RTCP.TransportFeedbackPacket.TWCC do
   end
 
   defp parse_feedback(payload, packet_status_count) do
-    {receive_deltas, parsed_packet_status} = parse_packet_status(payload, packet_status_count, [])
-
-    parse_receive_deltas(receive_deltas, parsed_packet_status, [])
+    with {:ok, {encoded_receive_deltas, parsed_packet_status}} <-
+           parse_packet_status(payload, packet_status_count, []),
+         {:ok, receive_deltas} <-
+           parse_receive_deltas(encoded_receive_deltas, parsed_packet_status, []) do
+      {:ok, receive_deltas}
+    else
+      {:error, reason} -> {:error, reason}
+    end
   end
 
   defp parse_packet_status(binary, packets_left, parsed_status) when packets_left <= 0 do
@@ -115,7 +130,7 @@ defmodule Membrane.RTCP.TransportFeedbackPacket.TWCC do
     # status vector incomplete, filling the untaken slots with 0s - we may need to drop them
     parsed_status = Enum.drop(parsed_status, packets_left)
 
-    {binary, parsed_status}
+    {:ok, {binary, parsed_status}}
   end
 
   defp parse_packet_status(
@@ -123,7 +138,8 @@ defmodule Membrane.RTCP.TransportFeedbackPacket.TWCC do
            rest::binary>>,
          packets_left,
          parsed_status
-       ) do
+       )
+       when run_length <= packets_left do
     new_status =
       @packet_status_flags
       |> BiMap.fetch_key!(packet_status)
@@ -150,7 +166,20 @@ defmodule Membrane.RTCP.TransportFeedbackPacket.TWCC do
     parse_packet_status(rest, packets_left - div(14, symbol_size), parsed_status ++ new_status)
   end
 
-  defp parse_receive_deltas(_padding, [], parsed_deltas), do: Enum.reverse(parsed_deltas)
+  defp parse_packet_status(_binary, _packets_left, _parsed_status),
+    do: {:error, :incorrect_run_length}
+
+  defp parse_receive_deltas(padding, [], parsed_deltas) do
+    if :binary.decode_unsigned(padding) != 0 do
+      {:error, :invalid_padding}
+    else
+      {:ok, Enum.reverse(parsed_deltas)}
+    end
+  end
+
+  defp parse_receive_deltas(binary, [:not_received | rest_status], parsed_deltas) do
+    parse_receive_deltas(binary, rest_status, [:not_received | parsed_deltas])
+  end
 
   defp parse_receive_deltas(
          <<delta::unsigned-integer-size(8), rest::binary>>,
@@ -168,9 +197,8 @@ defmodule Membrane.RTCP.TransportFeedbackPacket.TWCC do
     parse_receive_deltas(rest, rest_status, [Time.microseconds(delta) * 250 | parsed_deltas])
   end
 
-  defp parse_receive_deltas(binary, [_not_received_or_reserved | rest_status], parsed_deltas) do
-    parse_receive_deltas(binary, rest_status, [:not_received | parsed_deltas])
-  end
+  defp parse_receive_deltas(_binary, [:reserved | _rest_status], _parsed_deltas),
+    do: {:error, :symbol_reserved}
 
   defp make_packet_status_chunks(scaled_receive_deltas) do
     scaled_receive_deltas
