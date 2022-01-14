@@ -222,13 +222,13 @@ defmodule Membrane.RTCP.TransportFeedbackPacket.TWCC do
     do: <<@run_length_id::1, BiMap.fetch!(@packet_status_flags, status)::2, packet_count::13>>
 
   defp encode_packet_status_chunk(%StatusVector{vector: vector, packet_count: packet_count}) do
-    # we use 2-bit symbols, so padding size for an incomplete vector is 2*(number of unfilled slots) bits
-    padding_size = 2 * (@status_vector_capacity - packet_count)
-
     symbol_list =
       Enum.reduce(vector, <<>>, fn status, acc ->
         <<acc::bitstring, BiMap.fetch!(@packet_status_flags, status)::2>>
       end)
+
+    # we use 2-bit symbols, so padding size for an incomplete vector is 2*(number of unfilled slots) bits
+    padding_size = 2 * (@status_vector_capacity - packet_count)
 
     <<@status_vector_id::1, @status_vector_symbol_2_bit_id::1, symbol_list::bitstring,
       0::size(padding_size)>>
@@ -262,7 +262,13 @@ defmodule Membrane.RTCP.TransportFeedbackPacket.TWCC do
   end
 
   defp maybe_add_padding(payload) do
-    padding_size = 32 - rem(bit_size(payload), 32)
-    <<payload::bitstring, 0::size(padding_size)>>
+    bytes_remaining = rem(byte_size(payload), 4)
+
+    if bytes_remaining > 0 do
+      padding_size = 4 - bytes_remaining
+      <<payload::binary, 0::size(padding_size)-unit(8)>>
+    else
+      payload
+    end
   end
 end
