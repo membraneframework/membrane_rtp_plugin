@@ -396,12 +396,13 @@ defmodule Membrane.RTP.SessionBin do
       }
     }
 
-    {rtp_extensions, maybe_link_twcc, state} = maybe_handle_twcc(rtp_extensions, ssrc, ctx, state)
+    {rtp_extensions, maybe_link_twcc_receiver, state} =
+      maybe_handle_twcc_receiver(rtp_extensions, ssrc, ctx, state)
 
     router_link =
       link(:ssrc_router)
       |> via_out(Pad.ref(:output, ssrc))
-      |> then(maybe_link_twcc)
+      |> then(maybe_link_twcc_receiver)
       |> to(rtp_stream_name)
 
     acc = {new_children, router_link}
@@ -465,8 +466,11 @@ defmodule Membrane.RTP.SessionBin do
       maybe_link_encryptor =
         &to(&1, {:srtp_encryptor, ssrc}, %SRTP.Encryptor{policies: state.srtp_policies})
 
+      maybe_link_twcc_sender = maybe_handle_twcc_sender(ssrc, ctx)
+
       links = [
         link_bin_input(input_pad)
+        |> then(maybe_link_twcc_sender)
         |> to({:stream_send_bin, ssrc}, %RTP.StreamSendBin{
           ssrc: ssrc,
           payload_type: payload_type,
@@ -601,13 +605,13 @@ defmodule Membrane.RTP.SessionBin do
       raise "Cannot find default RTP payload type for encoding #{encoding}"
   end
 
-  defp maybe_handle_twcc(rtp_extensions, pad_ssrc, ctx, state) do
-    # workaround: as TWCC is a transport-wide extension, there should exist only one TWCC child
-    # that handles packets from all incoming streams that have declared support for it
+  defp maybe_handle_twcc_receiver(rtp_extensions, pad_ssrc, ctx, state) do
+    # Workaround: as TWCC is a transport-wide extension, there should exist only one TWCC receiver
+    # child that handles packets from all incoming streams that have declared support for it.
     {maybe_twcc, rtp_extensions} = Keyword.pop(rtp_extensions, :twcc)
 
     should_link? = maybe_twcc != nil
-    should_create_child? = not Map.has_key?(ctx.children, :twcc)
+    should_create_child? = not Map.has_key?(ctx.children, :twcc_receiver)
 
     {maybe_twcc_ssrc, state} =
       if should_link? and should_create_child? do
@@ -622,9 +626,9 @@ defmodule Membrane.RTP.SessionBin do
           |> via_in(Pad.ref(:input, pad_ssrc))
           |> then(fn link ->
             if should_create_child? do
-              to(link, :twcc, %{maybe_twcc | sender_ssrc: maybe_twcc_ssrc})
+              to(link, :twcc_receiver, %{maybe_twcc | feedback_sender_ssrc: maybe_twcc_ssrc})
             else
-              to(link, :twcc)
+              to(link, :twcc_receiver)
             end
           end)
           |> via_out(Pad.ref(:output, pad_ssrc)))
@@ -633,5 +637,28 @@ defmodule Membrane.RTP.SessionBin do
       end
 
     {rtp_extensions, maybe_link_twcc, state}
+  end
+
+  defp maybe_handle_twcc_sender(pad_ssrc, ctx) do
+    # Workaround: as TWCC is a transport-wide extension, there should exist only one TWCC sender
+    # child that handles packets for all outgoing streams. As there is no support for declaring
+    # outbound extensions, outbound TWCC will be enabled if inbound TWCC has been enabled.
+    should_link? = Map.has_key?(ctx.children, :twcc_receiver)
+    should_create_child? = not Map.has_key?(ctx.children, :twcc_sender)
+
+    if should_link? do
+      &(&1
+        |> via_in(Pad.ref(:input, pad_ssrc))
+        |> then(fn link ->
+          if should_create_child? do
+            to(link, :twcc_sender, RTP.TWCCSender)
+          else
+            to(link, :twcc_sender)
+          end
+        end)
+        |> via_out(Pad.ref(:output, pad_ssrc)))
+    else
+      & &1
+    end
   end
 end

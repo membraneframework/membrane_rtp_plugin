@@ -25,7 +25,7 @@ defmodule Membrane.RTP.TWCCReceiver do
                 default: Membrane.Time.milliseconds(250),
                 description: "How often to generate feedback packets."
               ],
-              sender_ssrc: [
+              feedback_sender_ssrc: [
                 spec: RTP.ssrc_t() | nil,
                 default: nil,
                 description:
@@ -38,14 +38,14 @@ defmodule Membrane.RTP.TWCCReceiver do
 
     @type t :: %__MODULE__{
             twcc_id: 1..14,
-            sender_ssrc: RTP.ssrc_t() | nil,
+            feedback_sender_ssrc: RTP.ssrc_t() | nil,
             report_interval: Time.t(),
             packet_info_store: PacketInfoStore.t(),
             feedback_packet_count: non_neg_integer(),
             media_ssrc: RTP.ssrc_t() | nil
           }
 
-    @enforce_keys [:twcc_id, :report_interval, :sender_ssrc]
+    @enforce_keys [:twcc_id, :report_interval, :feedback_sender_ssrc]
     defstruct @enforce_keys ++
                 [
                   packet_info_store: %PacketInfoStore{},
@@ -137,7 +137,7 @@ defmodule Membrane.RTP.TWCCReceiver do
     %State{
       packet_info_store: store,
       feedback_packet_count: feedback_packet_count,
-      sender_ssrc: sender_ssrc,
+      feedback_sender_ssrc: feedback_sender_ssrc,
       media_ssrc: media_ssrc
     } = state
 
@@ -148,7 +148,7 @@ defmodule Membrane.RTP.TWCCReceiver do
 
     %RTCPEvent{
       rtcp: %TransportFeedbackPacket{
-        sender_ssrc: sender_ssrc,
+        sender_ssrc: feedback_sender_ssrc,
         media_ssrc: media_ssrc,
         payload: struct!(TransportFeedbackPacket.TWCC, stats)
       }
