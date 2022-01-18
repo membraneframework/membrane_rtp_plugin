@@ -218,6 +218,8 @@ defmodule Membrane.RTCP.TransportFeedbackPacket.TWCC do
           %StatusVector{vector: vector} = run_length_to_status_vector(run_length)
           [%StatusVector{vector: [status | vector], packet_count: count + 1} | rest]
 
+        # TODO: if no large or negative deltas has been encountered, consider using 1-bit status vector
+
         [%StatusVector{vector: vector, packet_count: count} | rest]
         when count < @status_vector_capacity ->
           [%StatusVector{vector: [status | vector], packet_count: count + 1} | rest]
