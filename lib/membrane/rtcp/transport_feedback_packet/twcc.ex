@@ -47,6 +47,7 @@ defmodule Membrane.RTCP.TransportFeedbackPacket.TWCC do
   @run_length_capacity @max_u13_val
 
   @status_vector_id 1
+  @status_vector_symbol_1_bit_id 0
   @status_vector_symbol_2_bit_id 1
   @status_vector_capacity 7
 
@@ -153,9 +154,11 @@ defmodule Membrane.RTCP.TransportFeedbackPacket.TWCC do
          packets_left,
          parsed_status
        ) do
-    # vector_type = 0 -> 14 symbols, 1 bit each
-    # vector_type = 1 -> 7 symbols, 2 bits each
-    symbol_size = vector_type + 1
+    {symbol_size, packets_parsed} =
+      case vector_type do
+        @status_vector_symbol_1_bit_id -> {1, 14}
+        @status_vector_symbol_2_bit_id -> {2, 7}
+      end
 
     # note about 1-bit symbols: the draft does not specify this,
     # but libwebrtc treats <<1::1>> as a "packet received, small delta" status
@@ -163,7 +166,7 @@ defmodule Membrane.RTCP.TransportFeedbackPacket.TWCC do
       for <<(<<symbol::size(symbol_size)>> <- symbol_list)>>,
         do: BiMap.fetch_key!(@packet_status_flags, symbol)
 
-    parse_packet_status(rest, packets_left - div(14, symbol_size), parsed_status ++ new_status)
+    parse_packet_status(rest, packets_left - packets_parsed, parsed_status ++ new_status)
   end
 
   defp parse_packet_status(_binary, _packets_left, _parsed_status),
@@ -232,10 +235,6 @@ defmodule Membrane.RTCP.TransportFeedbackPacket.TWCC do
 
   defp encode_receive_delta(scaled_delta) do
     case delta_to_packet_status(scaled_delta) do
-      :not_received ->
-        Membrane.Logger.warn("Reporting a non-received packet")
-        <<>>
-
       :small_delta ->
         <<scaled_delta::8>>
 
@@ -245,6 +244,10 @@ defmodule Membrane.RTCP.TransportFeedbackPacket.TWCC do
         )
 
         <<cap_delta(scaled_delta)::16>>
+
+      :not_received ->
+        Membrane.Logger.warn("Reporting a non-received packet")
+        <<>>
     end
   end
 
@@ -257,7 +260,8 @@ defmodule Membrane.RTCP.TransportFeedbackPacket.TWCC do
         <<acc::bitstring, BiMap.fetch!(@packet_status_flags, status)::2>>
       end)
 
-    # we use 2-bit symbols, so padding size for an incomplete vector is 2*(number of unfilled slots) bits
+    # in current implementation we use only 2-bit symbols for encoding, so padding
+    # size for an incomplete vector is always 2*(number of unfilled slots) bits
     padding_size = 2 * (@status_vector_capacity - packet_count)
 
     <<@status_vector_id::1, @status_vector_symbol_2_bit_id::1, symbol_list::bitstring,

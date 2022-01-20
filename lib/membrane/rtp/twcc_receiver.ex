@@ -1,6 +1,7 @@
 defmodule Membrane.RTP.TWCCReceiver do
   @moduledoc """
-  The module defines an element responsible for recording transport-wide statistics of incoming packets.
+  The module defines an element responsible for recording transport-wide statistics of incoming packets
+  and generating TWCC feedbacks.
   """
   use Membrane.Filter
 
