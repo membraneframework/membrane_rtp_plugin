@@ -117,21 +117,17 @@ defmodule Membrane.RTCP.TransportFeedbackPacket.TWCC do
 
   defp parse_feedback(payload, packet_status_count) do
     with {:ok, {encoded_receive_deltas, parsed_packet_status}} <-
-           parse_packet_status(payload, packet_status_count, []),
-         {:ok, receive_deltas} <-
-           parse_receive_deltas(encoded_receive_deltas, parsed_packet_status, []) do
-      {:ok, receive_deltas}
-    else
-      {:error, reason} -> {:error, reason}
+           parse_packet_status(payload, packet_status_count, []) do
+      parse_receive_deltas(encoded_receive_deltas, parsed_packet_status, [])
     end
   end
 
-  defp parse_packet_status(binary, packets_left, parsed_status) when packets_left <= 0 do
+  defp parse_packet_status(rest, packets_left, parsed_status) when packets_left <= 0 do
     # note about incomplete vectors: the draft does not specify this, but libwebrtc can make the last
     # status vector incomplete, filling the untaken slots with 0s - we may need to drop them
     parsed_status = Enum.drop(parsed_status, packets_left)
 
-    {:ok, {binary, parsed_status}}
+    {:ok, {rest, parsed_status}}
   end
 
   defp parse_packet_status(
@@ -169,8 +165,8 @@ defmodule Membrane.RTCP.TransportFeedbackPacket.TWCC do
     parse_packet_status(rest, packets_left - packets_parsed, parsed_status ++ new_status)
   end
 
-  defp parse_packet_status(_binary, _packets_left, _parsed_status),
-    do: {:error, :incorrect_run_length}
+  defp parse_packet_status(_payload, _packets_left, _parsed_status),
+    do: {:error, :invalid_run_length}
 
   defp parse_receive_deltas(padding, [], parsed_deltas) do
     if :binary.decode_unsigned(padding) != 0 do
@@ -180,8 +176,8 @@ defmodule Membrane.RTCP.TransportFeedbackPacket.TWCC do
     end
   end
 
-  defp parse_receive_deltas(binary, [:not_received | rest_status], parsed_deltas) do
-    parse_receive_deltas(binary, rest_status, [:not_received | parsed_deltas])
+  defp parse_receive_deltas(rest, [:not_received | rest_status], parsed_deltas) do
+    parse_receive_deltas(rest, rest_status, [:not_received | parsed_deltas])
   end
 
   defp parse_receive_deltas(
@@ -200,7 +196,7 @@ defmodule Membrane.RTCP.TransportFeedbackPacket.TWCC do
     parse_receive_deltas(rest, rest_status, [Time.microseconds(delta) * 250 | parsed_deltas])
   end
 
-  defp parse_receive_deltas(_binary, [:reserved | _rest_status], _parsed_deltas),
+  defp parse_receive_deltas(_payload, [:reserved | _rest_status], _parsed_deltas),
     do: {:error, :symbol_reserved}
 
   defp make_packet_status_chunks(scaled_receive_deltas) do
@@ -221,7 +217,7 @@ defmodule Membrane.RTCP.TransportFeedbackPacket.TWCC do
           %StatusVector{vector: vector} = run_length_to_status_vector(run_length)
           [%StatusVector{vector: [status | vector], packet_count: count + 1} | rest]
 
-        # TODO: if no large or negative deltas has been encountered, consider using 1-bit status vector
+        # TODO: if no large or negative delta has been encountered, consider using 1-bit status vector
 
         [%StatusVector{vector: vector, packet_count: count} | rest]
         when count < @status_vector_capacity ->

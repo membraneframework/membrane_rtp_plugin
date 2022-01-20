@@ -12,8 +12,8 @@ defmodule Membrane.RTCP.TWCCTest do
       encoded_feedbacks
       |> Enum.zip(expected_feedbacks)
       |> Enum.each(fn {encoded, expected} ->
-        assert TWCC.decode(encoded) == {:ok, expected}
-        assert TWCC.encode(expected) == encoded
+        assert {:ok, expected} == TWCC.decode(encoded)
+        assert encoded == TWCC.encode(expected)
       end)
     end
 
@@ -21,7 +21,7 @@ defmodule Membrane.RTCP.TWCCTest do
       encoded_feedbacks = Fixtures.twcc_malformed_feedbacks()
 
       Enum.each(encoded_feedbacks, fn encoded ->
-        assert TWCC.decode(encoded) == {:error, :malformed_packet}
+        assert {:error, :malformed_packet} == TWCC.decode(encoded)
       end)
     end
   end

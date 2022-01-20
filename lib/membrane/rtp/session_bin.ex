@@ -77,7 +77,8 @@ defmodule Membrane.RTP.SessionBin do
   ### TWCC
   TWCC as a transport-wide extension is handled differently, and is linked from `RTP.SSRCRouter`
   to possibly many `RTP.StreamReceiveBin`s. Only the first TWCC extension is initialized, and it
-  will handle all RTP streams that have declared support for it.
+  will handle all RTP streams that have declared support for it. For outgoing streams, an `RTP.TWCCSender`
+  element will be spawned and linked to all `RTP.StreamSendBin`s.
   """
   @type rtp_extension_options_t ::
           {extension_name :: rtp_extension_name_t(),
@@ -622,7 +623,8 @@ defmodule Membrane.RTP.SessionBin do
 
     maybe_link_twcc =
       if should_link? do
-        &(&1
+        fn link_builder ->
+          link_builder
           |> via_in(Pad.ref(:input, pad_ssrc))
           |> then(fn link ->
             if should_create_child? do
@@ -631,7 +633,8 @@ defmodule Membrane.RTP.SessionBin do
               to(link, :twcc_receiver)
             end
           end)
-          |> via_out(Pad.ref(:output, pad_ssrc)))
+          |> via_out(Pad.ref(:output, pad_ssrc))
+        end
       else
         & &1
       end
@@ -647,7 +650,8 @@ defmodule Membrane.RTP.SessionBin do
     should_create_child? = not Map.has_key?(ctx.children, :twcc_sender)
 
     if should_link? do
-      &(&1
+      fn link_builder ->
+        link_builder
         |> via_in(Pad.ref(:input, pad_ssrc))
         |> then(fn link ->
           if should_create_child? do
@@ -656,7 +660,8 @@ defmodule Membrane.RTP.SessionBin do
             to(link, :twcc_sender)
           end
         end)
-        |> via_out(Pad.ref(:output, pad_ssrc)))
+        |> via_out(Pad.ref(:output, pad_ssrc))
+      end
     else
       & &1
     end
