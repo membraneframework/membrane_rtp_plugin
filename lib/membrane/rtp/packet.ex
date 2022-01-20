@@ -88,7 +88,7 @@ defmodule Membrane.RTP.Packet do
           | {:error, :wrong_version | :malformed_packet}
   def parse(packet, encrypted?)
 
-  def parse(<<version::2, _::bitstring>>, _encrypted?) when version != 2,
+  def parse(<<version::2, _payload::bitstring>>, _encrypted?) when version != 2,
     do: {:error, :wrong_version}
 
   def parse(

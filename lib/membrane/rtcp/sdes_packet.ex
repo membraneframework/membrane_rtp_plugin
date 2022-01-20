@@ -106,7 +106,7 @@ defmodule Membrane.RTCP.SdesPacket do
     parse_items(rest, [item | acc])
   end
 
-  defp parse_items(<<_si_type::8, _::binary>>, _acc) do
+  defp parse_items(<<_si_type::8, _payload::binary>>, _acc) do
     {:error, :unknown_si_type}
   end
 
