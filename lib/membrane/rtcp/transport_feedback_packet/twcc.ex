@@ -60,8 +60,8 @@ defmodule Membrane.RTCP.TransportFeedbackPacket.TWCC do
 
   @impl true
   def decode(
-        <<base_seq_num::16, packet_status_count::16, reference_time::24, feedback_packet_count::8,
-          payload::binary>> = packet
+        <<base_seq_num::16, packet_status_count::16, reference_time::signed-integer-size(24),
+          feedback_packet_count::8, payload::binary>> = packet
       ) do
     case parse_feedback(payload, packet_status_count) do
       {:ok, receive_deltas} ->
@@ -103,7 +103,8 @@ defmodule Membrane.RTCP.TransportFeedbackPacket.TWCC do
     reference_time = div(reference_time, Time.milliseconds(64))
 
     encoded_header =
-      <<base_seq_num::16, packet_status_count::16, reference_time::24, feedback_packet_count::8>>
+      <<base_seq_num::16, packet_status_count::16, reference_time::signed-integer-size(24),
+        feedback_packet_count::8>>
 
     encoded_packet_status_chunks =
       Enum.map_join(packet_status_chunks, &encode_packet_status_chunk/1)
