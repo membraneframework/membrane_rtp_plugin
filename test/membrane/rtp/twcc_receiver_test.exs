@@ -12,7 +12,7 @@ defmodule Membrane.RTP.TWCCReceiverTest do
   @feedback_packet_count 100
   @max_feedback_packet_count Bitwise.bsl(1, 8) - 1
 
-  @sender_ssrc 1_234_567_890
+  @feedback_sender_ssrc 1_234_567_890
   @media_ssrc 9_876_543_210
   @other_media_ssrc 1_111_111_111
 
@@ -31,7 +31,7 @@ defmodule Membrane.RTP.TWCCReceiverTest do
 
     state = %TWCCReceiver.State{
       twcc_id: @default_twcc_id,
-      sender_ssrc: @sender_ssrc,
+      feedback_sender_ssrc: @feedback_sender_ssrc,
       report_interval: nil,
       feedback_packet_count: @feedback_packet_count
     }
@@ -110,7 +110,7 @@ defmodule Membrane.RTP.TWCCReceiverTest do
       assert {{:ok, event: {_event_pad, event}}, _state} =
                TWCCReceiver.handle_tick(:report_timer, nil, state)
 
-      assert event.rtcp.sender_ssrc == @sender_ssrc
+      assert event.rtcp.sender_ssrc == @feedback_sender_ssrc
     end
 
     test "increments its feedback packet count", %{state: state, buffer: buffer} do
