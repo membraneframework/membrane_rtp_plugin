@@ -4,10 +4,13 @@ defmodule Membrane.RTP.TWCCSender do
   """
   use Membrane.Filter
 
-  alias Membrane.RTP
+  alias Membrane.{RTP, Time}
   alias Membrane.RTP.Header
+  alias Membrane.RTCP.TransportFeedbackPacket.TWCC
+  alias __MODULE__.CongestionControl
 
   require Bitwise
+  require Membrane.Logger
 
   @seq_number_limit Bitwise.bsl(1, 16)
 
@@ -16,7 +19,8 @@ defmodule Membrane.RTP.TWCCSender do
 
   @impl true
   def handle_init(_options) do
-    {:ok, %{seq_num: 0}}
+    {:ok,
+     %{seq_num: 0, last_ts: nil, seq_to_delta: %{}, seq_to_size: %{}, cc: %CongestionControl{}}}
   end
 
   @impl true
@@ -30,6 +34,29 @@ defmodule Membrane.RTP.TWCCSender do
     {{:ok, event: {Pad.ref(opposite_direction, id), event}}, state}
   end
 
+  def handle_other({:twcc_feedback, feedback}, _ctx, state) do
+    # Membrane.Logger.error("got feedback: " <> inspect(feedback))
+
+    %TWCC{
+      base_seq_num: base_seq_num,
+      feedback_packet_count: feedback_packet_count,
+      packet_status_count: packet_count,
+      receive_deltas: receive_deltas,
+      reference_time: reference_time
+    } = feedback
+
+    max_seq_num = base_seq_num + packet_count - 1
+
+    sequence_numbers = Enum.map(base_seq_num..max_seq_num, &rem(&1, @seq_number_limit))
+
+    send_deltas = Enum.map(sequence_numbers, &Map.fetch!(state.seq_to_delta, &1))
+    packet_sizes = Enum.map(sequence_numbers, &Map.fetch!(state.seq_to_size, &1))
+
+    cc = CongestionControl.update(state.cc, receive_deltas, send_deltas, packet_sizes)
+
+    {:ok, %{state | cc: cc}}
+  end
+
   @impl true
   def handle_process(Pad.ref(:input, id), buffer, _ctx, state) do
     {seq_num, state} = Map.get_and_update!(state, :seq_num, &{&1, rem(&1 + 1, @seq_number_limit)})
@@ -37,7 +64,15 @@ defmodule Membrane.RTP.TWCCSender do
     buffer =
       Header.Extension.put(buffer, %Header.Extension{identifier: :twcc, data: <<seq_num::16>>})
 
-    {{:ok, buffer: {Pad.ref(:output, id), buffer}}, state}
+    current_ts = Time.monotonic_time()
+    send_delta = current_ts - (state.last_ts || current_ts)
+
+    state =
+      state
+      |> put_in([:seq_to_delta, seq_num], send_delta)
+      |> put_in([:seq_to_size, seq_num], bit_size(buffer.payload))
+
+    {{:ok, buffer: {Pad.ref(:output, id), buffer}}, %{state | last_ts: current_ts}}
   end
 
   @impl true

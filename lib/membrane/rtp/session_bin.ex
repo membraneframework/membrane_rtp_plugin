@@ -572,6 +572,11 @@ defmodule Membrane.RTP.SessionBin do
     {{:ok, notify: msg}, state}
   end
 
+  @impl true
+  def handle_notification({:twcc_feedback, _feedback} = msg, _rtcp_parser, _ctx, state) do
+    {{:ok, forward: {:twcc_sender, msg}}, state}
+  end
+
   defp add_ssrc(remote_ssrc, state) do
     %{ssrcs: ssrcs, receiver_ssrc_generator: generator} = state
     local_ssrc = generator.([remote_ssrc | Map.keys(ssrcs)], Map.values(ssrcs))
@@ -647,7 +652,8 @@ defmodule Membrane.RTP.SessionBin do
     # Workaround: as TWCC is a transport-wide extension, there should exist only one TWCC sender
     # child that handles packets for all outgoing streams. As there is no support for declaring
     # outbound extensions, outbound TWCC will be enabled if inbound TWCC has been enabled.
-    should_link? = Map.has_key?(ctx.children, :twcc_receiver)
+    # Map.has_key?(ctx.children, :twcc_receiver)
+    should_link? = true
     should_create_child? = not Map.has_key?(ctx.children, :twcc_sender)
 
     if should_link? do
