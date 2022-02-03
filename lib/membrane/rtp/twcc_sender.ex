@@ -45,6 +45,24 @@ defmodule Membrane.RTP.TWCCSender do
       reference_time: reference_time
     } = feedback
 
+    # notr = Enum.count(receive_deltas, fn delta -> delta == :not_received end)
+
+    # ld =
+    #   Enum.filter(receive_deltas, fn delta -> delta != :not_received end)
+    #   |> Enum.count(fn delta -> Time.to_milliseconds(delta) > 64 end)
+
+    # ng =
+    #   Enum.filter(receive_deltas, fn delta -> delta != :not_received end)
+    #   |> Enum.count(fn delta -> Time.to_milliseconds(delta) < 0 end)
+
+    # if Enum.any?([notr, ld, ng], fn n -> n > 0 end) do
+    #   Membrane.Logger.error("----------------------------------------------------------------")
+    #   Membrane.Logger.error("not_r: " <> inspect(notr * 100 / length(receive_deltas)) <> "%")
+    #   Membrane.Logger.error("large: " <> inspect(ld * 100 / length(receive_deltas)) <> "%")
+    #   Membrane.Logger.error("negat: " <> inspect(ng * 100 / length(receive_deltas)) <> "%")
+    #   Membrane.Logger.error("----------------------------------------------------------------")
+    # end
+
     max_seq_num = base_seq_num + packet_count - 1
 
     sequence_numbers = Enum.map(base_seq_num..max_seq_num, &rem(&1, @seq_number_limit))
@@ -52,7 +70,18 @@ defmodule Membrane.RTP.TWCCSender do
     send_deltas = Enum.map(sequence_numbers, &Map.fetch!(state.seq_to_delta, &1))
     packet_sizes = Enum.map(sequence_numbers, &Map.fetch!(state.seq_to_size, &1))
 
-    cc = CongestionControl.update(state.cc, receive_deltas, send_deltas, packet_sizes)
+    cc =
+      CongestionControl.update(
+        state.cc,
+        reference_time,
+        receive_deltas,
+        send_deltas,
+        packet_sizes
+      )
+
+    Membrane.Logger.error("A_hat: " <> inspect(cc.a_hat / 1000) <> "kbps")
+    # Membrane.Logger.error("As_hat: " <> inspect(cc.as_hat / 1000) <> "kbps")
+    Membrane.Logger.error("state: " <> inspect(cc.state))
 
     {:ok, %{state | cc: cc}}
   end
