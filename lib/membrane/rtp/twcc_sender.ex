@@ -11,8 +11,8 @@ defmodule Membrane.RTP.TWCCSender do
 
   @seq_number_limit Bitwise.bsl(1, 16)
 
-  def_input_pad :input, demand_unit: :buffers, caps: RTP, availability: :on_request
-  def_output_pad :output, caps: RTP, availability: :on_request
+  def_input_pad :input, caps: RTP, availability: :on_request, demand_mode: :auto
+  def_output_pad :output, caps: RTP, availability: :on_request, demand_mode: :auto
 
   @impl true
   def handle_init(_options) do
@@ -22,11 +22,6 @@ defmodule Membrane.RTP.TWCCSender do
   @impl true
   def handle_caps(Pad.ref(:input, id), caps, _ctx, state) do
     {{:ok, caps: {Pad.ref(:output, id), caps}}, state}
-  end
-
-  @impl true
-  def handle_demand(Pad.ref(:output, id), size, :buffers, _ctx, state) do
-    {{:ok, demand: {Pad.ref(:input, id), size}}, state}
   end
 
   @impl true

@@ -20,8 +20,8 @@ defmodule Membrane.RTP.InboundPacketTracker do
   @max_s24_val Bitwise.bsl(1, 23) - 1
   @min_s24_val -Bitwise.bsl(1, 23)
 
-  def_input_pad :input, demand_unit: :buffers, caps: :any
-  def_output_pad :output, caps: :any
+  def_input_pad :input, caps: :any, demand_mode: :auto
+  def_output_pad :output, caps: :any, demand_mode: :auto
 
   def_options clock_rate: [
                 type: :integer,
@@ -76,11 +76,6 @@ defmodule Membrane.RTP.InboundPacketTracker do
   end
 
   @impl true
-  def handle_demand(:output, size, :buffers, _ctx, state) do
-    {{:ok, demand: {:input, size}}, state}
-  end
-
-  @impl true
   def handle_process(:input, buffer, _ctx, %State{cycles: cycles, max_seq: max_seq} = state) do
     seq_num = buffer.metadata.rtp.sequence_number
     max_seq = max_seq || seq_num - 1
@@ -100,7 +95,7 @@ defmodule Membrane.RTP.InboundPacketTracker do
 
       # the packets is either too old or too new
       delta <= @max_seq_num - @max_unordered ->
-        {{:ok, redemand: :output}, update_received(state)}
+        {:ok, update_received(state)}
 
       # packet is old but within dropout threshold
       true ->

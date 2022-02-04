@@ -14,8 +14,8 @@ defmodule Membrane.RTP.SilenceDiscarder do
 
   alias Membrane.RTP.{Header, PacketsDiscardedEvent}
 
-  def_input_pad :input, caps: :any, demand_unit: :buffers
-  def_output_pad :output, caps: :any
+  def_input_pad :input, caps: :any, demand_mode: :auto
+  def_output_pad :output, caps: :any, demand_mode: :auto
 
   def_options max_consecutive_drops: [
                 spec: non_neg_integer() | :infinity,
@@ -50,11 +50,6 @@ defmodule Membrane.RTP.SilenceDiscarder do
   end
 
   @impl true
-  def handle_demand(:output, size, :buffers, _ctx, state) do
-    {{:ok, demand: {:input, size}}, state}
-  end
-
-  @impl true
   def handle_event(pad, other, ctx, state), do: super(pad, other, ctx, state)
 
   @impl true
@@ -83,7 +78,7 @@ defmodule Membrane.RTP.SilenceDiscarder do
 
     cond do
       audio_level >= silence_threshold ->
-        {{:ok, redemand: :output}, %{state | dropped: dropped + 1}}
+        {:ok, %{state | dropped: dropped + 1}}
 
       dropped > 0 ->
         stop_dropping(buffer, state)

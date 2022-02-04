@@ -19,7 +19,7 @@ defmodule Membrane.RTP.Parser do
   use Membrane.Filter
 
   alias Membrane.Buffer
-  alias Membrane.{RTCPEvent, RTP, RemoteStream}
+  alias Membrane.{RTCPEvent, RTCP, RTP, RemoteStream}
 
   require Membrane.Logger
 
@@ -43,10 +43,10 @@ defmodule Membrane.RTP.Parser do
               ]
 
   def_input_pad :input,
-    caps: {RemoteStream, type: :packetized, content_format: one_of([nil, RTP])},
-    demand_unit: :buffers
+    caps: {RemoteStream, type: :packetized, content_format: one_of([nil, RTP, RTCP])},
+    demand_mode: :auto
 
-  def_output_pad :output, caps: RTP
+  def_output_pad :output, caps: RTP, demand_mode: :auto
 
   def_output_pad :rtcp_output, mode: :push, caps: :any, availability: :on_request
 
@@ -83,11 +83,8 @@ defmodule Membrane.RTP.Parser do
     else
       :rtcp ->
         case state.rtcp_output_pad do
-          nil ->
-            {{:ok, redemand: :output}, state}
-
-          pad ->
-            {{:ok, buffer: {pad, buffer}, redemand: :output}, state}
+          nil -> {:ok, state}
+          pad -> {{:ok, buffer: {pad, buffer}}, state}
         end
 
       {:error, reason} ->
@@ -97,13 +94,8 @@ defmodule Membrane.RTP.Parser do
         Reason: #{inspect(reason)}. Ignoring packet.
         """)
 
-        {{:ok, redemand: :output}, state}
+        {:ok, state}
     end
-  end
-
-  @impl true
-  def handle_demand(:output, size, :buffers, _ctx, state) do
-    {{:ok, demand: {:input, size}}, state}
   end
 
   @impl true
