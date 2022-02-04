@@ -34,9 +34,8 @@ defmodule Membrane.RTP.TWCCSender do
     {{:ok, event: {Pad.ref(opposite_direction, id), event}}, state}
   end
 
+  @impl true
   def handle_other({:twcc_feedback, feedback}, _ctx, state) do
-    # Membrane.Logger.error("got feedback: " <> inspect(feedback))
-
     %TWCC{
       base_seq_num: base_seq_num,
       feedback_packet_count: feedback_packet_count,
@@ -44,24 +43,6 @@ defmodule Membrane.RTP.TWCCSender do
       receive_deltas: receive_deltas,
       reference_time: reference_time
     } = feedback
-
-    # notr = Enum.count(receive_deltas, fn delta -> delta == :not_received end)
-
-    # ld =
-    #   Enum.filter(receive_deltas, fn delta -> delta != :not_received end)
-    #   |> Enum.count(fn delta -> Time.to_milliseconds(delta) > 64 end)
-
-    # ng =
-    #   Enum.filter(receive_deltas, fn delta -> delta != :not_received end)
-    #   |> Enum.count(fn delta -> Time.to_milliseconds(delta) < 0 end)
-
-    # if Enum.any?([notr, ld, ng], fn n -> n > 0 end) do
-    #   Membrane.Logger.error("----------------------------------------------------------------")
-    #   Membrane.Logger.error("not_r: " <> inspect(notr * 100 / length(receive_deltas)) <> "%")
-    #   Membrane.Logger.error("large: " <> inspect(ld * 100 / length(receive_deltas)) <> "%")
-    #   Membrane.Logger.error("negat: " <> inspect(ng * 100 / length(receive_deltas)) <> "%")
-    #   Membrane.Logger.error("----------------------------------------------------------------")
-    # end
 
     max_seq_num = base_seq_num + packet_count - 1
 
@@ -82,6 +63,7 @@ defmodule Membrane.RTP.TWCCSender do
     Membrane.Logger.error("A_hat: " <> inspect(cc.a_hat / 1000) <> "kbps")
     # Membrane.Logger.error("As_hat: " <> inspect(cc.as_hat / 1000) <> "kbps")
     Membrane.Logger.error("state: " <> inspect(cc.state))
+    # Membrane.Logger.error(inspect(cc))
 
     {:ok, %{state | cc: cc}}
   end
