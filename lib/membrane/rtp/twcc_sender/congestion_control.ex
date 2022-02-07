@@ -11,25 +11,19 @@ defmodule Membrane.RTP.TWCCSender.CongestionControl do
   # state noise covariance
   @q 0.001
   # filter coefficient for the measured noise variance, between [0.1, 0.001]
-  @chi 0.01
+  @chi 0.001
 
   # decrease rate factor
   @beta 0.85
 
-  # coefficients for the adaptive threshold
+  # coefficients for the adaptive threshold (reffered to as "K_u", "K_d" in the RFC)
   @coeff_K_u 0.01
   @coeff_K_d 0.00018
-
-  # T: Time window for measuring the received bitrate, between [0.5, 1] s
-  @target_receive_interval Time.seconds(1)
 
   # alpha factor for exponential moving average
   @ema_smoothing_factor 0.95
 
-  # time required to trigger a signal (reffered to as "overuse_time_th" in RFC)
-  @signal_time_threshold Time.milliseconds(10)
-
-  @last_rates_probe_size 50
+  @last_rates_probe_size 10
   @last_receive_bandwidth_probe_size 10
 
   # upper limit for sender-side bandwidth in bps
@@ -50,7 +44,7 @@ defmodule Membrane.RTP.TWCCSender.CongestionControl do
     state: :increase,
     # timestamp indicating when we started to overuse the link
     overuse_start_ts: nil,
-    # timestamp indicating when we started to undere the link
+    # timestamp indicating when we started to underuse the link
     underuse_start_ts: nil,
     # latest timestamp indicating when the receiver-side bandwidth was updated
     last_bandwidth_update_ts: nil,
@@ -60,12 +54,16 @@ defmodule Membrane.RTP.TWCCSender.CongestionControl do
     as_hat: 300_000_000.0,
     # latest estimates of receiver-side bandwidth
     r_hats: [],
-    # accumulator for packet sizes in bits that have been received through @target_receive_interval
+    # time window for measuring the received bitrate, between [0.5, 1]s (reffered to as "T" in the RFC)
+    target_receive_interval: Time.milliseconds(750),
+    # accumulator for packet sizes in bits that have been received through target_receive_interval
     packet_received_sizes: 0,
     # starting timestamp for current packet received interval
     packet_received_interval_start: nil,
     # last timestamp for current packet received interval
-    packet_received_interval_end: nil
+    packet_received_interval_end: nil,
+    # time required to trigger a signal (reffered to as "overuse_time_th" in the RFC)
+    signal_time_threshold: Time.milliseconds(10)
   ]
 
   @type t :: %__MODULE__{
@@ -159,6 +157,8 @@ defmodule Membrane.RTP.TWCCSender.CongestionControl do
 
     alpha = :math.pow(1 - @chi, 30 / (1000 * f_max))
 
+    # alpha = 0.95
+
     var_v_hat = max(alpha * var_v_hat + (1 - alpha) * z * z, 1)
 
     k = (e + @q) / (var_v_hat + e + @q)
@@ -179,6 +179,17 @@ defmodule Membrane.RTP.TWCCSender.CongestionControl do
         del_var_th
       end
 
+    # Membrane.Logger.error("m_hat: " <> inspect(m_hat))
+    # Membrane.Logger.error("del_var_th: " <> inspect(del_var_th))
+    # Membrane.Logger.error("z: " <> inspect(z))
+    # Membrane.Logger.error("f_max: " <> inspect(f_max))
+    # Membrane.Logger.error("alpha: " <> inspect(alpha))
+    # Membrane.Logger.error("var_v_hat: " <> inspect(var_v_hat))
+    # Membrane.Logger.error("k: " <> inspect(k))
+    # Membrane.Logger.error("e: " <> inspect(e))
+    # Membrane.Logger.error("state: " <> inspect(cc.state))
+    # Membrane.Logger.error("--------------------------")
+
     cc = %__MODULE__{
       cc
       | m_hat: m_hat,
@@ -197,7 +208,7 @@ defmodule Membrane.RTP.TWCCSender.CongestionControl do
 
     underuse_start_ts = cc.underuse_start_ts || now
 
-    trigger_underuse? = now - underuse_start_ts > @signal_time_threshold and m_hat <= prev_m_hat
+    trigger_underuse? = now - underuse_start_ts > cc.signal_time_threshold and m_hat <= prev_m_hat
 
     if trigger_underuse? do
       {:underuse, %__MODULE__{cc | underuse_start_ts: now, overuse_start_ts: nil}}
@@ -212,7 +223,7 @@ defmodule Membrane.RTP.TWCCSender.CongestionControl do
 
     overuse_start_ts = cc.overuse_start_ts || now
 
-    trigger_overuse? = now - overuse_start_ts > @signal_time_threshold and m_hat >= prev_m_hat
+    trigger_overuse? = now - overuse_start_ts > cc.signal_time_threshold and m_hat >= prev_m_hat
 
     if trigger_overuse? do
       {:overuse, %__MODULE__{cc | underuse_start_ts: nil, overuse_start_ts: now}}
@@ -297,7 +308,7 @@ defmodule Membrane.RTP.TWCCSender.CongestionControl do
          packet_sizes
        )
        when packet_received_interval_end - packet_received_interval_start >=
-              @target_receive_interval do
+              cc.target_receive_interval do
     %__MODULE__{
       r_hats: r_hats,
       a_hat: prev_a_hat,

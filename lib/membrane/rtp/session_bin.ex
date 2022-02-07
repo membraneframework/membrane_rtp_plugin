@@ -577,6 +577,12 @@ defmodule Membrane.RTP.SessionBin do
     {{:ok, forward: {:twcc_sender, msg}}, state}
   end
 
+  @impl true
+  def handle_notification({:bandwidth_estimation, val}, :twcc_sender, _ctx, state) do
+    Membrane.Logger.error("Received bandwidth estimation: " <> inspect(val / 1000) <> "kbps")
+    {:ok, state}
+  end
+
   defp add_ssrc(remote_ssrc, state) do
     %{ssrcs: ssrcs, receiver_ssrc_generator: generator} = state
     local_ssrc = generator.([remote_ssrc | Map.keys(ssrcs)], Map.values(ssrcs))

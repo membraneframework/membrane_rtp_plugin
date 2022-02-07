@@ -20,12 +20,39 @@ defmodule Membrane.RTP.TWCCSender do
   @impl true
   def handle_init(_options) do
     {:ok,
-     %{seq_num: 0, last_ts: nil, seq_to_delta: %{}, seq_to_size: %{}, cc: %CongestionControl{}}}
+     %{
+       seq_num: 0,
+       last_ts: nil,
+       seq_to_delta: %{},
+       seq_to_size: %{},
+       cc: %CongestionControl{},
+       bandwidth_report_interval: Time.seconds(2)
+     }}
   end
 
   @impl true
   def handle_caps(Pad.ref(:input, id), caps, _ctx, state) do
     {{:ok, caps: {Pad.ref(:output, id), caps}}, state}
+  end
+
+  @impl true
+  def handle_prepared_to_playing(_ctx, state) do
+    {{:ok, start_timer: {:bandwidth_report_timer, state.bandwidth_report_interval}}, state}
+  end
+
+  @impl true
+  def handle_playing_to_prepared(_ctx, state) do
+    {{:ok, stop_timer: :bandwidth_report_timer}, state}
+  end
+
+  @impl true
+  def handle_tick(:bandwidth_report_timer, _ctx, %{cc: cc} = state) do
+    {{:ok, notify: {:bandwidth_estimation, min(cc.a_hat, cc.as_hat)}}, state}
+  end
+
+  @impl true
+  def handle_demand(Pad.ref(:output, id), size, :buffers, _ctx, state) do
+    {{:ok, demand: {Pad.ref(:input, id), size}}, state}
   end
 
   @impl true
@@ -59,11 +86,6 @@ defmodule Membrane.RTP.TWCCSender do
         send_deltas,
         packet_sizes
       )
-
-    Membrane.Logger.error("A_hat: " <> inspect(cc.a_hat / 1000) <> "kbps")
-    # Membrane.Logger.error("As_hat: " <> inspect(cc.as_hat / 1000) <> "kbps")
-    Membrane.Logger.error("state: " <> inspect(cc.state))
-    # Membrane.Logger.error(inspect(cc))
 
     {:ok, %{state | cc: cc}}
   end
