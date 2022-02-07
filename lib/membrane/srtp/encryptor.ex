@@ -83,9 +83,8 @@ defmodule Membrane.SRTP.Encryptor do
     }
 
     :ok = ExLibSRTP.add_stream(state.srtp, policy)
-
-    {{:ok, buffer: {:output, Enum.reverse(state.queue)}},
-     %{Map.put(state, :policies, [policy]) | queue: []}}
+    buffers = state.queue |> Enum.reverse() |> Enum.flat_map(&protect_buffer(&1, state.srtp))
+    {{:ok, buffer: {:output, buffers}}, %{Map.put(state, :policies, [policy]) | queue: []}}
   end
 
   @impl true
@@ -101,16 +100,20 @@ defmodule Membrane.SRTP.Encryptor do
 
   @impl true
   def handle_process(:input, buffer, _ctx, state) do
+    {{:ok, buffer: {:output, protect_buffer(buffer, state.srtp)}}, state}
+  end
+
+  defp protect_buffer(buffer, srtp) do
     %Buffer{payload: payload} = buffer
     packet_type = RTP.Packet.identify(payload)
 
     case packet_type do
-      :rtp -> ExLibSRTP.protect(state.srtp, payload)
-      :rtcp -> ExLibSRTP.protect_rtcp(state.srtp, payload)
+      :rtp -> ExLibSRTP.protect(srtp, payload)
+      :rtcp -> ExLibSRTP.protect_rtcp(srtp, payload)
     end
     |> case do
       {:ok, payload} ->
-        {{:ok, buffer: {:output, %Buffer{buffer | payload: payload}}}, state}
+        [%Buffer{buffer | payload: payload}]
 
       {:error, reason} ->
         Membrane.Logger.warn("""
@@ -119,7 +122,7 @@ defmodule Membrane.SRTP.Encryptor do
         Reason: #{inspect(reason)}. Ignoring packet.
         """)
 
-        {:ok, state}
+        []
     end
   end
 end
