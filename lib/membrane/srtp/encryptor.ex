@@ -45,6 +45,25 @@ defmodule Membrane.SRTP.Encryptor do
   end
 
   @impl true
+  def handle_start_of_stream(:input, _ctx, state) do
+    if state.policies == [] do
+      # TODO: remove when dynamic switching between automatic and manual demands will be supported
+      {{:ok, start_timer: {:policy_timer, Membrane.Time.seconds(5)}}, state}
+    else
+      {:ok, state}
+    end
+  end
+
+  @impl true
+  def handle_tick(:policy_timer, ctx, state) do
+    if state.policies != [] or ctx.pads.input.end_of_stream? do
+      {{:ok, stop_timer: :policy_timer}, state}
+    else
+      raise "No SRTP policies arrived in 5 seconds"
+    end
+  end
+
+  @impl true
   def handle_prepared_to_stopped(_ctx, state) do
     {:ok, %{state | srtp: nil, policies: []}}
   end

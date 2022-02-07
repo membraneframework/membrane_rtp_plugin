@@ -126,14 +126,16 @@ defmodule Membrane.RTP.OutboundPacketTracker do
 
   @impl true
   def handle_other(:send_stats, ctx, state) do
-    if state.rtcp_output_pad && not ctx.pads[state.rtcp_output_pad].end_of_stream? do
+    %{rtcp_output_pad: rtcp_output} = state
+
+    if rtcp_output && not ctx.pads[rtcp_output].end_of_stream? do
       stats = get_stats(state)
 
       actions =
         %{state.ssrc => stats}
         |> SenderReport.generate_report()
         |> Enum.map(&Membrane.RTCP.Packet.serialize(&1))
-        |> Enum.map(&{:buffer, {state.rtcp_output_pad, %Membrane.Buffer{payload: &1}}})
+        |> Enum.map(&{:buffer, {rtcp_output, %Membrane.Buffer{payload: &1}}})
 
       {{:ok, actions}, %{state | any_buffer_sent?: false}}
     else
