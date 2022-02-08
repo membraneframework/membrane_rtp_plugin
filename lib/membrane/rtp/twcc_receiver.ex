@@ -75,30 +75,19 @@ defmodule Membrane.RTP.TWCCReceiver do
 
   @impl true
   def handle_caps(Pad.ref(:input, ssrc), caps, ctx, state) do
-    output_pad = Pad.ref(:output, ssrc)
-
-    if Map.has_key?(ctx.pads, output_pad) do
-      {{:ok, caps: {output_pad, caps}}, state}
-    else
-      put_in(state, [:caps_buffer, output_pad], caps)
-      |> then(&{:ok, &1})
-    end
+    actions_or_buffer([caps: {Pad.ref(:output, ssrc), caps}], ctx, state)
   end
 
   @impl true
-  def handle_pad_added(Pad.ref(:input, _ssrc), _ctx, state), do: {:ok, state}
-
-  @impl true
-  def handle_pad_added(Pad.ref(:output, _ssrc) = pad, _ctx, state) do
-    {caps, state} = pop_in(state, [:caps_buffer, pad])
-
-    if is_nil(caps), do: {:ok, state}, else: {{:ok, caps: {pad, caps}}, state}
+  def handle_pad_added(pad, _ctx, state) do
+    {actions, buffer} = Map.pop(state.caps_buffer, pad, [])
+    {{:ok, actions}, %{state | caps_buffer: buffer}}
   end
 
   @impl true
-  def handle_event(Pad.ref(direction, ssrc), event, _ctx, state) do
+  def handle_event(Pad.ref(direction, ssrc), event, ctx, state) do
     opposite_direction = if direction == :input, do: :output, else: :input
-    {{:ok, event: {Pad.ref(opposite_direction, ssrc), event}}, state}
+    actions_or_buffer([event: {Pad.ref(opposite_direction, ssrc), event}], ctx, state)
   end
 
   @impl true
@@ -111,7 +100,7 @@ defmodule Membrane.RTP.TWCCReceiver do
   end
 
   @impl true
-  def handle_process(Pad.ref(:input, ssrc), buffer, _ctx, state) do
+  def handle_process(Pad.ref(:input, ssrc), buffer, ctx, state) do
     {extension, buffer} = Header.Extension.pop(buffer, state.twcc_id)
 
     state =
@@ -124,11 +113,11 @@ defmodule Membrane.RTP.TWCCReceiver do
         state
       end
 
-    {{:ok, buffer: {Pad.ref(:output, ssrc), buffer}}, state}
+    [buffer: {Pad.ref(:output, ssrc), buffer}] |> actions_or_buffer(ctx, state)
   end
 
   @impl true
-  def handle_tick(:report_timer, _ctx, %State{packet_info_store: store} = state) do
+  def handle_tick(:report_timer, ctx, %State{packet_info_store: store} = state) do
     if PacketInfoStore.empty?(store) or state.media_ssrc == nil do
       {:ok, state}
     else
@@ -140,13 +129,13 @@ defmodule Membrane.RTP.TWCCReceiver do
           feedback_packet_count: rem(state.feedback_packet_count + 1, @feedback_count_limit)
       }
 
-      {{:ok, event: {Pad.ref(:input, state.media_ssrc), event}}, state}
+      [event: {Pad.ref(:input, state.media_ssrc), event}] |> actions_or_buffer(ctx, state)
     end
   end
 
   @impl true
-  def handle_end_of_stream(Pad.ref(:input, ssrc), _ctx, state) do
-    {{:ok, end_of_stream: Pad.ref(:output, ssrc)}, state}
+  def handle_end_of_stream(Pad.ref(:input, ssrc), ctx, state) do
+    [end_of_stream: Pad.ref(:output, ssrc)] |> actions_or_buffer(ctx, state)
   end
 
   defp make_rtcp_event(state) do
@@ -169,5 +158,27 @@ defmodule Membrane.RTP.TWCCReceiver do
         payload: struct!(TransportFeedbackPacket.TWCC, stats)
       }
     }
+  end
+
+  defp actions_or_buffer(actions, ctx, state) do
+    grouped_by_validity =
+      Enum.group_by(actions, fn
+        {action, {pad, _event}} when action in [:event, :buffer, :caps] ->
+          Map.has_key?(ctx.pads, pad)
+
+        {:end_of_stream, pad} ->
+          Map.has_key?(ctx.pads, pad)
+
+        _otherwise ->
+          true
+      end)
+
+    buffer =
+      Map.get(grouped_by_validity, false, [])
+      |> Enum.reduce(state.caps_buffer, fn {_action, {pad, _args}} = action, buffer ->
+        Map.update(buffer, pad, Qex.new([action]), &Qex.push(&1, action))
+      end)
+
+    {{:ok, Map.get(grouped_by_validity, true, [])}, %{state | caps_buffer: buffer}}
   end
 end
