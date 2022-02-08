@@ -35,6 +35,7 @@ defmodule Membrane.RTP.TWCCReceiver do
 
   defmodule State do
     @moduledoc false
+    use Bunch.Access
     alias Membrane.RTP.TWCCReceiver.PacketInfoStore
 
     @type t :: %__MODULE__{
