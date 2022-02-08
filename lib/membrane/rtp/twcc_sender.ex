@@ -26,9 +26,15 @@ defmodule Membrane.RTP.TWCCSender do
        seq_to_delta: %{},
        seq_to_size: %{},
        cc: %CongestionControl{},
-       bandwidth_report_interval: Time.seconds(2)
+       bandwidth_report_interval: Time.seconds(5)
      }}
   end
+
+  @impl true
+  def handle_pad_added(_pad, _ctx, state), do: {:ok, %{state | cc: %CongestionControl{}}}
+
+  @impl true
+  def handle_pad_removed(_pad, _ctx, state), do: {:ok, %{state | cc: %CongestionControl{}}}
 
   @impl true
   def handle_caps(Pad.ref(:input, id), caps, _ctx, state) do

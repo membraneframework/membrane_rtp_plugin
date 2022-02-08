@@ -208,7 +208,8 @@ defmodule Membrane.RTP.TWCCSender.CongestionControl do
 
     underuse_start_ts = cc.underuse_start_ts || now
 
-    trigger_underuse? = now - underuse_start_ts > cc.signal_time_threshold and m_hat <= prev_m_hat
+    trigger_underuse? =
+      now - underuse_start_ts >= cc.signal_time_threshold and m_hat <= prev_m_hat
 
     if trigger_underuse? do
       {:underuse, %__MODULE__{cc | underuse_start_ts: now, overuse_start_ts: nil}}
@@ -223,7 +224,7 @@ defmodule Membrane.RTP.TWCCSender.CongestionControl do
 
     overuse_start_ts = cc.overuse_start_ts || now
 
-    trigger_overuse? = now - overuse_start_ts > cc.signal_time_threshold and m_hat >= prev_m_hat
+    trigger_overuse? = now - overuse_start_ts >= cc.signal_time_threshold and m_hat >= prev_m_hat
 
     if trigger_overuse? do
       {:overuse, %__MODULE__{cc | underuse_start_ts: nil, overuse_start_ts: now}}
