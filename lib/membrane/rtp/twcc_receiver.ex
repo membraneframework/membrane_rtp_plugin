@@ -35,6 +35,7 @@ defmodule Membrane.RTP.TWCCReceiver do
 
   defmodule State do
     @moduledoc false
+    use Bunch.Access
     alias Membrane.RTP.TWCCReceiver.PacketInfoStore
 
     @type t :: %__MODULE__{
@@ -43,7 +44,8 @@ defmodule Membrane.RTP.TWCCReceiver do
             report_interval: Time.t(),
             packet_info_store: PacketInfoStore.t(),
             feedback_packet_count: non_neg_integer(),
-            media_ssrc: RTP.ssrc_t() | nil
+            media_ssrc: RTP.ssrc_t() | nil,
+            caps_buffer: %{Pad.ref_t() => RTP.t()}
           }
 
     @enforce_keys [:twcc_id, :report_interval, :feedback_sender_ssrc]
@@ -51,7 +53,8 @@ defmodule Membrane.RTP.TWCCReceiver do
                 [
                   packet_info_store: %PacketInfoStore{},
                   feedback_packet_count: 0,
-                  media_ssrc: nil
+                  media_ssrc: nil,
+                  caps_buffer: %{}
                 ]
   end
 
@@ -71,8 +74,25 @@ defmodule Membrane.RTP.TWCCReceiver do
   end
 
   @impl true
-  def handle_caps(Pad.ref(:input, ssrc), caps, _ctx, state) do
-    {{:ok, caps: {Pad.ref(:output, ssrc), caps}}, state}
+  def handle_caps(Pad.ref(:input, ssrc), caps, ctx, state) do
+    output_pad = Pad.ref(:output, ssrc)
+
+    if Map.has_key?(ctx.pads, output_pad) do
+      {{:ok, caps: {output_pad, caps}}, state}
+    else
+      put_in(state, [:caps_buffer, output_pad], caps)
+      |> then(&{:ok, &1})
+    end
+  end
+
+  @impl true
+  def handle_pad_added(Pad.ref(:input, _ssrc), _ctx, state), do: {:ok, state}
+
+  @impl true
+  def handle_pad_added(Pad.ref(:output, _ssrc) = pad, _ctx, state) do
+    {caps, state} = pop_in(state, [:caps_buffer, pad])
+
+    if is_nil(caps), do: {:ok, state}, else: {{:ok, caps: {pad, caps}}, state}
   end
 
   @impl true
