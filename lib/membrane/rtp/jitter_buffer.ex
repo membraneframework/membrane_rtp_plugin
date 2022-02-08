@@ -16,12 +16,9 @@ defmodule Membrane.RTP.JitterBuffer do
 
   @timestamp_limit Bitwise.bsl(1, 32)
 
-  def_output_pad :output,
-    caps: RTP
+  def_output_pad :output, caps: RTP, demand_mode: :auto
 
-  def_input_pad :input,
-    caps: RTP,
-    demand_unit: :buffers
+  def_input_pad :input, caps: RTP, demand_mode: :auto
 
   @default_latency 200 |> Time.milliseconds()
 
@@ -76,10 +73,6 @@ defmodule Membrane.RTP.JitterBuffer do
   end
 
   @impl true
-  def handle_demand(:output, size, :buffers, _ctx, state),
-    do: {{:ok, demand: {:input, size}}, state}
-
-  @impl true
   def handle_end_of_stream(:input, _context, %State{store: store} = state) do
     {actions, state} =
       store
@@ -113,7 +106,7 @@ defmodule Membrane.RTP.JitterBuffer do
 
       {:error, :late_packet} ->
         warn("Late packet has arrived")
-        {{:ok, redemand: :output}, state}
+        {:ok, state}
     end
   end
 
@@ -142,7 +135,7 @@ defmodule Membrane.RTP.JitterBuffer do
 
     state = %{state | store: store} |> set_timer()
 
-    {{:ok, actions ++ [redemand: :output]}, state}
+    {{:ok, actions}, state}
   end
 
   @spec set_timer(State.t()) :: State.t()

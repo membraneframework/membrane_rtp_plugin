@@ -15,11 +15,11 @@ defmodule Membrane.RTP.SSRCRouter do
 
   alias Membrane.{RTP, RTCPEvent}
 
-  def_input_pad :input, demand_unit: :buffers, caps: RTP, availability: :on_request
+  def_input_pad :input, caps: RTP, availability: :on_request, demand_mode: :auto
 
-  def_input_pad :rtcp_input, demand_unit: :buffers, caps: :any, availability: :on_request
+  def_input_pad :rtcp_input, caps: :any, availability: :on_request, demand_mode: :auto
 
-  def_output_pad :output, caps: RTP, availability: :on_request
+  def_output_pad :output, caps: RTP, availability: :on_request, demand_mode: :auto
 
   defmodule State do
     @moduledoc false
@@ -84,27 +84,6 @@ defmodule Membrane.RTP.SSRCRouter do
   @impl true
   def handle_pad_removed(Pad.ref(:output, ssrc), _ctx, state) do
     {:ok, %State{state | output_pad_ids: MapSet.delete(state.output_pad_ids, ssrc)}}
-  end
-
-  @impl true
-  def handle_prepared_to_playing(ctx, state) do
-    actions =
-      ctx.pads
-      |> Enum.filter(fn {_pad_ref, pad_data} -> pad_data.direction == :input end)
-      |> Enum.map(fn {pad_ref, _pad_data} -> {:demand, {pad_ref, 1}} end)
-
-    {{:ok, actions}, state}
-  end
-
-  @impl true
-  def handle_demand(Pad.ref(:output, ssrc), _size, _unit, ctx, state) do
-    case state.input_pads do
-      %{^ssrc => input_pad} ->
-        {{:ok, demand: {input_pad, &(&1 + ctx.incoming_demand)}}, state}
-
-      _pads ->
-        {:ok, state}
-    end
   end
 
   @impl true
@@ -189,8 +168,7 @@ defmodule Membrane.RTP.SSRCRouter do
 
     if waiting_for_linking?(ssrc, state) do
       state = update_in(state, [:linking_buffers, ssrc], &[action | &1])
-      actions = if type == :buffer, do: [demand: {state.input_pads[ssrc], &(&1 + 1)}], else: []
-      {actions, state}
+      {[], state}
     else
       {[action], state}
     end

@@ -8,8 +8,8 @@ defmodule Membrane.SRTCP.Decryptor do
 
   alias Membrane.Buffer
 
-  def_input_pad :input, caps: :any, demand_unit: :buffers
-  def_output_pad :output, caps: :any
+  def_input_pad :input, caps: :any, demand_mode: :auto
+  def_output_pad :output, caps: :any, demand_mode: :auto
 
   def_options policies: [
                 spec: [ExLibSRTP.Policy.t()],
@@ -41,11 +41,6 @@ defmodule Membrane.SRTCP.Decryptor do
   end
 
   @impl true
-  def handle_demand(:output, size, :buffers, _ctx, state) do
-    {{:ok, demand: {:input, size}}, state}
-  end
-
-  @impl true
   def handle_process(:input, buffer, _ctx, state) do
     {:ok, payload} = ExLibSRTP.unprotect_rtcp(state.srtp, buffer.payload)
     {{:ok, buffer: {:output, %Buffer{buffer | payload: payload}}}, state}
@@ -66,7 +61,7 @@ defmodule Membrane.SRTCP.Decryptor do
     }
 
     :ok = ExLibSRTP.add_stream(state.srtp, policy)
-    {{:ok, redemand: :output}, %{state | policies: [policy]}}
+    {:ok, %{state | policies: [policy]}}
   end
 
   @impl true

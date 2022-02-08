@@ -27,14 +27,11 @@ defmodule Membrane.RTP.JitterBufferTest do
     test "start of stream starts timer that changes state", %{state: state} do
       assert {:ok, state} = JitterBuffer.handle_start_of_stream(:input, %{}, state)
       assert_receive message, (state.latency |> Membrane.Time.to_milliseconds()) + 2
-
-      assert {{:ok, redemand: :output}, final_state} =
-               JitterBuffer.handle_other(message, %{}, state)
-
+      assert {{:ok, []}, final_state} = JitterBuffer.handle_other(message, %{}, state)
       assert final_state.waiting? == false
     end
 
-    test "any new buffer is kept without redemand", %{state: state, buffer: buffer} do
+    test "any new buffer is kept", %{state: state, buffer: buffer} do
       assert BufferStore.dump(state.store) == []
       assert {:ok, state} = JitterBuffer.handle_process(:input, buffer, nil, state)
 
@@ -51,7 +48,7 @@ defmodule Membrane.RTP.JitterBufferTest do
     end
 
     test "outputs it immediately if it is in order", %{state: state, buffer: buffer} do
-      assert {{:ok, buffer: {:output, ^buffer}, redemand: :output}, state} =
+      assert {{:ok, buffer: {:output, ^buffer}}, state} =
                JitterBuffer.handle_process(:input, buffer, nil, state)
 
       assert %JitterBuffer.State{store: store} = state
@@ -60,10 +57,7 @@ defmodule Membrane.RTP.JitterBufferTest do
 
     test "refuses to add that packet when it comes too late", %{state: state} do
       late_buffer = BufferFactory.sample_buffer(@base_seq_number - 2)
-
-      assert {{:ok, redemand: :output}, new_state} =
-               JitterBuffer.handle_process(:input, late_buffer, nil, state)
-
+      assert {:ok, new_state} = JitterBuffer.handle_process(:input, late_buffer, nil, state)
       assert new_state == state
     end
 
@@ -103,7 +97,7 @@ defmodule Membrane.RTP.JitterBufferTest do
 
       assert {{:ok, actions}, _state} = JitterBuffer.handle_other(message, %{}, state)
 
-      assert [event: event, buffer: buffer_action, redemand: :output] = actions
+      assert [event: event, buffer: buffer_action] = actions
       assert event == {:output, %Membrane.Event.Discontinuity{}}
       assert buffer_action == {:output, buffer}
     end

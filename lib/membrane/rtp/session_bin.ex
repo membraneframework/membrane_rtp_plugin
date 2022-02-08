@@ -100,7 +100,7 @@ defmodule Membrane.RTP.SessionBin do
 
   @ssrc_boundaries 2..(Bitwise.bsl(1, 32) - 1)
 
-  @rtp_input_buffer_params [warn_size: 250, fail_size: 500]
+  @rtp_input_params [toilet_capacity: 500]
 
   def_options fmt_mapping: [
                 spec: %{RTP.payload_type_t() => {RTP.encoding_name_t(), RTP.clock_rate_t()}},
@@ -341,7 +341,8 @@ defmodule Membrane.RTP.SessionBin do
 
     links =
       [
-        link_bin_input(pad, buffer: @rtp_input_buffer_params)
+        link_bin_input(pad)
+        |> via_in(:input, @rtp_input_params)
         |> to({:rtp_parser, ref}, %RTP.Parser{secure?: secure?})
         |> via_in(Pad.ref(:input, ref))
         |> to(:ssrc_router)

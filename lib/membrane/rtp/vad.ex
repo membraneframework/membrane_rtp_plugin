@@ -27,14 +27,9 @@ defmodule Membrane.RTP.VAD do
 
   alias Membrane.RTP.{Header, Utils}
 
-  def_input_pad :input,
-    availability: :always,
-    caps: :any,
-    demand_unit: :buffers
+  def_input_pad :input, availability: :always, caps: :any, demand_mode: :auto
 
-  def_output_pad :output,
-    availability: :always,
-    caps: :any
+  def_output_pad :output, availability: :always, caps: :any, demand_mode: :auto
 
   def_options vad_id: [
                 spec: 1..14,
@@ -106,11 +101,6 @@ defmodule Membrane.RTP.VAD do
     }
 
     {:ok, state}
-  end
-
-  @impl true
-  def handle_demand(:output, size, :buffers, _ctx, state) do
-    {{:ok, demand: {:input, size}}, state}
   end
 
   @impl true

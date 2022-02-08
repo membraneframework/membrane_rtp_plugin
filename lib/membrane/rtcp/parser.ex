@@ -12,9 +12,9 @@ defmodule Membrane.RTCP.Parser do
 
   def_input_pad :input,
     caps: {RemoteStream, type: :packetized, content_format: one_of([nil, RTP])},
-    demand_unit: :buffers
+    demand_mode: :auto
 
-  def_output_pad :output, caps: RTCP
+  def_output_pad :output, caps: RTCP, demand_mode: :auto
   def_output_pad :rtcp_output, mode: :push, caps: :any
 
   @impl true
@@ -48,11 +48,6 @@ defmodule Membrane.RTCP.Parser do
   end
 
   @impl true
-  def handle_demand(:output, size, :buffers, _ctx, state) do
-    {{:ok, demand: {:input, size}}, state}
-  end
-
-  @impl true
   def handle_event(:output, %RTCPEvent{} = event, _ctx, state) do
     buffer = %Buffer{payload: RTCP.Packet.serialize(event.rtcp)}
     {{:ok, buffer: {:rtcp_output, buffer}}, state}
@@ -62,7 +57,7 @@ defmodule Membrane.RTCP.Parser do
   def handle_event(pad, event, ctx, state), do: super(pad, event, ctx, state)
 
   defp process_packets(rtcp, metadata) do
-    Enum.flat_map(rtcp, &process_rtcp(&1, metadata)) ++ [redemand: :output]
+    Enum.flat_map(rtcp, &process_rtcp(&1, metadata))
   end
 
   defp process_rtcp(%RTCP.FeedbackPacket{payload: %RTCP.FeedbackPacket.PLI{}}, _metadata) do

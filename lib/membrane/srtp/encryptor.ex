@@ -10,8 +10,8 @@ defmodule Membrane.SRTP.Encryptor do
 
   require Membrane.Logger
 
-  def_input_pad :input, caps: :any, demand_unit: :buffers
-  def_output_pad :output, caps: :any
+  def_input_pad :input, caps: :any, demand_mode: :auto
+  def_output_pad :output, caps: :any, demand_mode: :auto
 
   def_options policies: [
                 spec: [ExLibSRTP.Policy.t()],
@@ -26,7 +26,8 @@ defmodule Membrane.SRTP.Encryptor do
   def handle_init(%__MODULE__{policies: policies}) do
     state = %{
       policies: policies,
-      srtp: nil
+      srtp: nil,
+      queue: []
     }
 
     {:ok, state}
@@ -41,6 +42,25 @@ defmodule Membrane.SRTP.Encryptor do
     |> Enum.each(&ExLibSRTP.add_stream(srtp, &1))
 
     {:ok, %{state | srtp: srtp}}
+  end
+
+  @impl true
+  def handle_start_of_stream(:input, _ctx, state) do
+    if state.policies == [] do
+      # TODO: remove when dynamic switching between automatic and manual demands will be supported
+      {{:ok, start_timer: {:policy_timer, Membrane.Time.seconds(5)}}, state}
+    else
+      {:ok, state}
+    end
+  end
+
+  @impl true
+  def handle_tick(:policy_timer, ctx, state) do
+    if state.policies != [] or ctx.pads.input.end_of_stream? do
+      {{:ok, stop_timer: :policy_timer}, state}
+    else
+      raise "No SRTP policies arrived in 5 seconds"
+    end
   end
 
   @impl true
@@ -63,7 +83,8 @@ defmodule Membrane.SRTP.Encryptor do
     }
 
     :ok = ExLibSRTP.add_stream(state.srtp, policy)
-    {{:ok, redemand: :output}, Map.put(state, :policies, [policy])}
+    buffers = state.queue |> Enum.reverse() |> Enum.flat_map(&protect_buffer(&1, state.srtp))
+    {{:ok, buffer: {:output, buffers}}, %{Map.put(state, :policies, [policy]) | queue: []}}
   end
 
   @impl true
@@ -73,27 +94,26 @@ defmodule Membrane.SRTP.Encryptor do
   end
 
   @impl true
-  def handle_demand(:output, _size, :buffers, _ctx, %{policies: []} = state) do
-    {:ok, state}
-  end
-
-  @impl true
-  def handle_demand(:output, size, :buffers, _ctx, state) do
-    {{:ok, demand: {:input, size}}, state}
+  def handle_process(:input, buffer, _ctx, %{policies: []} = state) do
+    {:ok, Map.update!(state, :queue, &[buffer | &1])}
   end
 
   @impl true
   def handle_process(:input, buffer, _ctx, state) do
+    {{:ok, buffer: {:output, protect_buffer(buffer, state.srtp)}}, state}
+  end
+
+  defp protect_buffer(buffer, srtp) do
     %Buffer{payload: payload} = buffer
     packet_type = RTP.Packet.identify(payload)
 
     case packet_type do
-      :rtp -> ExLibSRTP.protect(state.srtp, payload)
-      :rtcp -> ExLibSRTP.protect_rtcp(state.srtp, payload)
+      :rtp -> ExLibSRTP.protect(srtp, payload)
+      :rtcp -> ExLibSRTP.protect_rtcp(srtp, payload)
     end
     |> case do
       {:ok, payload} ->
-        {{:ok, buffer: {:output, %Buffer{buffer | payload: payload}}}, state}
+        [%Buffer{buffer | payload: payload}]
 
       {:error, reason} ->
         Membrane.Logger.warn("""
@@ -102,7 +122,7 @@ defmodule Membrane.SRTP.Encryptor do
         Reason: #{inspect(reason)}. Ignoring packet.
         """)
 
-        {:ok, state}
+        []
     end
   end
 end

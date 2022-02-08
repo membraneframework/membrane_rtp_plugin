@@ -28,24 +28,19 @@ defmodule Membrane.RTP.StreamSendBinTest do
   end
 
   defmodule Limiter do
-    # module responsible for passing up to a limit of elements and
+    # module responsible for passing up to a limit of buffers and
     # then ignores all the buffers
 
     use Membrane.Filter
 
     def_options limit: [spec: non_neg_integer() | :infinity]
 
-    def_input_pad :input, demand_unit: :buffers, caps: :any
-    def_output_pad :output, caps: :any
+    def_input_pad :input, caps: :any, demand_mode: :auto
+    def_output_pad :output, caps: :any, demand_mode: :auto
 
     @impl true
     def handle_init(opts) do
       {:ok, %{buffers: 0, limit: opts.limit}}
-    end
-
-    @impl true
-    def handle_demand(:output, size, :buffers, _ctx, state) do
-      {{:ok, demand: {:input, size}}, state}
     end
 
     @impl true
@@ -108,7 +103,7 @@ defmodule Membrane.RTP.StreamSendBinTest do
               payloader: Map.get(opts, :payloader, H264.Payloader),
               payload_type: Membrane.RTP.PayloadFormat.get(:H264).payload_type,
               ssrc: @ssrc,
-              rtcp_report_interval: Membrane.Time.seconds(1)
+              rtcp_report_interval: Map.get(opts, :rtcp_interval, Membrane.Time.seconds(1))
             },
             rtcp_sink: Testing.Sink,
             rtp_sink: Testing.Sink
@@ -132,9 +127,10 @@ defmodule Membrane.RTP.StreamSendBinTest do
     opts = %Testing.Pipeline.Options{
       module: SenderPipeline,
       custom_args: %{
-        limit: 50,
+        limit: 5,
         source_type: :pcap,
-        payloader: nil
+        payloader: nil,
+        rtcp_interval: Membrane.Time.microseconds(100)
       }
     }
 
@@ -143,17 +139,16 @@ defmodule Membrane.RTP.StreamSendBinTest do
     Testing.Pipeline.play(pipeline)
 
     assert_pipeline_playback_changed(pipeline, _, :playing)
-    assert_start_of_stream(pipeline, :rtp)
     assert_start_of_stream(pipeline, :rtp_sink)
 
-    assert_sink_buffer(pipeline, :rtcp_sink, packet, 4000)
+    assert_sink_buffer(pipeline, :rtcp_sink, packet)
 
     %Membrane.Buffer{payload: packet_payload} = packet
     {:ok, [packet]} = Membrane.RTCP.Packet.parse(packet_payload)
 
     assert %Membrane.RTCP.SenderReportPacket{
              sender_info: %{
-               sender_packet_count: 50
+               sender_packet_count: 5
              }
            } = packet
 
@@ -175,7 +170,6 @@ defmodule Membrane.RTP.StreamSendBinTest do
     Testing.Pipeline.play(pipeline)
 
     assert_pipeline_playback_changed(pipeline, _, :playing)
-    assert_start_of_stream(pipeline, :rtp)
     assert_start_of_stream(pipeline, :rtp_sink)
 
     assert_end_of_stream(pipeline, :rtp_sink, :input, 4000)
@@ -198,7 +192,6 @@ defmodule Membrane.RTP.StreamSendBinTest do
     Testing.Pipeline.play(pipeline)
 
     assert_pipeline_playback_changed(pipeline, _, :playing)
-    assert_start_of_stream(pipeline, :rtp)
     assert_start_of_stream(pipeline, :rtp_sink)
 
     for _ <- 1..@frames_count do

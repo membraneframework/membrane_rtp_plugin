@@ -12,8 +12,8 @@ defmodule Membrane.RTCP.Receiver do
 
   require Membrane.Logger
 
-  def_input_pad :input, demand_unit: :buffers, caps: :any
-  def_output_pad :output, caps: :any
+  def_input_pad :input, caps: :any, demand_mode: :auto
+  def_output_pad :output, caps: :any, demand_mode: :auto
 
   def_options local_ssrc: [spec: RTP.ssrc_t()],
               remote_ssrc: [spec: RTP.ssrc_t()],
@@ -106,11 +106,6 @@ defmodule Membrane.RTCP.Receiver do
 
   @impl true
   def handle_event(pad, event, ctx, state), do: super(pad, event, ctx, state)
-
-  @impl true
-  def handle_demand(:output, size, :buffers, _ctx, state) do
-    {{:ok, demand: {:input, size}}, state}
-  end
 
   @impl true
   def handle_process(:input, buffer, _ctx, state) do

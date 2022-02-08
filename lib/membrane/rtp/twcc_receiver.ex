@@ -14,8 +14,8 @@ defmodule Membrane.RTP.TWCCReceiver do
 
   @feedback_count_limit Bitwise.bsl(1, 8)
 
-  def_input_pad :input, demand_unit: :buffers, caps: RTP, availability: :on_request
-  def_output_pad :output, caps: RTP, availability: :on_request
+  def_input_pad :input, caps: RTP, availability: :on_request, demand_mode: :auto
+  def_output_pad :output, caps: RTP, availability: :on_request, demand_mode: :auto
 
   def_options twcc_id: [
                 spec: 1..14,
@@ -73,11 +73,6 @@ defmodule Membrane.RTP.TWCCReceiver do
   @impl true
   def handle_caps(Pad.ref(:input, ssrc), caps, _ctx, state) do
     {{:ok, caps: {Pad.ref(:output, ssrc), caps}}, state}
-  end
-
-  @impl true
-  def handle_demand(Pad.ref(:output, ssrc), size, :buffers, _ctx, state) do
-    {{:ok, demand: {Pad.ref(:input, ssrc), size}}, state}
   end
 
   @impl true

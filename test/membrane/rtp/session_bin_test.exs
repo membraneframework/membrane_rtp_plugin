@@ -122,6 +122,7 @@ defmodule Membrane.RTP.Session.BinTest do
         ],
         links: [
           link(:rtcp_source)
+          |> via_in(:rtp_input)
           |> to(:rtp)
           |> via_out(Pad.ref(:rtcp_receiver_output, rtp_input_ref))
           |> to(:rtcp_sink),

@@ -11,19 +11,16 @@ defmodule Membrane.RTP.OutboundPacketTracker do
   alias Membrane.{Buffer, RTP, Payload, Time}
   alias Membrane.RTP.Session.SenderReport
 
-  def_input_pad :input,
-    caps: :any,
-    demand_unit: :buffers
+  def_input_pad :input, caps: :any, demand_mode: :auto
 
-  def_output_pad :output,
-    caps: :any
+  def_output_pad :output, caps: :any, demand_mode: :auto
 
   def_input_pad :rtcp_input,
     availability: :on_request,
     caps: :any,
-    demand_unit: :buffers
+    demand_mode: :auto
 
-  def_output_pad :rtcp_output, availability: :on_request, caps: :any
+  def_output_pad :rtcp_output, availability: :on_request, caps: :any, demand_mode: :auto
 
   def_options ssrc: [spec: RTP.ssrc_t()],
               payload_type: [spec: RTP.payload_type_t()],
@@ -80,16 +77,6 @@ defmodule Membrane.RTP.OutboundPacketTracker do
   end
 
   @impl true
-  def handle_demand(:output, size, :buffers, _ctx, state) do
-    {{:ok, demand: {:input, size}}, state}
-  end
-
-  @impl true
-  def handle_demand(Pad.ref(:rtcp_output, _id), _size, _type, _ctx, state) do
-    {:ok, state}
-  end
-
-  @impl true
   def handle_pad_added(Pad.ref(:rtcp_input, _id), _ctx, state) do
     {:ok, state}
   end
@@ -138,21 +125,22 @@ defmodule Membrane.RTP.OutboundPacketTracker do
   end
 
   @impl true
-  def handle_other(:send_stats, _ctx, %{rtcp_output_pad: nil} = state) do
-    {:ok, state}
-  end
+  def handle_other(:send_stats, ctx, state) do
+    %{rtcp_output_pad: rtcp_output} = state
 
-  @impl true
-  def handle_other(:send_stats, _ctx, state) do
-    stats = get_stats(state)
+    if rtcp_output && not ctx.pads[rtcp_output].end_of_stream? do
+      stats = get_stats(state)
 
-    actions =
-      %{state.ssrc => stats}
-      |> SenderReport.generate_report()
-      |> Enum.map(&Membrane.RTCP.Packet.serialize(&1))
-      |> Enum.map(&{:buffer, {state.rtcp_output_pad, %Membrane.Buffer{payload: &1}}})
+      actions =
+        %{state.ssrc => stats}
+        |> SenderReport.generate_report()
+        |> Enum.map(&Membrane.RTCP.Packet.serialize(&1))
+        |> Enum.map(&{:buffer, {rtcp_output, %Membrane.Buffer{payload: &1}}})
 
-    {{:ok, actions ++ [redemand: state.rtcp_output_pad]}, %{state | any_buffer_sent?: false}}
+      {{:ok, actions}, %{state | any_buffer_sent?: false}}
+    else
+      {:ok, state}
+    end
   end
 
   defp get_stats(%State{any_buffer_sent?: false}), do: :no_stats
