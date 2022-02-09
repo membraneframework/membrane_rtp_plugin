@@ -45,7 +45,7 @@ defmodule Membrane.RTP.TWCCReceiver do
             packet_info_store: PacketInfoStore.t(),
             feedback_packet_count: non_neg_integer(),
             media_ssrc: RTP.ssrc_t() | nil,
-            caps_buffer: %{Pad.ref_t() => RTP.t()}
+            actions_buffer: %{Pad.ref_t() => Qex.t()}
           }
 
     @enforce_keys [:twcc_id, :report_interval, :feedback_sender_ssrc]
@@ -54,7 +54,7 @@ defmodule Membrane.RTP.TWCCReceiver do
                   packet_info_store: %PacketInfoStore{},
                   feedback_packet_count: 0,
                   media_ssrc: nil,
-                  caps_buffer: %{}
+                  actions_buffer: %{}
                 ]
   end
 
@@ -75,19 +75,19 @@ defmodule Membrane.RTP.TWCCReceiver do
 
   @impl true
   def handle_caps(Pad.ref(:input, ssrc), caps, ctx, state) do
-    actions_or_buffer([caps: {Pad.ref(:output, ssrc), caps}], ctx, state)
+    [caps: {Pad.ref(:output, ssrc), caps}] |> send_as_actions_or_buffer(ctx, state)
   end
 
   @impl true
   def handle_pad_added(pad, _ctx, state) do
-    {actions, buffer} = Map.pop(state.caps_buffer, pad, [])
-    {{:ok, actions}, %{state | caps_buffer: buffer}}
+    {actions, buffer} = Map.pop(state.actions_buffer, pad, [])
+    {{:ok, Enum.to_list(actions)}, %{state | actions_buffer: buffer}}
   end
 
   @impl true
   def handle_event(Pad.ref(direction, ssrc), event, ctx, state) do
     opposite_direction = if direction == :input, do: :output, else: :input
-    actions_or_buffer([event: {Pad.ref(opposite_direction, ssrc), event}], ctx, state)
+    [event: {Pad.ref(opposite_direction, ssrc), event}] |> send_as_actions_or_buffer(ctx, state)
   end
 
   @impl true
@@ -113,7 +113,7 @@ defmodule Membrane.RTP.TWCCReceiver do
         state
       end
 
-    [buffer: {Pad.ref(:output, ssrc), buffer}] |> actions_or_buffer(ctx, state)
+    [buffer: {Pad.ref(:output, ssrc), buffer}] |> send_as_actions_or_buffer(ctx, state)
   end
 
   @impl true
@@ -129,13 +129,13 @@ defmodule Membrane.RTP.TWCCReceiver do
           feedback_packet_count: rem(state.feedback_packet_count + 1, @feedback_count_limit)
       }
 
-      [event: {Pad.ref(:input, state.media_ssrc), event}] |> actions_or_buffer(ctx, state)
+      [event: {Pad.ref(:input, state.media_ssrc), event}] |> send_as_actions_or_buffer(ctx, state)
     end
   end
 
   @impl true
   def handle_end_of_stream(Pad.ref(:input, ssrc), ctx, state) do
-    [end_of_stream: Pad.ref(:output, ssrc)] |> actions_or_buffer(ctx, state)
+    [end_of_stream: Pad.ref(:output, ssrc)] |> send_as_actions_or_buffer(ctx, state)
   end
 
   defp make_rtcp_event(state) do
@@ -160,25 +160,29 @@ defmodule Membrane.RTP.TWCCReceiver do
     }
   end
 
-  defp actions_or_buffer(actions, ctx, state) do
-    grouped_by_validity =
+  # Checks if actions would be valid in the current context, namely, if they don't reference the pad that hasn't been linked yet
+  # If they are valid, they are executed immediately, otherwise they are buffered and executed as soon as the pad in question is added
+  defp send_as_actions_or_buffer(actions, ctx, state) do
+    is_valid? = &if(Map.has_key?(ctx.pads, &1), do: :valid, else: :invalid)
+
+    grouped =
       Enum.group_by(actions, fn
         {action, {pad, _event}} when action in [:event, :buffer, :caps] ->
-          Map.has_key?(ctx.pads, pad)
+          is_valid?.(pad)
 
         {:end_of_stream, pad} ->
-          Map.has_key?(ctx.pads, pad)
+          is_valid?.(pad)
 
         _otherwise ->
-          true
+          :valid
       end)
 
     buffer =
-      Map.get(grouped_by_validity, false, [])
-      |> Enum.reduce(state.caps_buffer, fn {_action, {pad, _args}} = action, buffer ->
+      Map.get(grouped, :invalid, [])
+      |> Enum.reduce(state.actions_buffer, fn {_action, {pad, _args}} = action, buffer ->
         Map.update(buffer, pad, Qex.new([action]), &Qex.push(&1, action))
       end)
 
-    {{:ok, Map.get(grouped_by_validity, true, [])}, %{state | caps_buffer: buffer}}
+    {{:ok, Map.get(grouped, :valid, [])}, %{state | actions_buffer: buffer}}
   end
 end

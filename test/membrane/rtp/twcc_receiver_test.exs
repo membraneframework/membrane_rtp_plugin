@@ -44,7 +44,8 @@ defmodule Membrane.RTP.TWCCReceiverTest do
       twcc_id: @default_twcc_id,
       feedback_sender_ssrc: @feedback_sender_ssrc,
       report_interval: nil,
-      feedback_packet_count: @feedback_packet_count
+      feedback_packet_count: @feedback_packet_count,
+      actions_buffer: %{}
     }
 
     [state: state, buffer: buffer]
@@ -167,6 +168,41 @@ defmodule Membrane.RTP.TWCCReceiverTest do
                TWCCReceiver.handle_tick(:report_timer, @ctx, state)
 
       assert state.feedback_packet_count == 0
+    end
+  end
+
+  describe "When output pad is not connected, TWCC Element" do
+    setup %{state: state, buffer: buffer} do
+      {_element, ctx} = pop_in(@ctx, [:pads, @default_output_pad])
+
+      actions_buffer = %{
+        @default_input_pad => Qex.new(event: {@default_input_pad, :event})
+      }
+
+      state = Map.put(state, :actions_buffer, actions_buffer)
+
+      [
+        state: state,
+        buffer: buffer,
+        ctx: ctx
+      ]
+    end
+
+    test "will not try to execute any action", %{state: state, buffer: buffer, ctx: ctx} do
+      assert {{:ok, []}, state} =
+               TWCCReceiver.handle_process(@default_input_pad, buffer, ctx, state)
+
+      assert {{:ok, []}, state} = TWCCReceiver.handle_caps(@default_input_pad, :caps, ctx, state)
+
+      assert [buffer: {@default_output_pad, _buffer}, caps: _caps] =
+               Map.get(state.actions_buffer, @default_output_pad) |> Enum.to_list()
+    end
+
+    test "will send buffered actions when the pad connects", %{state: state, ctx: ctx} do
+      assert {{:ok, [event: {@default_input_pad, _event}]}, state} =
+               TWCCReceiver.handle_pad_added(@default_input_pad, ctx, state)
+
+      refute Map.has_key?(state.actions_buffer, @default_input_pad)
     end
   end
 end
