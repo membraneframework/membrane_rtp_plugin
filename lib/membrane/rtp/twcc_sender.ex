@@ -22,8 +22,7 @@ defmodule Membrane.RTP.TWCCSender do
     {:ok,
      %{
        seq_num: 0,
-       last_ts: nil,
-       seq_to_delta: %{},
+       seq_to_timestamp: %{},
        seq_to_size: %{},
        cc: %CongestionControl{},
        bandwidth_report_interval: Time.seconds(5)
@@ -57,11 +56,6 @@ defmodule Membrane.RTP.TWCCSender do
   end
 
   @impl true
-  def handle_demand(Pad.ref(:output, id), size, :buffers, _ctx, state) do
-    {{:ok, demand: {Pad.ref(:input, id), size}}, state}
-  end
-
-  @impl true
   def handle_event(Pad.ref(direction, id), event, _ctx, state) do
     opposite_direction = if direction == :input, do: :output, else: :input
     {{:ok, event: {Pad.ref(opposite_direction, id), event}}, state}
@@ -71,7 +65,8 @@ defmodule Membrane.RTP.TWCCSender do
   def handle_other({:twcc_feedback, feedback}, _ctx, state) do
     %TWCC{
       base_seq_num: base_seq_num,
-      feedback_packet_count: feedback_packet_count,
+      # TODO: handle lost feedbacks
+      feedback_packet_count: _feedback_packet_count,
       packet_status_count: packet_count,
       receive_deltas: receive_deltas,
       reference_time: reference_time
@@ -79,9 +74,25 @@ defmodule Membrane.RTP.TWCCSender do
 
     max_seq_num = base_seq_num + packet_count - 1
 
+    rtt =
+      Time.monotonic_time() -
+        Map.fetch!(state.seq_to_timestamp, rem(max_seq_num, @seq_number_limit))
+
     sequence_numbers = Enum.map(base_seq_num..max_seq_num, &rem(&1, @seq_number_limit))
 
-    send_deltas = Enum.map(sequence_numbers, &Map.fetch!(state.seq_to_delta, &1))
+    send_timestamps = Enum.map(sequence_numbers, &Map.fetch!(state.seq_to_timestamp, &1))
+
+    timestamp_before_base = Map.get(state.seq_to_timestamp, base_seq_num - 1, hd(send_timestamps))
+
+    send_deltas =
+      sequence_numbers
+      |> Enum.reduce({[], timestamp_before_base}, fn seq_num, {deltas, previous_timestamp} ->
+        timestamp = Map.fetch!(state.seq_to_timestamp, seq_num)
+        {[timestamp - previous_timestamp | deltas], timestamp}
+      end)
+      |> elem(0)
+      |> Enum.reverse()
+
     packet_sizes = Enum.map(sequence_numbers, &Map.fetch!(state.seq_to_size, &1))
 
     cc =
@@ -90,10 +101,16 @@ defmodule Membrane.RTP.TWCCSender do
         reference_time,
         receive_deltas,
         send_deltas,
-        packet_sizes
+        packet_sizes,
+        rtt
       )
 
-    {:ok, %{state | cc: cc}}
+    {:ok,
+     Map.merge(state, %{
+       cc: cc,
+       seq_to_size: Map.drop(state.seq_to_size, sequence_numbers),
+       seq_to_timestamp: Map.drop(state.seq_to_timestamp, Enum.drop(sequence_numbers, -1))
+     })}
   end
 
   @impl true
@@ -103,15 +120,12 @@ defmodule Membrane.RTP.TWCCSender do
     buffer =
       Header.Extension.put(buffer, %Header.Extension{identifier: :twcc, data: <<seq_num::16>>})
 
-    current_ts = Time.monotonic_time()
-    send_delta = current_ts - (state.last_ts || current_ts)
-
     state =
       state
-      |> put_in([:seq_to_delta, seq_num], send_delta)
+      |> put_in([:seq_to_timestamp, seq_num], Time.monotonic_time())
       |> put_in([:seq_to_size, seq_num], bit_size(buffer.payload))
 
-    {{:ok, buffer: {Pad.ref(:output, id), buffer}}, %{state | last_ts: current_ts}}
+    {{:ok, buffer: {Pad.ref(:output, id), buffer}}, state}
   end
 
   @impl true
