@@ -83,7 +83,7 @@ defmodule Membrane.RTP.TWCCSender do
     max_seq_num = base_seq_num + packet_count - 1
 
     rtt =
-      Time.monotonic_time() -
+      Time.vm_time() -
         Map.fetch!(state.seq_to_timestamp, rem(max_seq_num, @seq_number_limit))
 
     sequence_numbers = Enum.map(base_seq_num..max_seq_num, &rem(&1, @seq_number_limit))
@@ -125,7 +125,7 @@ defmodule Membrane.RTP.TWCCSender do
 
     state =
       state
-      |> put_in([:seq_to_timestamp, seq_num], Time.monotonic_time())
+      |> put_in([:seq_to_timestamp, seq_num], Time.vm_time())
       |> put_in([:seq_to_size, seq_num], bit_size(buffer.payload))
 
     out_pad = Pad.ref(:output, id)

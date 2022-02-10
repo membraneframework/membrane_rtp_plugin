@@ -45,7 +45,7 @@ defmodule Membrane.RTP.TWCCSender.CongestionControl do
     # timestamp indicating when we started to underuse the link
     underuse_start_ts: nil,
     # latest timestamp indicating when the receiver-side bandwidth was increased
-    last_bandwidth_increase_ts: Time.monotonic_time(),
+    last_bandwidth_increase_ts: Time.vm_time(),
     # receiver-side bandwidth estimation in bps
     a_hat: 300_000.0,
     # sender-side bandwidth estimation in bps
@@ -187,7 +187,7 @@ defmodule Membrane.RTP.TWCCSender.CongestionControl do
 
   defp make_signal(%__MODULE__{m_hat: m_hat, del_var_th: del_var_th} = cc, prev_m_hat)
        when m_hat < -del_var_th do
-    now = Time.monotonic_time()
+    now = Time.vm_time()
 
     underuse_start_ts = cc.underuse_start_ts || now
 
@@ -203,7 +203,7 @@ defmodule Membrane.RTP.TWCCSender.CongestionControl do
 
   defp make_signal(%__MODULE__{m_hat: m_hat, del_var_th: del_var_th} = cc, prev_m_hat)
        when m_hat > del_var_th do
-    now = Time.monotonic_time()
+    now = Time.vm_time()
 
     overuse_start_ts = cc.overuse_start_ts || now
 
@@ -306,7 +306,7 @@ defmodule Membrane.RTP.TWCCSender.CongestionControl do
 
     r_hat = 1 / (packet_received_interval_ms / 1000) * packet_received_sizes
 
-    now = Time.monotonic_time()
+    now = Time.vm_time()
     last_bandwidth_increase_ts = last_bandwidth_increase_ts || now
     time_since_last_update_ms = Time.to_milliseconds(now - last_bandwidth_increase_ts)
 
