@@ -11,7 +11,6 @@ defmodule Membrane.RTP.TWCCSender do
   alias __MODULE__.CongestionControl
 
   require Bitwise
-  require Membrane.Logger
 
   @seq_number_limit Bitwise.bsl(1, 16)
 

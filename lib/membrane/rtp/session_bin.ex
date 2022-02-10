@@ -573,14 +573,13 @@ defmodule Membrane.RTP.SessionBin do
   end
 
   @impl true
-  def handle_notification({:twcc_feedback, _feedback} = msg, _rtcp_parser, _ctx, state) do
-    {{:ok, forward: {:twcc_sender, msg}}, state}
+  def handle_notification({:bandwidth_estimation, _val} = msg, :twcc_sender, _ctx, state) do
+    {{:ok, notify: msg}, state}
   end
 
   @impl true
-  def handle_notification({:bandwidth_estimation, val}, :twcc_sender, _ctx, state) do
-    Membrane.Logger.info("Received bandwidth estimation: " <> inspect(val / 1000) <> "kbps")
-    {:ok, state}
+  def handle_notification({:twcc_feedback, _feedback} = msg, _rtcp_parser, _ctx, state) do
+    {{:ok, forward: {:twcc_sender, msg}}, state}
   end
 
   defp add_ssrc(remote_ssrc, state) do
