@@ -579,7 +579,7 @@ defmodule Membrane.RTP.SessionBin do
 
   @impl true
   def handle_notification({:bandwidth_estimation, val}, :twcc_sender, _ctx, state) do
-    Membrane.Logger.error("Received bandwidth estimation: " <> inspect(val / 1000) <> "kbps")
+    Membrane.Logger.info("Received bandwidth estimation: " <> inspect(val / 1000) <> "kbps")
     {:ok, state}
   end
 
@@ -658,8 +658,7 @@ defmodule Membrane.RTP.SessionBin do
     # Workaround: as TWCC is a transport-wide extension, there should exist only one TWCC sender
     # child that handles packets for all outgoing streams. As there is no support for declaring
     # outbound extensions, outbound TWCC will be enabled if inbound TWCC has been enabled.
-    # Map.has_key?(ctx.children, :twcc_receiver)
-    should_link? = true
+    should_link? = Map.has_key?(ctx.children, :twcc_receiver)
     should_create_child? = not Map.has_key?(ctx.children, :twcc_sender)
 
     if should_link? do

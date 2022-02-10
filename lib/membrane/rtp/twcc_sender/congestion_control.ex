@@ -6,6 +6,7 @@ defmodule Membrane.RTP.TWCCSender.CongestionControl do
 
   require Membrane.Logger
 
+  # disable Credo naming checks to use the RFC notation
   # credo:disable-for-this-file /(ModuleAttributeNames|VariableNames)/
 
   # state noise covariance
@@ -23,11 +24,8 @@ defmodule Membrane.RTP.TWCCSender.CongestionControl do
   # alpha factor for exponential moving average
   @ema_smoothing_factor 0.95
 
-  @last_rates_probe_size 10
-  @last_receive_bandwidth_probe_size 10
-
-  # upper limit for sender-side bandwidth in bps
-  @sender_side_bandwidth_cap 1_000_000_000
+  @last_receive_rates_probe_size 25
+  @last_receive_bandwidth_probe_size 25
 
   defstruct [
     # inter-packet delay estimate (in ms)
@@ -39,19 +37,19 @@ defmodule Membrane.RTP.TWCCSender.CongestionControl do
     # initial value for the adaptive threshold, 12.5ms
     del_var_th: 12.5,
     # last rates at which packets were received
-    last_rates: [],
+    last_receive_rates: [],
     # current delay-based controller state
     state: :increase,
     # timestamp indicating when we started to overuse the link
     overuse_start_ts: nil,
     # timestamp indicating when we started to underuse the link
     underuse_start_ts: nil,
-    # latest timestamp indicating when the receiver-side bandwidth was updated
-    last_bandwidth_update_ts: Time.monotonic_time(),
+    # latest timestamp indicating when the receiver-side bandwidth was increased
+    last_bandwidth_increase_ts: Time.monotonic_time(),
     # receiver-side bandwidth estimation in bps
-    a_hat: 300_000_000.0,
+    a_hat: 300_000.0,
     # sender-side bandwidth estimation in bps
-    as_hat: 300_000_000.0,
+    as_hat: 300_000.0,
     # latest estimates of receiver-side bandwidth
     r_hats: [],
     # time window for measuring the received bitrate, between [0.5, 1]s (reffered to as "T" in the RFC)
@@ -71,11 +69,11 @@ defmodule Membrane.RTP.TWCCSender.CongestionControl do
           e: float(),
           var_v_hat: float(),
           del_var_th: float(),
-          last_rates: [float()],
+          last_receive_rates: [float()],
           state: :increase | :decrease | :hold,
           overuse_start_ts: Time.t() | nil,
           underuse_start_ts: Time.t() | nil,
-          last_bandwidth_update_ts: Time.t() | nil,
+          last_bandwidth_increase_ts: Time.t(),
           a_hat: float(),
           as_hat: float(),
           r_hats: [float()],
@@ -87,29 +85,18 @@ defmodule Membrane.RTP.TWCCSender.CongestionControl do
   @spec update(t(), Time.t(), [Time.t() | :not_received], [Time.t()], [pos_integer()], Time.t()) ::
           t()
   def update(
-        %__MODULE__{m_hat: prev_m_hat} = cc,
+        %__MODULE__{} = cc,
         reference_time,
         receive_deltas,
         send_deltas,
         packet_sizes,
         rtt
       ) do
-    receive_deltas =
-      Enum.map(receive_deltas, fn delta ->
-        if delta == :not_received, do: delta, else: Time.to_milliseconds(delta)
-      end)
-
-    send_deltas = Enum.map(send_deltas, &Time.to_milliseconds/1)
-
-    rtt = Time.to_milliseconds(rtt)
-
     cc
     |> update_metrics(receive_deltas, send_deltas)
-    |> make_signal(prev_m_hat)
-    |> then(fn {signal, cc} -> update_state(cc, signal) end)
     |> store_packet_received_sizes(reference_time, receive_deltas, packet_sizes)
-    |> maybe_increase_bandwidth(packet_sizes, rtt)
-    |> update_loss(receive_deltas)
+    |> update_receiver_bandwidth(packet_sizes, rtt)
+    |> update_sender_bandwidth(receive_deltas)
   end
 
   defp update_metrics(cc, [], []), do: cc
@@ -148,20 +135,20 @@ defmodule Membrane.RTP.TWCCSender.CongestionControl do
       e: e,
       var_v_hat: var_v_hat,
       del_var_th: del_var_th,
-      last_rates: last_rates
+      last_receive_rates: last_receive_rates
     } = cc
 
-    interpacket_delta = recv_delta - send_delta
+    [recv_delta_ms, send_delta_ms] = Enum.map([recv_delta, send_delta], &Time.to_milliseconds/1)
+
+    interpacket_delta = recv_delta_ms - send_delta_ms
 
     z = interpacket_delta - prev_m_hat
 
-    last_rates = [1 / max(recv_delta, 1) | last_rates]
+    last_receive_rates = [1 / max(recv_delta_ms, 1) | last_receive_rates]
 
-    f_max = Enum.max(last_rates)
+    f_max = Enum.max(last_receive_rates)
 
     alpha = :math.pow(1 - @chi, 30 / (1000 * f_max))
-
-    # alpha = 0.95
 
     var_v_hat = max(alpha * var_v_hat + (1 - alpha) * z * z, 1)
 
@@ -177,33 +164,25 @@ defmodule Membrane.RTP.TWCCSender.CongestionControl do
     del_var_th =
       if abs_m_hat - del_var_th <= 15 do
         coeff_K = if abs_m_hat < del_var_th, do: @coeff_K_d, else: @coeff_K_u
-        gain = recv_delta * coeff_K * (abs_m_hat - del_var_th)
+        gain = recv_delta_ms * coeff_K * (abs_m_hat - del_var_th)
         max(min(del_var_th + gain, 600), 6)
       else
         del_var_th
       end
-
-    # Membrane.Logger.error("m_hat: " <> inspect(m_hat))
-    # Membrane.Logger.error("del_var_th: " <> inspect(del_var_th))
-    # Membrane.Logger.error("z: " <> inspect(z))
-    # Membrane.Logger.error("f_max: " <> inspect(f_max))
-    # Membrane.Logger.error("alpha: " <> inspect(alpha))
-    # Membrane.Logger.error("var_v_hat: " <> inspect(var_v_hat))
-    # Membrane.Logger.error("k: " <> inspect(k))
-    # Membrane.Logger.error("e: " <> inspect(e))
-    # Membrane.Logger.error("state: " <> inspect(cc.state))
-    # Membrane.Logger.error("--------------------------")
 
     cc = %__MODULE__{
       cc
       | m_hat: m_hat,
         var_v_hat: var_v_hat,
         e: e,
-        last_rates: Enum.take(last_rates, @last_rates_probe_size),
+        last_receive_rates: Enum.take(last_receive_rates, @last_receive_rates_probe_size),
         del_var_th: del_var_th
     }
 
-    update_metrics(cc, recv_deltas, send_deltas)
+    cc
+    |> make_signal(prev_m_hat)
+    |> then(fn {signal, cc} -> update_state(cc, signal) end)
+    |> update_metrics(recv_deltas, send_deltas)
   end
 
   defp make_signal(%__MODULE__{m_hat: m_hat, del_var_th: del_var_th} = cc, prev_m_hat)
@@ -255,19 +234,16 @@ defmodule Membrane.RTP.TWCCSender.CongestionControl do
   defp update_state(cc, signal)
 
   defp update_state(%__MODULE__{state: :hold} = cc, :overuse),
-    do: %__MODULE__{cc | state: :decrease, a_hat: @beta * cc.a_hat}
+    do: %__MODULE__{cc | state: :decrease}
 
   defp update_state(%__MODULE__{state: :hold} = cc, :normal),
     do: %__MODULE__{cc | state: :increase}
 
   defp update_state(%__MODULE__{state: :increase} = cc, :overuse),
-    do: %__MODULE__{cc | state: :decrease, a_hat: @beta * cc.a_hat}
+    do: %__MODULE__{cc | state: :decrease}
 
   defp update_state(%__MODULE__{state: :increase} = cc, :underuse),
     do: %__MODULE__{cc | state: :hold}
-
-  defp update_state(%__MODULE__{state: :decrease} = cc, :overuse),
-    do: %__MODULE__{cc | a_hat: @beta * cc.a_hat}
 
   defp update_state(%__MODULE__{state: :decrease} = cc, :normal),
     do: %__MODULE__{cc | state: :hold}
@@ -290,8 +266,8 @@ defmodule Membrane.RTP.TWCCSender.CongestionControl do
       |> Enum.filter(fn {delta, _size} -> delta != :not_received end)
       |> Enum.unzip()
 
-    time_received = Enum.scan(receive_deltas, reference_time, &(&1 + &2))
-    {earliest_packet_ts, latest_packet_ts} = Enum.min_max(time_received)
+    timestamp_received = Enum.scan(receive_deltas, reference_time, &(&1 + &2))
+    {earliest_packet_ts, latest_packet_ts} = Enum.min_max(timestamp_received)
 
     packet_received_interval_start = packet_received_interval_start || earliest_packet_ts
     packet_received_interval_end = packet_received_interval_end || latest_packet_ts
@@ -304,7 +280,10 @@ defmodule Membrane.RTP.TWCCSender.CongestionControl do
     }
   end
 
-  defp maybe_increase_bandwidth(
+  defp update_receiver_bandwidth(%__MODULE__{state: :decrease} = cc, _packet_sizes, _rtt),
+    do: %__MODULE__{cc | a_hat: @beta * cc.a_hat}
+
+  defp update_receiver_bandwidth(
          %__MODULE__{
            state: :increase,
            packet_received_interval_end: packet_received_interval_end,
@@ -318,7 +297,7 @@ defmodule Membrane.RTP.TWCCSender.CongestionControl do
     %__MODULE__{
       r_hats: r_hats,
       a_hat: prev_a_hat,
-      last_bandwidth_update_ts: last_bandwidth_update_ts,
+      last_bandwidth_increase_ts: last_bandwidth_increase_ts,
       packet_received_sizes: packet_received_sizes
     } = cc
 
@@ -328,8 +307,8 @@ defmodule Membrane.RTP.TWCCSender.CongestionControl do
     r_hat = 1 / (packet_received_interval_ms / 1000) * packet_received_sizes
 
     now = Time.monotonic_time()
-    last_bandwidth_update_ts = last_bandwidth_update_ts || now
-    time_since_last_update_ms = Time.to_milliseconds(now - last_bandwidth_update_ts)
+    last_bandwidth_increase_ts = last_bandwidth_increase_ts || now
+    time_since_last_update_ms = Time.to_milliseconds(now - last_bandwidth_increase_ts)
 
     a_hat =
       case bitrate_increase_mode(r_hat, cc) do
@@ -338,7 +317,7 @@ defmodule Membrane.RTP.TWCCSender.CongestionControl do
           eta * prev_a_hat
 
         :additive ->
-          response_time_ms = 100 + rtt
+          response_time_ms = 100 + Time.to_milliseconds(rtt)
           alpha = 0.5 * min(time_since_last_update_ms / response_time_ms, 1)
           expected_packet_size_bits = Enum.sum(packet_sizes) / length(packet_sizes)
           prev_a_hat + max(1000, alpha * expected_packet_size_bits)
@@ -350,16 +329,16 @@ defmodule Membrane.RTP.TWCCSender.CongestionControl do
       cc
       | a_hat: a_hat,
         r_hats: Enum.take([r_hat | r_hats], @last_receive_bandwidth_probe_size),
-        last_bandwidth_update_ts: now,
+        last_bandwidth_increase_ts: now,
         packet_received_interval_end: nil,
         packet_received_interval_start: nil,
         packet_received_sizes: 0
     }
   end
 
-  defp maybe_increase_bandwidth(cc, _packet_sizes, _rtt), do: cc
+  defp update_receiver_bandwidth(cc, _packet_sizes, _rtt), do: cc
 
-  defp update_loss(%__MODULE__{as_hat: as_hat} = cc, receive_deltas) do
+  defp update_sender_bandwidth(%__MODULE__{as_hat: as_hat, a_hat: a_hat} = cc, receive_deltas) do
     lost = Enum.count(receive_deltas, &(&1 == :not_received))
     loss_ratio = lost / length(receive_deltas)
 
@@ -370,21 +349,21 @@ defmodule Membrane.RTP.TWCCSender.CongestionControl do
         true -> as_hat
       end
 
-    %__MODULE__{cc | as_hat: min(as_hat, @sender_side_bandwidth_cap)}
+    %__MODULE__{cc | as_hat: min(as_hat, 1.5 * a_hat)}
   end
 
   defp bitrate_increase_mode(_r_hat, %__MODULE__{r_hats: prev_r_hats})
-       when length(prev_r_hats) < 2,
+       when length(prev_r_hats) < @last_receive_bandwidth_probe_size,
        do: :multiplicative
 
   defp bitrate_increase_mode(r_hat, %__MODULE__{r_hats: prev_r_hats}) do
     exp_average = exponential_moving_average(@ema_smoothing_factor, prev_r_hats)
     std_dev = std_dev(prev_r_hats)
 
-    if r_hat > exp_average + 3 * std_dev do
-      :multiplicative
-    else
+    if abs(r_hat - exp_average) <= 3 * std_dev do
       :additive
+    else
+      :multiplicative
     end
   end
 

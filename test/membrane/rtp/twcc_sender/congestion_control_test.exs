@@ -4,8 +4,6 @@ defmodule Membrane.RTP.TWCCSender.CongestionControlTest do
   alias Membrane.Time
   alias Membrane.RTP.TWCCSender.CongestionControl
 
-  require Logger
-
   defp simulate_updates(cc, [], [], [], [], []), do: cc
 
   defp simulate_updates(
@@ -62,8 +60,8 @@ defmodule Membrane.RTP.TWCCSender.CongestionControlTest do
   describe "Delay-based controller" do
     setup %{cc: %CongestionControl{a_hat: target_bandwidth} = cc} do
       # Setup:
-      # 20 reports delivered in a regular 100ms interval -> simulating 2s of bandwidth estimation process
-      # 10 packets per report gives us 100 packets/s
+      # 20 reports delivered in a regular 200ms interval -> simulating 4s of bandwidth estimation process
+      # 10 packets per report gives us 50 packets/s
       n_reports = 20
       packets_per_report = 10
       report_interval_ms = 200
@@ -92,7 +90,7 @@ defmodule Membrane.RTP.TWCCSender.CongestionControlTest do
       rtts: rtts
     } do
       receive_deltas =
-        Time.milliseconds(10)
+        Time.milliseconds(5)
         |> List.duplicate(n_reports)
         |> Enum.map(&List.duplicate(&1, packets_per_report))
 
@@ -135,10 +133,10 @@ defmodule Membrane.RTP.TWCCSender.CongestionControlTest do
         )
 
       assert cc.state == :decrease
-      assert cc.a_hat < 0.75 * initial_bwe
+      assert cc.a_hat < 0.8 * initial_bwe
     end
 
-    test "increases estimated receive bandwidth if interpacket delay decreases", %{
+    test "starts to increase estimated receive bandwidth if interpacket delay decreases", %{
       cc: %CongestionControl{a_hat: initial_bwe} = cc,
       n_reports: n_reports,
       packets_per_report: packets_per_report,

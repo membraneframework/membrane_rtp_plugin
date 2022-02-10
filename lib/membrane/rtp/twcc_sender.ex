@@ -1,6 +1,7 @@
 defmodule Membrane.RTP.TWCCSender do
   @moduledoc """
-  The module defines an element responsible for tagging outgoing packets with transport-wide sequence numbers.
+  The module defines an element responsible for tagging outgoing packets with transport-wide sequence numbers and
+  estimating available bandwidth.
   """
   use Membrane.Filter
 
@@ -25,19 +26,26 @@ defmodule Membrane.RTP.TWCCSender do
        seq_to_timestamp: %{},
        seq_to_size: %{},
        cc: %CongestionControl{},
-       bandwidth_report_interval: Time.seconds(5)
+       bandwidth_report_interval: Time.seconds(5),
+       buffered_actions: %{}
      }}
   end
 
   @impl true
-  def handle_pad_added(_pad, _ctx, state), do: {:ok, %{state | cc: %CongestionControl{}}}
+  def handle_pad_added(pad, _ctx, state) do
+    {queued_actions, other_actions} = Map.pop(state.buffered_actions, pad, [])
+
+    {{:ok, Enum.to_list(queued_actions)},
+     %{state | cc: %CongestionControl{}, buffered_actions: other_actions}}
+  end
 
   @impl true
   def handle_pad_removed(_pad, _ctx, state), do: {:ok, %{state | cc: %CongestionControl{}}}
 
   @impl true
-  def handle_caps(Pad.ref(:input, id), caps, _ctx, state) do
-    {{:ok, caps: {Pad.ref(:output, id), caps}}, state}
+  def handle_caps(Pad.ref(:input, id), caps, ctx, state) do
+    out_pad = Pad.ref(:output, id)
+    [caps: {out_pad, caps}] |> send_when_pad_connected(out_pad, ctx, state)
   end
 
   @impl true
@@ -56,20 +64,21 @@ defmodule Membrane.RTP.TWCCSender do
   end
 
   @impl true
-  def handle_event(Pad.ref(direction, id), event, _ctx, state) do
+  def handle_event(Pad.ref(direction, id), event, ctx, state) do
     opposite_direction = if direction == :input, do: :output, else: :input
-    {{:ok, event: {Pad.ref(opposite_direction, id), event}}, state}
+    out_pad = Pad.ref(opposite_direction, id)
+    [event: {out_pad, event}] |> send_when_pad_connected(out_pad, ctx, state)
   end
 
   @impl true
   def handle_other({:twcc_feedback, feedback}, _ctx, state) do
     %TWCC{
-      base_seq_num: base_seq_num,
-      # TODO: handle lost feedbacks
+      # TODO: consider what to do when we lose some feedback
       feedback_packet_count: _feedback_packet_count,
+      reference_time: reference_time,
+      base_seq_num: base_seq_num,
       packet_status_count: packet_count,
-      receive_deltas: receive_deltas,
-      reference_time: reference_time
+      receive_deltas: receive_deltas
     } = feedback
 
     max_seq_num = base_seq_num + packet_count - 1
@@ -105,16 +114,11 @@ defmodule Membrane.RTP.TWCCSender do
         rtt
       )
 
-    {:ok,
-     Map.merge(state, %{
-       cc: cc,
-       seq_to_size: Map.drop(state.seq_to_size, sequence_numbers),
-       seq_to_timestamp: Map.drop(state.seq_to_timestamp, Enum.drop(sequence_numbers, -1))
-     })}
+    {:ok, %{state | cc: cc}}
   end
 
   @impl true
-  def handle_process(Pad.ref(:input, id), buffer, _ctx, state) do
+  def handle_process(Pad.ref(:input, id), buffer, ctx, state) do
     {seq_num, state} = Map.get_and_update!(state, :seq_num, &{&1, rem(&1 + 1, @seq_number_limit)})
 
     buffer =
@@ -125,11 +129,28 @@ defmodule Membrane.RTP.TWCCSender do
       |> put_in([:seq_to_timestamp, seq_num], Time.monotonic_time())
       |> put_in([:seq_to_size, seq_num], bit_size(buffer.payload))
 
-    {{:ok, buffer: {Pad.ref(:output, id), buffer}}, state}
+    out_pad = Pad.ref(:output, id)
+    [buffer: {out_pad, buffer}] |> send_when_pad_connected(out_pad, ctx, state)
   end
 
   @impl true
-  def handle_end_of_stream(Pad.ref(:input, id), _ctx, state) do
-    {{:ok, end_of_stream: Pad.ref(:output, id)}, state}
+  def handle_end_of_stream(Pad.ref(:input, id), ctx, state) do
+    out_pad = Pad.ref(:output, id)
+    [end_of_stream: out_pad] |> send_when_pad_connected(out_pad, ctx, state)
+  end
+
+  defp send_when_pad_connected(actions, pad, ctx, state) do
+    if Map.has_key?(ctx.pads, pad) do
+      {{:ok, actions}, state}
+    else
+      new_actions = Qex.new(actions)
+
+      {:ok,
+       %{
+         state
+         | buffered_actions:
+             Map.update(state.buffered_actions, pad, new_actions, &Qex.join(&1, new_actions))
+       }}
+    end
   end
 end
