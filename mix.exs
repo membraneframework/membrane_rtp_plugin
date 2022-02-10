@@ -84,6 +84,7 @@ defmodule Membrane.RTP.Plugin.MixProject do
       {:membrane_element_udp, "~> 0.6.0", only: :test},
       {:membrane_hackney_plugin, "~> 0.6.0", only: :test},
       {:ex_libsrtp, "~> 0.3.0", optional: true},
+      {:qex, "~> 0.5.1"},
       {:bunch, "~> 1.0"},
       {:heap, "~> 2.0.2"},
       {:bimap, "~> 1.1.0"},

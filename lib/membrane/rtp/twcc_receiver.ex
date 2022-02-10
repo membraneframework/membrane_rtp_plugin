@@ -43,7 +43,8 @@ defmodule Membrane.RTP.TWCCReceiver do
             report_interval: Time.t(),
             packet_info_store: PacketInfoStore.t(),
             feedback_packet_count: non_neg_integer(),
-            media_ssrc: RTP.ssrc_t() | nil
+            media_ssrc: RTP.ssrc_t() | nil,
+            buffered_actions: %{Pad.ref_t() => Qex.t()}
           }
 
     @enforce_keys [:twcc_id, :report_interval, :feedback_sender_ssrc]
@@ -51,7 +52,8 @@ defmodule Membrane.RTP.TWCCReceiver do
                 [
                   packet_info_store: %PacketInfoStore{},
                   feedback_packet_count: 0,
-                  media_ssrc: nil
+                  media_ssrc: nil,
+                  buffered_actions: %{}
                 ]
   end
 
@@ -71,14 +73,30 @@ defmodule Membrane.RTP.TWCCReceiver do
   end
 
   @impl true
-  def handle_caps(Pad.ref(:input, ssrc), caps, _ctx, state) do
-    {{:ok, caps: {Pad.ref(:output, ssrc), caps}}, state}
+  def handle_caps(Pad.ref(:input, ssrc), caps, ctx, state) do
+    pad = Pad.ref(:output, ssrc)
+    actions = [caps: {pad, caps}]
+
+    if Map.has_key?(ctx.pads, pad),
+      do: {{:ok, actions}, state},
+      else: {:ok, buffer_actions(actions, pad, state)}
   end
 
   @impl true
-  def handle_event(Pad.ref(direction, ssrc), event, _ctx, state) do
+  def handle_pad_added(pad, _ctx, state) do
+    {actions, buffer} = Map.pop(state.buffered_actions, pad, [])
+    {{:ok, Enum.to_list(actions)}, %{state | buffered_actions: buffer}}
+  end
+
+  @impl true
+  def handle_event(Pad.ref(direction, ssrc), event, ctx, state) do
     opposite_direction = if direction == :input, do: :output, else: :input
-    {{:ok, event: {Pad.ref(opposite_direction, ssrc), event}}, state}
+    pad = Pad.ref(opposite_direction, ssrc)
+    actions = [event: {pad, event}]
+
+    if Map.has_key?(ctx.pads, pad),
+      do: {{:ok, actions}, state},
+      else: {:ok, buffer_actions(actions, pad, state)}
   end
 
   @impl true
@@ -91,7 +109,7 @@ defmodule Membrane.RTP.TWCCReceiver do
   end
 
   @impl true
-  def handle_process(Pad.ref(:input, ssrc), buffer, _ctx, state) do
+  def handle_process(Pad.ref(:input, ssrc), buffer, ctx, state) do
     {extension, buffer} = Header.Extension.pop(buffer, state.twcc_id)
 
     state =
@@ -104,11 +122,16 @@ defmodule Membrane.RTP.TWCCReceiver do
         state
       end
 
-    {{:ok, buffer: {Pad.ref(:output, ssrc), buffer}}, state}
+    pad = Pad.ref(:output, ssrc)
+    actions = [buffer: {pad, buffer}]
+
+    if Map.has_key?(ctx.pads, pad),
+      do: {{:ok, actions}, state},
+      else: {:ok, buffer_actions(actions, pad, state)}
   end
 
   @impl true
-  def handle_tick(:report_timer, _ctx, %State{packet_info_store: store} = state) do
+  def handle_tick(:report_timer, ctx, %State{packet_info_store: store} = state) do
     if PacketInfoStore.empty?(store) or state.media_ssrc == nil do
       {:ok, state}
     else
@@ -120,13 +143,23 @@ defmodule Membrane.RTP.TWCCReceiver do
           feedback_packet_count: rem(state.feedback_packet_count + 1, @feedback_count_limit)
       }
 
-      {{:ok, event: {Pad.ref(:input, state.media_ssrc), event}}, state}
+      pad = Pad.ref(:input, state.media_ssrc)
+      actions = [event: {pad, event}]
+
+      if Map.has_key?(ctx.pads, pad),
+        do: {{:ok, actions}, state},
+        else: {:ok, buffer_actions(actions, pad, state)}
     end
   end
 
   @impl true
-  def handle_end_of_stream(Pad.ref(:input, ssrc), _ctx, state) do
-    {{:ok, end_of_stream: Pad.ref(:output, ssrc)}, state}
+  def handle_end_of_stream(Pad.ref(:input, ssrc), ctx, state) do
+    pad = Pad.ref(:output, ssrc)
+    actions = [end_of_stream: pad]
+
+    if Map.has_key?(ctx.pads, pad),
+      do: {{:ok, actions}, state},
+      else: {:ok, buffer_actions(actions, pad, state)}
   end
 
   defp make_rtcp_event(state) do
@@ -148,6 +181,15 @@ defmodule Membrane.RTP.TWCCReceiver do
         media_ssrc: media_ssrc,
         payload: struct!(TransportFeedbackPacket.TWCC, stats)
       }
+    }
+  end
+
+  defp buffer_actions(actions, pad, state) do
+    actions = Qex.new(actions)
+
+    %State{
+      state
+      | buffered_actions: Map.update(state.buffered_actions, pad, actions, &Qex.join(&1, actions))
     }
   end
 end
