@@ -45,7 +45,7 @@ defmodule Membrane.RTP.TWCCReceiver do
             packet_info_store: PacketInfoStore.t(),
             feedback_packet_count: non_neg_integer(),
             media_ssrc: RTP.ssrc_t() | nil,
-            actions_buffer: %{Pad.ref_t() => Qex.t()}
+            buffered_actions: %{Pad.ref_t() => Qex.t()}
           }
 
     @enforce_keys [:twcc_id, :report_interval, :feedback_sender_ssrc]
@@ -54,7 +54,7 @@ defmodule Membrane.RTP.TWCCReceiver do
                   packet_info_store: %PacketInfoStore{},
                   feedback_packet_count: 0,
                   media_ssrc: nil,
-                  actions_buffer: %{}
+                  buffered_actions: %{}
                 ]
   end
 
@@ -75,19 +75,29 @@ defmodule Membrane.RTP.TWCCReceiver do
 
   @impl true
   def handle_caps(Pad.ref(:input, ssrc), caps, ctx, state) do
-    [caps: {Pad.ref(:output, ssrc), caps}] |> send_as_actions_or_buffer(ctx, state)
+    pad = Pad.ref(:output, ssrc)
+    actions = [caps: {pad, caps}]
+
+    if Map.has_key?(ctx.pads, pad),
+      do: {{:ok, actions}, state},
+      else: {:ok, buffer_actions(actions, pad, state)}
   end
 
   @impl true
   def handle_pad_added(pad, _ctx, state) do
-    {actions, buffer} = Map.pop(state.actions_buffer, pad, [])
-    {{:ok, Enum.to_list(actions)}, %{state | actions_buffer: buffer}}
+    {actions, buffer} = Map.pop(state.buffered_actions, pad, [])
+    {{:ok, Enum.to_list(actions)}, %{state | buffered_actions: buffer}}
   end
 
   @impl true
   def handle_event(Pad.ref(direction, ssrc), event, ctx, state) do
     opposite_direction = if direction == :input, do: :output, else: :input
-    [event: {Pad.ref(opposite_direction, ssrc), event}] |> send_as_actions_or_buffer(ctx, state)
+    pad = Pad.ref(opposite_direction, ssrc)
+    actions = [event: {pad, event}]
+
+    if Map.has_key?(ctx.pads, pad),
+      do: {{:ok, actions}, state},
+      else: {:ok, buffer_actions(actions, pad, state)}
   end
 
   @impl true
@@ -113,7 +123,12 @@ defmodule Membrane.RTP.TWCCReceiver do
         state
       end
 
-    [buffer: {Pad.ref(:output, ssrc), buffer}] |> send_as_actions_or_buffer(ctx, state)
+    pad = Pad.ref(:output, ssrc)
+    actions = [buffer: {pad, buffer}]
+
+    if Map.has_key?(ctx.pads, pad),
+      do: {{:ok, actions}, state},
+      else: {:ok, buffer_actions(actions, pad, state)}
   end
 
   @impl true
@@ -129,13 +144,23 @@ defmodule Membrane.RTP.TWCCReceiver do
           feedback_packet_count: rem(state.feedback_packet_count + 1, @feedback_count_limit)
       }
 
-      [event: {Pad.ref(:input, state.media_ssrc), event}] |> send_as_actions_or_buffer(ctx, state)
+      pad = Pad.ref(:input, state.media_ssrc)
+      actions = [event: {pad, event}]
+
+      if Map.has_key?(ctx.pads, pad),
+        do: {{:ok, actions}, state},
+        else: {:ok, buffer_actions(actions, pad, state)}
     end
   end
 
   @impl true
   def handle_end_of_stream(Pad.ref(:input, ssrc), ctx, state) do
-    [end_of_stream: Pad.ref(:output, ssrc)] |> send_as_actions_or_buffer(ctx, state)
+    pad = Pad.ref(:output, ssrc)
+    actions = [end_of_stream: pad]
+
+    if Map.has_key?(ctx.pads, pad),
+      do: {{:ok, actions}, state},
+      else: {:ok, buffer_actions(actions, pad, state)}
   end
 
   defp make_rtcp_event(state) do
@@ -160,29 +185,12 @@ defmodule Membrane.RTP.TWCCReceiver do
     }
   end
 
-  # Checks if actions would be valid in the current context, namely, if they don't reference the pad that hasn't been linked yet
-  # If they are valid, they are executed immediately, otherwise they are buffered and executed as soon as the pad in question is added
-  defp send_as_actions_or_buffer(actions, ctx, state) do
-    is_valid? = &if(Map.has_key?(ctx.pads, &1), do: :valid, else: :invalid)
+  defp buffer_actions(actions, pad, state) do
+    actions = Qex.new(actions)
 
-    grouped =
-      Enum.group_by(actions, fn
-        {action, {pad, _event}} when action in [:event, :buffer, :caps] ->
-          is_valid?.(pad)
-
-        {:end_of_stream, pad} ->
-          is_valid?.(pad)
-
-        _otherwise ->
-          :valid
-      end)
-
-    buffer =
-      Map.get(grouped, :invalid, [])
-      |> Enum.reduce(state.actions_buffer, fn {_action, {pad, _args}} = action, buffer ->
-        Map.update(buffer, pad, Qex.new([action]), &Qex.push(&1, action))
-      end)
-
-    {{:ok, Map.get(grouped, :valid, [])}, %{state | actions_buffer: buffer}}
+    %State{
+      state
+      | buffered_actions: Map.update(state.buffered_actions, pad, actions, &Qex.join(&1, actions))
+    }
   end
 end
