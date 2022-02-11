@@ -26,7 +26,7 @@ defmodule Membrane.RTP.JitterBufferTest do
 
     test "start of stream starts timer that changes state", %{state: state} do
       assert {:ok, state} = JitterBuffer.handle_start_of_stream(:input, %{}, state)
-      assert_receive message, (state.latency |> Membrane.Time.to_milliseconds()) + 2
+      assert_receive message, (state.latency |> Membrane.Time.to_milliseconds()) + 5
       assert {{:ok, []}, final_state} = JitterBuffer.handle_other(message, %{}, state)
       assert final_state.waiting? == false
     end
