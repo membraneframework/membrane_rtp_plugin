@@ -94,12 +94,11 @@ defmodule Membrane.RTP.TWCCSender do
 
     send_deltas =
       sequence_numbers
-      |> Enum.reduce({[], timestamp_before_base}, fn seq_num, {deltas, previous_timestamp} ->
+      |> Enum.map_reduce(timestamp_before_base, fn seq_num, previous_timestamp ->
         timestamp = Map.fetch!(state.seq_to_timestamp, seq_num)
-        {[timestamp - previous_timestamp | deltas], timestamp}
+        {timestamp - previous_timestamp, timestamp}
       end)
       |> elem(0)
-      |> Enum.reverse()
 
     packet_sizes = Enum.map(sequence_numbers, &Map.fetch!(state.seq_to_size, &1))
 
@@ -142,14 +141,10 @@ defmodule Membrane.RTP.TWCCSender do
     if Map.has_key?(ctx.pads, pad) do
       {{:ok, actions}, state}
     else
-      new_actions = Qex.new(actions)
+      state =
+        update_in(state, [:buffered_actions, pad], &Qex.join(&1 || Qex.new(), Qex.new(actions)))
 
-      {:ok,
-       %{
-         state
-         | buffered_actions:
-             Map.update(state.buffered_actions, pad, new_actions, &Qex.join(&1, new_actions))
-       }}
+      {:ok, state}
     end
   end
 end
