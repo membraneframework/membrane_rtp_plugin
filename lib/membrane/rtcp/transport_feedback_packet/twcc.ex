@@ -28,7 +28,7 @@ defmodule Membrane.RTCP.TransportFeedbackPacket.TWCC do
     :feedback_packet_count
   ]
 
-  @type t :: %{
+  @type t :: %__MODULE__{
           base_seq_num: non_neg_integer(),
           reference_time: Time.t(),
           packet_status_count: pos_integer(),
@@ -186,7 +186,7 @@ defmodule Membrane.RTCP.TransportFeedbackPacket.TWCC do
          [:small_delta | rest_status],
          parsed_deltas
        ) do
-    parse_receive_deltas(rest, rest_status, [Time.microseconds(delta) * 250 | parsed_deltas])
+    parse_receive_deltas(rest, rest_status, [Time.microseconds(delta * 250) | parsed_deltas])
   end
 
   defp parse_receive_deltas(
@@ -194,7 +194,7 @@ defmodule Membrane.RTCP.TransportFeedbackPacket.TWCC do
          [:large_or_negative_delta | rest_status],
          parsed_deltas
        ) do
-    parse_receive_deltas(rest, rest_status, [Time.microseconds(delta) * 250 | parsed_deltas])
+    parse_receive_deltas(rest, rest_status, [Time.microseconds(delta * 250) | parsed_deltas])
   end
 
   defp parse_receive_deltas(_payload, [:reserved | _rest_status], _parsed_deltas),

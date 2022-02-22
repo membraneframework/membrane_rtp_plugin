@@ -105,18 +105,17 @@ defmodule Membrane.RTP.TWCCReceiver.PacketInfoStore do
 
     receive_deltas =
       base_seq_num..max_seq_num
-      |> Enum.reduce({[], reference_time}, fn seq_num, {deltas, previous_timestamp} ->
+      |> Enum.map_reduce(reference_time, fn seq_num, previous_timestamp ->
         case Map.get(seq_to_timestamp, seq_num) do
           nil ->
-            {[:not_received | deltas], previous_timestamp}
+            {:not_received, previous_timestamp}
 
           timestamp ->
             delta = timestamp - previous_timestamp
-            {[delta | deltas], timestamp}
+            {delta, timestamp}
         end
       end)
       |> elem(0)
-      |> Enum.reverse()
 
     {reference_time, receive_deltas}
   end
