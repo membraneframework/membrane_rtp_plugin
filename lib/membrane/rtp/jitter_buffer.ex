@@ -3,7 +3,6 @@ defmodule Membrane.RTP.JitterBuffer do
   Element that buffers and reorders RTP packets based on `sequence_number`.
   """
   use Membrane.Filter
-  use Membrane.Log
   use Bunch
 
   alias Membrane.{RTP, Time}
@@ -11,6 +10,7 @@ defmodule Membrane.RTP.JitterBuffer do
   alias __MODULE__.{BufferStore, Record}
 
   require Bitwise
+  require Membrane.Logger
 
   @type packet_index :: non_neg_integer()
 
@@ -90,7 +90,7 @@ defmodule Membrane.RTP.JitterBuffer do
           %State{state | store: result}
 
         {:error, :late_packet} ->
-          warn("Late packet has arrived")
+          Membrane.Logger.warn("Late packet has arrived")
           state
       end
 
@@ -105,7 +105,7 @@ defmodule Membrane.RTP.JitterBuffer do
         send_buffers(state)
 
       {:error, :late_packet} ->
-        warn("Late packet has arrived")
+        Membrane.Logger.warn("Late packet has arrived")
         {:ok, state}
     end
   end
