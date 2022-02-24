@@ -20,13 +20,6 @@ defmodule Membrane.RTP.Plugin.MixProject do
       name: "Membrane RTP plugin",
       source_url: @github_url,
       homepage_url: "https://membraneframework.org",
-      test_coverage: [tool: ExCoveralls],
-      preferred_cli_env: [
-        coveralls: :test,
-        "coveralls.detail": :test,
-        "coveralls.post": :test,
-        "coveralls.html": :test
-      ],
       docs: docs()
     ]
   end
@@ -43,7 +36,8 @@ defmodule Membrane.RTP.Plugin.MixProject do
   defp docs do
     [
       main: "readme",
-      extras: ["README.md", "LICENSE"],
+      extras: ["README.md", LICENSE: [title: License]],
+      formatters: ["html"],
       source_ref: "v#{@version}",
       nest_modules_by_prefix: [
         Membrane.RTP,
@@ -73,26 +67,25 @@ defmodule Membrane.RTP.Plugin.MixProject do
 
   defp deps do
     [
-      {:membrane_core,
-       github: "membraneframework/membrane_core", tag: "v0.9.0-rc.0", override: true},
+      {:membrane_core, "~> 0.9.0"},
       {:membrane_rtp_format, "~> 0.3.1"},
-      {:membrane_rtp_h264_plugin, "~> 0.8.0"},
-      {:membrane_rtp_mpegaudio_plugin, "~> 0.7.0", only: :test},
-      {:membrane_h264_ffmpeg_plugin, "~> 0.16.0", only: :test},
-      {:membrane_element_pcap,
-       github: "membraneframework/membrane-element-pcap", tag: "v0.4.0", only: :test},
-      {:membrane_element_udp, "~> 0.6.0", only: :test},
-      {:membrane_hackney_plugin, "~> 0.6.0", only: :test},
       {:ex_libsrtp, "~> 0.3.0", optional: true},
       {:qex, "~> 0.5.1"},
       {:bunch, "~> 1.0"},
       {:heap, "~> 2.0.2"},
       {:bimap, "~> 1.1.0"},
 
+      # Test
+      {:membrane_rtp_h264_plugin, "~> 0.9", only: :test},
+      {:membrane_rtp_mpegaudio_plugin, "~> 0.8", only: :test},
+      {:membrane_h264_ffmpeg_plugin, "~> 0.18", only: :test},
+      {:membrane_pcap_plugin,
+       github: "membraneframework/membrane_pcap_plugin", tag: "v0.5.0", only: :test},
+      {:membrane_hackney_plugin, "~> 0.7", only: :test},
+
       # Dev
       {:ex_doc, "~> 0.21", only: :dev, runtime: false},
       {:dialyxir, "~> 1.0", only: :dev, runtime: false},
-      {:excoveralls, ">= 0.8.0", only: :test},
       {:credo, "~> 1.5", only: :dev, runtime: false}
     ]
   end

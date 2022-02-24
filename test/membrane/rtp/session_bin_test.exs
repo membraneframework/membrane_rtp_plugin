@@ -97,7 +97,7 @@ defmodule Membrane.RTP.Session.BinTest do
 
       spec = %ParentSpec{
         children: [
-          pcap: %Membrane.Element.Pcap.Source{path: options.input.pcap},
+          pcap: %Membrane.Pcap.Source{path: options.input.pcap},
           pauser: %Pauser{pause_after: [15]},
           rtp: %RTP.SessionBin{
             fmt_mapping: options.fmt_mapping,

@@ -87,7 +87,7 @@ defmodule Membrane.RTP.StreamSendBinTest do
           :pcap ->
             %{
               children: [
-                pcap: %Membrane.Element.Pcap.Source{path: @pcap_file},
+                pcap: %Membrane.Pcap.Source{path: @pcap_file},
                 parser: Membrane.RTP.Parser
               ],
               link_builder: link(:pcap) |> to(:parser)
