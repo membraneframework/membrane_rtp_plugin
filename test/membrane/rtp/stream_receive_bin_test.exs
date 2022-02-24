@@ -37,7 +37,7 @@ defmodule Membrane.RTP.StreamReceiveBinTest do
   test "RTP stream passes through bin properly" do
     opts = %Testing.Pipeline.Options{
       elements: [
-        pcap: %Membrane.Element.Pcap.Source{path: @pcap_file},
+        pcap: %Membrane.Pcap.Source{path: @pcap_file},
         rtp_parser: RTP.Parser,
         rtp: %StreamReceiveBin{
           clock_rate: @h264_clock_rate,
@@ -72,7 +72,7 @@ defmodule Membrane.RTP.StreamReceiveBinTest do
 
     opts = %Testing.Pipeline.Options{
       elements: [
-        pcap: %Membrane.Element.Pcap.Source{
+        pcap: %Membrane.Pcap.Source{
           path: pcap_file,
           packet_transformer: fn %ExPcap.Packet{
                                    packet_header: %{ts_sec: sec, ts_usec: usec},
