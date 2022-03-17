@@ -37,8 +37,11 @@ defmodule Membrane.RTP.StreamReceiveBin do
 
   @impl true
   def handle_init(opts) do
+    if opts.secure? and not Code.ensure_loaded?(ExLibSRTP),
+      do: raise("Optional dependency :ex_libsrtp is required when using secure? option")
+
     maybe_link_decryptor =
-      &to(&1, :decryptor, %Membrane.SRTP.Decryptor{policies: opts.srtp_policies})
+      &to(&1, :decryptor, struct(Membrane.SRTP.Decryptor, %{policies: opts.srtp_policies}))
 
     maybe_link_depayloader_bin =
       &to(&1, :depayloader, %Membrane.RTP.DepayloaderBin{

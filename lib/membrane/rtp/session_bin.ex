@@ -298,13 +298,16 @@ defmodule Membrane.RTP.SessionBin do
               rtcp_sender_report_interval: nil,
               receiver_ssrc_generator: nil,
               rtcp_sender_report_data: %Session.SenderReport.Data{},
-              secure?: nil,
+              secure?: false,
               srtp_policies: nil,
               receiver_srtp_policies: nil
   end
 
   @impl true
   def handle_init(options) do
+    if options.secure? and not Code.ensure_loaded?(ExLibSRTP),
+      do: raise("Optional dependency :ex_libsrtp is required when using secure option")
+
     children = [ssrc_router: RTP.SSRCRouter]
     links = []
     spec = %ParentSpec{children: children, links: links}
@@ -332,12 +335,18 @@ defmodule Membrane.RTP.SessionBin do
     rtcp? = Map.has_key?(ctx.pads, rtcp_receiver_output)
 
     maybe_link_srtcp_decryptor =
-      &to(&1, {:srtcp_decryptor, ref}, %Membrane.SRTCP.Decryptor{policies: state.srtp_policies})
+      &to(
+        &1,
+        {:srtcp_decryptor, ref},
+        struct(Membrane.SRTCP.Decryptor, %{policies: state.srtp_policies})
+      )
 
     maybe_link_srtcp_encryptor =
-      &to(&1, {:srtcp_encryptor, ref}, %Membrane.SRTP.Encryptor{
-        policies: state.receiver_srtp_policies
-      })
+      &to(
+        &1,
+        {:srtcp_encryptor, ref},
+        struct(Membrane.SRTP.Encryptor, %{policies: state.receiver_srtp_policies})
+      )
 
     links =
       [
@@ -466,7 +475,7 @@ defmodule Membrane.RTP.SessionBin do
       clock_rate = clock_rate || get_from_register!(:clock_rate, payload_type, state)
 
       maybe_link_encryptor =
-        &to(&1, {:srtp_encryptor, ssrc}, %SRTP.Encryptor{policies: state.srtp_policies})
+        &to(&1, {:srtp_encryptor, ssrc}, struct(SRTP.Encryptor, %{policies: state.srtp_policies}))
 
       maybe_link_twcc_sender = maybe_handle_twcc_sender(ssrc, ctx)
 
@@ -489,9 +498,13 @@ defmodule Membrane.RTP.SessionBin do
       rtcp_links =
         if rtcp? do
           maybe_link_srtcp_encryptor =
-            &to(&1, {:srtcp_sender_encryptor, ssrc}, %SRTP.Encryptor{
-              policies: state.srtp_policies
-            })
+            &to(
+              &1,
+              {:srtcp_sender_encryptor, ssrc},
+              struct(SRTP.Encryptor, %{
+                policies: state.srtp_policies
+              })
+            )
 
           [
             link({:stream_send_bin, ssrc})
