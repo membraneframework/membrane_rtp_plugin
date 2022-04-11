@@ -11,9 +11,11 @@ defmodule Membrane.RTP.SSRCRouter do
   pad of id `{:rtcp, id}`, if no such pad exists the router simply drops the event.
   """
 
+  require Membrane.TelemetryMetrics
   use Membrane.Filter
 
   alias Membrane.{RTP, RTCPEvent}
+  alias Membrane.RTP.PayloadFormat
 
   def_input_pad :input, caps: RTP, availability: :on_request, demand_mode: :auto
 
@@ -91,6 +93,12 @@ defmodule Membrane.RTP.SSRCRouter do
     %Membrane.Buffer{
       metadata: %{rtp: %{ssrc: ssrc, payload_type: payload_type, extensions: extensions}}
     } = buffer
+
+    Membrane.TelemetryMetrics.execute(
+      [:packet_arrival, :rtp],
+      %{bitrate: bit_size(buffer.payload)},
+      %{ssrc: ssrc}
+    )
 
     {new_stream_actions, state} =
       maybe_handle_new_stream(pad, ssrc, payload_type, extensions, state)

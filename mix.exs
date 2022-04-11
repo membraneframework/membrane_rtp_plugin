@@ -67,6 +67,9 @@ defmodule Membrane.RTP.Plugin.MixProject do
 
   defp deps do
     [
+      {:membrane_telemetry_metrics,
+       branch: "basic-functionality-implementation",
+       github: "membraneframework/membrane_telemetry_metrics"},
       {:membrane_core, "~> 0.9.0"},
       {:membrane_rtp_format, "~> 0.3.1"},
       {:ex_libsrtp, "~> 0.3.0", optional: true},
