@@ -15,7 +15,6 @@ defmodule Membrane.RTP.SSRCRouter do
   use Membrane.Filter
 
   alias Membrane.{RTP, RTCPEvent}
-  alias Membrane.RTP.PayloadFormat
 
   def_input_pad :input, caps: RTP, availability: :on_request, demand_mode: :auto
 
