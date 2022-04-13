@@ -96,7 +96,7 @@ defmodule Membrane.RTP.SSRCRouter do
 
     Membrane.TelemetryMetrics.execute(
       [:packet_arrival, :rtp],
-      %{bitrate: bit_size(buffer.payload)},
+      %{bytes: byte_size(buffer.payload)},
       %{ssrc: ssrc}
     )
 
