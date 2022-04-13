@@ -11,8 +11,8 @@ defmodule Membrane.RTP.SSRCRouter do
   pad of id `{:rtcp, id}`, if no such pad exists the router simply drops the event.
   """
 
-  require Membrane.TelemetryMetrics
   use Membrane.Filter
+  require Membrane.TelemetryMetrics
 
   alias Membrane.{RTP, RTCPEvent}
 
