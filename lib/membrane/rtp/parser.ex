@@ -88,7 +88,7 @@ defmodule Membrane.RTP.Parser do
         end
 
       {:error, reason} ->
-        Membrane.Logger.warn("""
+        Membrane.Logger.debug("""
         Couldn't parse rtp packet:
         #{inspect(payload, limit: :infinity)}
         Reason: #{inspect(reason)}. Ignoring packet.

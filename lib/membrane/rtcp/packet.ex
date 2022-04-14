@@ -83,7 +83,7 @@ defmodule Membrane.RTCP.Packet do
           do_parse(rest, [packet | acc])
 
         {:error, :unknown_packet_type} ->
-          Membrane.Logger.warn("""
+          Membrane.Logger.debug("""
           Ignoring rtcp packet with packet type #{header.packet_type}:
           #{inspect(raw_header <> body_and_rest, limit: :infinity)}
           Reason: :unknown_packet_type

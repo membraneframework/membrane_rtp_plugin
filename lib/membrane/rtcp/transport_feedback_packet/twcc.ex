@@ -75,7 +75,7 @@ defmodule Membrane.RTCP.TransportFeedbackPacket.TWCC do
          }}
 
       {:error, reason} ->
-        Membrane.Logger.warn("""
+        Membrane.Logger.debug("""
         An error occured while parsing TWCC feedback packet.
         Reason: #{reason}
         Packet: #{inspect(packet, limit: :infinity)}
@@ -236,14 +236,14 @@ defmodule Membrane.RTCP.TransportFeedbackPacket.TWCC do
         <<scaled_delta::8>>
 
       :large_or_negative_delta ->
-        Membrane.Logger.warn(
+        Membrane.Logger.debug(
           "Reporting a packet with large or negative delta: (#{inspect(scaled_delta / 4)}ms)"
         )
 
         <<cap_delta(scaled_delta)::16>>
 
       :not_received ->
-        Membrane.Logger.warn("Reporting a non-received packet")
+        Membrane.Logger.debug("Reporting a non-received packet")
         <<>>
     end
   end

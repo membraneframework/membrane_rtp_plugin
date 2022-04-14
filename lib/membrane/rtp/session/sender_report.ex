@@ -56,7 +56,7 @@ defmodule Membrane.RTP.Session.SenderReport do
     if Enum.empty?(report_data.senders_ssrcs) do
       {:no_report, report_data}
     else
-      Membrane.Logger.warn(
+      Membrane.Logger.debug(
         "Not received sender stats from ssrcs: #{Enum.join(report_data.senders_ssrcs, ", ")}"
       )
 

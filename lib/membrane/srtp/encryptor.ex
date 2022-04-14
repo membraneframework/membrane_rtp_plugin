@@ -90,7 +90,7 @@ if Code.ensure_loaded?(ExLibSRTP) do
 
     @impl true
     def handle_event(_pad, other, _ctx, state) do
-      Membrane.Logger.warn("Got unexpected event: #{inspect(other)}. Ignoring.")
+      Membrane.Logger.debug("Got unexpected event: #{inspect(other)}. Ignoring.")
       {:ok, state}
     end
 
