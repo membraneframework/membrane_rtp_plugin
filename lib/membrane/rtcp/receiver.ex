@@ -11,6 +11,7 @@ defmodule Membrane.RTCP.Receiver do
   alias Membrane.Time
 
   require Membrane.Logger
+  require Membrane.TelemetryMetrics
 
   def_input_pad :input, caps: :any, demand_mode: :auto
   def_output_pad :output, caps: :any, demand_mode: :auto
@@ -120,6 +121,12 @@ defmodule Membrane.RTCP.Receiver do
         seq_num: state.fir_seq_num
       }
     }
+
+    Membrane.TelemetryMetrics.execute(
+      [:sending_fir, :rtcp],
+      %{},
+      %{ssrc: state.remote_ssrc}
+    )
 
     event = %RTCPEvent{rtcp: rtcp}
     state = Map.update!(state, :fir_seq_num, &(&1 + 1))
