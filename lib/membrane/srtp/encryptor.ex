@@ -89,10 +89,7 @@ if Code.ensure_loaded?(ExLibSRTP) do
     end
 
     @impl true
-    def handle_event(_pad, other, _ctx, state) do
-      Membrane.Logger.debug("Got unexpected event: #{inspect(other)}. Ignoring.")
-      {:ok, state}
-    end
+    def handle_event(pad, other, ctx, state), do: super(pad, other, ctx, state)
 
     @impl true
     def handle_process(:input, buffer, _ctx, %{policies: []} = state) do
