@@ -8,6 +8,9 @@ if Code.ensure_loaded?(ExLibSRTP) do
     use Membrane.Filter
 
     alias Membrane.Buffer
+    alias Membrane.SRTP
+
+    require Membrane.Logger
 
     def_input_pad :input, caps: :any, demand_mode: :auto
     def_output_pad :output, caps: :any, demand_mode: :auto
@@ -48,21 +51,27 @@ if Code.ensure_loaded?(ExLibSRTP) do
     end
 
     @impl true
-    def handle_event(_pad, %{handshake_data: handshake_data}, _ctx, %{policies: []} = state) do
-      {_local_keying_material, remote_keying_material, protection_profile} = handshake_data
-
+    def handle_event(_pad, %SRTP.KeyingMaterial.Event{} = event, _ctx, %{policies: []} = state) do
       {:ok, crypto_profile} =
-        ExLibSRTP.Policy.crypto_profile_from_dtls_srtp_protection_profile(protection_profile)
+        ExLibSRTP.Policy.crypto_profile_from_dtls_srtp_protection_profile(
+          event.protection_profile
+        )
 
       policy = %ExLibSRTP.Policy{
         ssrc: :any_inbound,
-        key: remote_keying_material,
+        key: event.remote_keying_material,
         rtp: crypto_profile,
         rtcp: crypto_profile
       }
 
       :ok = ExLibSRTP.add_stream(state.srtp, policy)
       {:ok, %{state | policies: [policy]}}
+    end
+
+    @impl true
+    def handle_event(_pad, %SRTP.KeyingMaterial.Event{}, _ctx, state) do
+      Membrane.Logger.warn("Got unexpected SRTP.KeyingMaterial.Event. Ignoring.")
+      {:ok, state}
     end
 
     @impl true
