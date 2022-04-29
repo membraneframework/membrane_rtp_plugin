@@ -21,7 +21,16 @@ defmodule Membrane.RTP.SSRCRouter do
 
   def_input_pad :rtcp_input, caps: :any, availability: :on_request, demand_mode: :auto
 
-  def_output_pad :output, caps: RTP, availability: :on_request, demand_mode: :auto
+  def_output_pad :output,
+    caps: RTP,
+    availability: :on_request,
+    demand_mode: :auto,
+    options: [
+      keyframe_detector: [
+        spec: function() | nil,
+        default: nil
+      ]
+    ]
 
   defmodule State do
     @moduledoc false
@@ -33,13 +42,15 @@ defmodule Membrane.RTP.SSRCRouter do
             input_pads: %{RTP.ssrc_t() => [input_pad :: Pad.ref_t()]},
             output_pad_ids: MapSet.t(),
             linking_buffers: %{RTP.ssrc_t() => [Membrane.Buffer.t()]},
-            handshake_event: struct() | nil
+            handshake_event: struct() | nil,
+            ssrc_to_keyframe_detector: %{RTP.ssrc_t() => function() | nil}
           }
 
     defstruct input_pads: %{},
               output_pad_ids: MapSet.new(),
               linking_buffers: %{},
-              handshake_event: nil
+              handshake_event: nil,
+              ssrc_to_keyframe_detector: %{}
   end
 
   @typedoc """
@@ -54,7 +65,8 @@ defmodule Membrane.RTP.SSRCRouter do
   end
 
   @impl true
-  def handle_pad_added(Pad.ref(:output, ssrc) = pad, _ctx, state) do
+  def handle_pad_added(Pad.ref(:output, ssrc) = pad, ctx, state) do
+    %{keyframe_detector: keyframe_detector} = ctx.pads[pad].options
     {buffered_actions, state} = pop_in(state, [:linking_buffers, ssrc])
 
     events =
@@ -63,6 +75,13 @@ defmodule Membrane.RTP.SSRCRouter do
       else
         []
       end
+
+    state =
+      Map.update!(
+        state,
+        :ssrc_to_keyframe_detector,
+        &Map.put(&1, ssrc, keyframe_detector)
+      )
 
     {{:ok, [caps: {pad, %RTP{}}] ++ events ++ Enum.reverse(buffered_actions || [])},
      %State{state | output_pad_ids: MapSet.put(state.output_pad_ids, ssrc)}}
@@ -96,7 +115,8 @@ defmodule Membrane.RTP.SSRCRouter do
 
     Membrane.TelemetryMetrics.execute(
       [:packet_arrival, :rtp],
-      %{bytes: byte_size(buffer.payload)},
+      %{bytes: byte_size(buffer.payload)}
+      |> maybe_add_keyframe_indicator(ssrc, buffer.payload, state),
       %{ssrc: ssrc}
     )
 
@@ -183,4 +203,18 @@ defmodule Membrane.RTP.SSRCRouter do
   end
 
   defp waiting_for_linking?(ssrc, %State{linking_buffers: lb}), do: Map.has_key?(lb, ssrc)
+
+  defp maybe_add_keyframe_indicator(measurements, ssrc, payload, state) do
+    case state.ssrc_to_keyframe_detector[ssrc] do
+      nil ->
+        measurements
+
+      fun when is_function(fun) ->
+        if fun.(payload) do
+          Map.put(measurements, :keyframe_indicator, 1)
+        else
+          Map.put(measurements, :keyframe_indicator, 0)
+        end
+    end
+  end
 end

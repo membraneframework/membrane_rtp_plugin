@@ -30,4 +30,11 @@ defmodule Membrane.RTP.PayloadFormatResolver do
       payloader -> {:ok, payloader}
     end
   end
+
+  def keyframe_detector(encoding) do
+    case PayloadFormat.get(encoding).keyframe_detector do
+      nil -> :error
+      keyframe_detector -> {:ok, keyframe_detector}
+    end
+  end
 end
