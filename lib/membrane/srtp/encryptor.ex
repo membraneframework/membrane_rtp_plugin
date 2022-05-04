@@ -70,7 +70,7 @@ if Code.ensure_loaded?(ExLibSRTP) do
     end
 
     @impl true
-    def handle_event(_pad, %SRTP.KeyingMaterial.Event{} = event, _ctx, %{policies: []} = state) do
+    def handle_event(_pad, %SRTP.KeyingMaterialEvent{} = event, _ctx, %{policies: []} = state) do
       {:ok, crypto_profile} =
         ExLibSRTP.Policy.crypto_profile_from_dtls_srtp_protection_profile(
           event.protection_profile
@@ -89,8 +89,8 @@ if Code.ensure_loaded?(ExLibSRTP) do
     end
 
     @impl true
-    def handle_event(_pad, %SRTP.KeyingMaterial.Event{}, _ctx, state) do
-      Membrane.Logger.warn("Got unexpected SRTP.KeyingMaterial.Event. Ignoring.")
+    def handle_event(_pad, %SRTP.KeyingMaterialEvent{}, _ctx, state) do
+      Membrane.Logger.warn("Got unexpected SRTP.KeyingMaterialEvent. Ignoring.")
       {:ok, state}
     end
 

@@ -110,7 +110,7 @@ defmodule Membrane.RTP.SSRCRouter do
   end
 
   @impl true
-  def handle_event(_pad, %SRTP.KeyingMaterial.Event{} = event, _ctx, state) do
+  def handle_event(_pad, %SRTP.KeyingMaterialEvent{} = event, _ctx, state) do
     {actions, state} =
       Enum.flat_map_reduce(state.input_pads, state, fn {ssrc, _input}, state ->
         maybe_add_to_linking_buffer(:event, event, ssrc, state)
