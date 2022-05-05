@@ -60,13 +60,11 @@ defmodule Membrane.RTP.ParserTest do
           ]
         })
 
-      Pipeline.play(pipeline)
-
       Enum.each(test_data_base, fn _test_data ->
         assert_sink_buffer(pipeline, :sink, %Buffer{}, @buffer_receive_timeout)
       end)
 
-      Pipeline.stop_and_terminate(pipeline, blocking?: true)
+      Pipeline.terminate(pipeline, blocking?: true)
     end
   end
 end
