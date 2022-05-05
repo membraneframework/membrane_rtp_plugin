@@ -15,7 +15,10 @@ defmodule Membrane.RTCP.Parser do
     demand_mode: :auto
 
   def_output_pad :output, caps: RTCP, demand_mode: :auto
-  def_output_pad :receiver_report_output, mode: :push, caps: {RemoteStream, type: :packetized, content_format: one_of([nil, RTCP])}
+
+  def_output_pad :receiver_report_output,
+    mode: :push,
+    caps: {RemoteStream, type: :packetized, content_format: one_of([nil, RTCP])}
 
   @impl true
   def handle_init(_opts) do
@@ -24,7 +27,9 @@ defmodule Membrane.RTCP.Parser do
 
   @impl true
   def handle_prepared_to_playing(_ctx, state) do
-    {{:ok, caps: {:receiver_report_output, %RemoteStream{type: :packetized, content_format: RTCP}}}, state}
+    {{:ok,
+      caps: {:receiver_report_output, %RemoteStream{type: :packetized, content_format: RTCP}}},
+     state}
   end
 
   @impl true
