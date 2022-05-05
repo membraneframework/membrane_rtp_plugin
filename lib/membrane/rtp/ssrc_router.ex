@@ -13,7 +13,7 @@ defmodule Membrane.RTP.SSRCRouter do
 
   use Membrane.Filter
 
-  alias Membrane.{RTP, RTCPEvent}
+  alias Membrane.{RTP, RTCPEvent, SRTP}
 
   def_input_pad :input, caps: RTP, availability: :on_request, demand_mode: :auto
 
@@ -31,13 +31,13 @@ defmodule Membrane.RTP.SSRCRouter do
             input_pads: %{RTP.ssrc_t() => [input_pad :: Pad.ref_t()]},
             output_pad_ids: MapSet.t(),
             linking_buffers: %{RTP.ssrc_t() => [Membrane.Buffer.t()]},
-            handshake_event: struct() | nil
+            srtp_keying_material_event: struct() | nil
           }
 
     defstruct input_pads: %{},
               output_pad_ids: MapSet.new(),
               linking_buffers: %{},
-              handshake_event: nil
+              srtp_keying_material_event: nil
   end
 
   @typedoc """
@@ -56,8 +56,8 @@ defmodule Membrane.RTP.SSRCRouter do
     {buffered_actions, state} = pop_in(state, [:linking_buffers, ssrc])
 
     events =
-      if state.handshake_event do
-        [{:event, {pad, state.handshake_event}}]
+      if state.srtp_keying_material_event do
+        [{:event, {pad, state.srtp_keying_material_event}}]
       else
         []
       end
@@ -110,13 +110,13 @@ defmodule Membrane.RTP.SSRCRouter do
   end
 
   @impl true
-  def handle_event(_pad, %{handshake_data: _data} = event, _ctx, state) do
+  def handle_event(_pad, %SRTP.KeyingMaterialEvent{} = event, _ctx, state) do
     {actions, state} =
       Enum.flat_map_reduce(state.input_pads, state, fn {ssrc, _input}, state ->
         maybe_add_to_linking_buffer(:event, event, ssrc, state)
       end)
 
-    {{:ok, actions}, %{state | handshake_event: event}}
+    {{:ok, actions}, %{state | srtp_keying_material_event: event}}
   end
 
   @impl true

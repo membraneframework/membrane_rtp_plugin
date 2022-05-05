@@ -47,7 +47,7 @@ defmodule Membrane.RTCP.Parser do
         {{:ok, actions}, state}
 
       {:error, reason} ->
-        Membrane.Logger.warn("""
+        Membrane.Logger.debug("""
         Couldn't parse rtcp packet:
         #{inspect(payload, limit: :infinity)}
         Reason: #{inspect(reason)}. Ignoring packet.
@@ -71,7 +71,7 @@ defmodule Membrane.RTCP.Parser do
   end
 
   defp process_rtcp(%RTCP.FeedbackPacket{payload: %RTCP.FeedbackPacket.PLI{}}, _metadata) do
-    Membrane.Logger.warn("Received packet loss indicator RTCP packet")
+    Membrane.Logger.debug("Received packet loss indicator RTCP packet")
     []
   end
 
