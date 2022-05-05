@@ -23,6 +23,12 @@ defmodule Membrane.RTCP.Parser do
   end
 
   @impl true
+  def handle_prepared_to_playing(_ctx, state) do
+    # NOT SURE IF THIS IS A CORRECT SOLUTION
+    {{:ok, caps: {:rtcp_output, %RTCP{}}}, state}
+  end
+
+  @impl true
   def handle_caps(:input, _caps, _ctx, state) do
     {{:ok, caps: {:output, %RTCP{}}}, state}
   end
