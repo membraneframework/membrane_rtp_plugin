@@ -362,7 +362,7 @@ defmodule Membrane.RTP.SessionBin do
             |> via_out(:rtcp_output)
             |> then(if secure?, do: maybe_link_srtcp_decryptor, else: & &1)
             |> to({:rtcp_parser, ref}, RTCP.Parser)
-            |> via_out(:rtcp_output)
+            |> via_out(:receiver_report_output)
             |> then(if secure?, do: maybe_link_srtcp_encryptor, else: & &1)
             |> to_bin_output(rtcp_receiver_output),
             link({:rtcp_parser, ref})
