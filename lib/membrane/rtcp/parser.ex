@@ -18,7 +18,7 @@ defmodule Membrane.RTCP.Parser do
 
   def_output_pad :receiver_report_output,
     mode: :push,
-    caps: {RemoteStream, type: :packetized, content_format: one_of([nil, RTCP])}
+    caps: {RemoteStream, type: :packetized, content_format: RTCP}
 
   @impl true
   def handle_init(_opts) do

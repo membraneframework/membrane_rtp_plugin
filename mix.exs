@@ -81,7 +81,7 @@ defmodule Membrane.RTP.Plugin.MixProject do
       {:membrane_h264_ffmpeg_plugin, "~> 0.19", only: :test},
       {:membrane_pcap_plugin,
        github: "membraneframework/membrane_pcap_plugin", tag: "v0.6.1", only: :test},
-      {:membrane_hackney_plugin, "~> 0.8.1", only: :test},
+      {:membrane_hackney_plugin, "~> 0.8.2", only: :test},
 
       # Dev
       {:ex_doc, "~> 0.21", only: :dev, runtime: false},
