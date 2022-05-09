@@ -202,6 +202,10 @@ defmodule Membrane.RTP.SessionBin do
         spec: function() | nil,
         default: nil
       ],
+      frame_detector: [
+        spec: function() | nil,
+        default: nil
+      ],
       clock_rate: [
         spec: integer() | nil,
         default: nil,
@@ -385,6 +389,7 @@ defmodule Membrane.RTP.SessionBin do
     %{
       depayloader: depayloader,
       keyframe_detector: keyframe_detector,
+      frame_detector: frame_detector,
       clock_rate: clock_rate,
       rtp_extensions: rtp_extensions,
       rtcp_fir_interval: fir_interval,
@@ -418,7 +423,7 @@ defmodule Membrane.RTP.SessionBin do
     router_link =
       link(:ssrc_router)
       |> via_out(Pad.ref(:output, ssrc),
-        options: [keyframe_detector: keyframe_detector]
+        options: [keyframe_detector: keyframe_detector, frame_detector: frame_detector]
       )
       |> then(maybe_link_twcc_receiver)
       |> to(rtp_stream_name)
