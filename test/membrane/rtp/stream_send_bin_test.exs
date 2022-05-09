@@ -119,7 +119,7 @@ defmodule Membrane.RTP.StreamSendBinTest do
         ]
       }
 
-      {{:ok, spec: spec}, %{}}
+      {{:ok, spec: spec, playback: :playing}, %{}}
     end
   end
 
@@ -136,8 +136,6 @@ defmodule Membrane.RTP.StreamSendBinTest do
 
     {:ok, pipeline} = Testing.Pipeline.start_link(opts)
 
-    Testing.Pipeline.play(pipeline)
-
     assert_pipeline_playback_changed(pipeline, _, :playing)
     assert_start_of_stream(pipeline, :rtp_sink)
 
@@ -152,7 +150,7 @@ defmodule Membrane.RTP.StreamSendBinTest do
              }
            } = packet
 
-    Testing.Pipeline.stop_and_terminate(pipeline, blocking?: true)
+    Testing.Pipeline.terminate(pipeline, blocking?: true)
   end
 
   test "Depayloaded RTP stream gets payloaded and passed through bin's output properly" do
@@ -167,14 +165,12 @@ defmodule Membrane.RTP.StreamSendBinTest do
 
     {:ok, pipeline} = Testing.Pipeline.start_link(opts)
 
-    Testing.Pipeline.play(pipeline)
-
     assert_pipeline_playback_changed(pipeline, _, :playing)
     assert_start_of_stream(pipeline, :rtp_sink)
 
     assert_end_of_stream(pipeline, :rtp_sink, :input, 4000)
 
-    Testing.Pipeline.stop_and_terminate(pipeline, blocking?: true)
+    Testing.Pipeline.terminate(pipeline, blocking?: true)
   end
 
   test "Payloaded RTP stream passes through bin's output properly" do
@@ -189,8 +185,6 @@ defmodule Membrane.RTP.StreamSendBinTest do
 
     {:ok, pipeline} = Testing.Pipeline.start_link(opts)
 
-    Testing.Pipeline.play(pipeline)
-
     assert_pipeline_playback_changed(pipeline, _, :playing)
     assert_start_of_stream(pipeline, :rtp_sink)
 
@@ -200,6 +194,6 @@ defmodule Membrane.RTP.StreamSendBinTest do
 
     assert_end_of_stream(pipeline, :rtp_sink, :input)
 
-    Testing.Pipeline.stop_and_terminate(pipeline, blocking?: true)
+    Testing.Pipeline.terminate(pipeline, blocking?: true)
   end
 end

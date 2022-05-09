@@ -15,11 +15,21 @@ defmodule Membrane.RTCP.Parser do
     demand_mode: :auto
 
   def_output_pad :output, caps: RTCP, demand_mode: :auto
-  def_output_pad :rtcp_output, mode: :push, caps: :any
+
+  def_output_pad :receiver_report_output,
+    mode: :push,
+    caps: {RemoteStream, type: :packetized, content_format: RTCP}
 
   @impl true
   def handle_init(_opts) do
     {:ok, %{}}
+  end
+
+  @impl true
+  def handle_prepared_to_playing(_ctx, state) do
+    {{:ok,
+      caps: {:receiver_report_output, %RemoteStream{type: :packetized, content_format: RTCP}}},
+     state}
   end
 
   @impl true
@@ -37,7 +47,7 @@ defmodule Membrane.RTCP.Parser do
         {{:ok, actions}, state}
 
       {:error, reason} ->
-        Membrane.Logger.warn("""
+        Membrane.Logger.debug("""
         Couldn't parse rtcp packet:
         #{inspect(payload, limit: :infinity)}
         Reason: #{inspect(reason)}. Ignoring packet.
@@ -50,7 +60,7 @@ defmodule Membrane.RTCP.Parser do
   @impl true
   def handle_event(:output, %RTCPEvent{} = event, _ctx, state) do
     buffer = %Buffer{payload: RTCP.Packet.serialize(event.rtcp)}
-    {{:ok, buffer: {:rtcp_output, buffer}}, state}
+    {{:ok, buffer: {:receiver_report_output, buffer}}, state}
   end
 
   @impl true
@@ -61,7 +71,7 @@ defmodule Membrane.RTCP.Parser do
   end
 
   defp process_rtcp(%RTCP.FeedbackPacket{payload: %RTCP.FeedbackPacket.PLI{}}, _metadata) do
-    Membrane.Logger.warn("Received packet loss indicator RTCP packet")
+    Membrane.Logger.debug("Received packet loss indicator RTCP packet")
     []
   end
 

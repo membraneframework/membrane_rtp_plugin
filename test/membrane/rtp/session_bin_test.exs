@@ -66,6 +66,11 @@ defmodule Membrane.RTP.Session.BinTest do
     end
 
     @impl true
+    def handle_prepared_to_playing(_ctx, state) do
+      {{:ok, caps: {:output, %Membrane.RemoteStream{type: :packetized}}}, state}
+    end
+
+    @impl true
     def handle_demand(:output, size, :buffers, _ctx, %{pause_after: [pause | _]} = state) do
       {{:ok, demand: {:input, min(size, pause - state.cnt)}}, state}
     end
@@ -166,7 +171,7 @@ defmodule Membrane.RTP.Session.BinTest do
         ]
       }
 
-      {{:ok, spec: spec},
+      {{:ok, spec: spec, playback: :playing},
        %{fmt_mapping: options.fmt_mapping, payload_and_depayload: options.payload_and_depayload}}
     end
 
@@ -270,7 +275,6 @@ defmodule Membrane.RTP.Session.BinTest do
       }
       |> Testing.Pipeline.start_link()
 
-    Testing.Pipeline.play(pipeline)
     assert_pipeline_playback_changed(pipeline, _, :playing)
 
     %{audio: %{ssrc: audio_ssrc}, video: %{ssrc: video_ssrc}} = input
@@ -314,7 +318,7 @@ defmodule Membrane.RTP.Session.BinTest do
     end)
 
     assert_end_of_stream(pipeline, {:sink, ^video_ssrc})
-    Testing.Pipeline.stop_and_terminate(pipeline, blocking?: true)
+    Testing.Pipeline.terminate(pipeline, blocking?: true)
     assert_pipeline_playback_changed(pipeline, _, :stopped)
   end
 end

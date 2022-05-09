@@ -17,6 +17,7 @@ if Code.ensure_loaded?(ExLibSRTP) do
 
     alias Membrane.Buffer
     alias Membrane.RTP.Utils
+    alias Membrane.SRTP
 
     require Membrane.Logger
 
@@ -58,21 +59,27 @@ if Code.ensure_loaded?(ExLibSRTP) do
     end
 
     @impl true
-    def handle_event(_pad, %{handshake_data: handshake_data}, _ctx, %{policies: []} = state) do
-      {_local_keying_material, remote_keying_material, protection_profile} = handshake_data
-
+    def handle_event(_pad, %SRTP.KeyingMaterialEvent{} = event, _ctx, %{policies: []} = state) do
       {:ok, crypto_profile} =
-        ExLibSRTP.Policy.crypto_profile_from_dtls_srtp_protection_profile(protection_profile)
+        ExLibSRTP.Policy.crypto_profile_from_dtls_srtp_protection_profile(
+          event.protection_profile
+        )
 
       policy = %ExLibSRTP.Policy{
         ssrc: :any_inbound,
-        key: remote_keying_material,
+        key: event.remote_keying_material,
         rtp: crypto_profile,
         rtcp: crypto_profile
       }
 
       :ok = ExLibSRTP.add_stream(state.srtp, policy)
       {:ok, Map.put(state, :policies, [policy])}
+    end
+
+    @impl true
+    def handle_event(_pad, %SRTP.KeyingMaterialEvent{}, _ctx, state) do
+      Membrane.Logger.warn("Got unexpected SRTP.KeyingMaterialEvent. Ignoring.")
+      {:ok, state}
     end
 
     @impl true
@@ -102,7 +109,7 @@ if Code.ensure_loaded?(ExLibSRTP) do
           {{:ok, buffer: {:output, %Buffer{buffer | payload: payload}}}, state}
 
         {:error, reason} ->
-          Membrane.Logger.warn("""
+          Membrane.Logger.debug("""
           Couldn't unprotect srtp packet:
           #{inspect(payload, limit: :infinity)}
           Reason: #{inspect(reason)}. Ignoring packet.

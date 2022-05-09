@@ -90,7 +90,7 @@ defmodule Membrane.RTP.JitterBuffer do
           %State{state | store: result}
 
         {:error, :late_packet} ->
-          Membrane.Logger.warn("Late packet has arrived")
+          Membrane.Logger.debug("Late packet has arrived")
           state
       end
 
@@ -105,7 +105,7 @@ defmodule Membrane.RTP.JitterBuffer do
         send_buffers(state)
 
       {:error, :late_packet} ->
-        Membrane.Logger.warn("Late packet has arrived")
+        Membrane.Logger.debug("Late packet has arrived")
         {:ok, state}
     end
   end
