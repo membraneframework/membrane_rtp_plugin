@@ -56,7 +56,8 @@ defmodule Membrane.RTP.SSRCRouter do
       state.input_pads
       |> Enum.filter(fn {_ssrc, p} -> p == pad end)
       |> Enum.flat_map_reduce(state, fn {ssrc, _pad}, state ->
-        maybe_buffer_action(:end_of_stream, ssrc, ctx, state)
+        action = {:end_of_stream, Pad.ref(:output, ssrc)}
+        maybe_buffer_action(action, ssrc, ctx, state)
       end)
 
     {{:ok, actions}, state}
@@ -100,7 +101,8 @@ defmodule Membrane.RTP.SSRCRouter do
     {new_stream_actions, state} =
       maybe_handle_new_stream(pad, ssrc, payload_type, extensions, state)
 
-    {actions, state} = maybe_buffer_action(:buffer, buffer, ssrc, ctx, state)
+    action = {:buffer, {Pad.ref(:output, ssrc), buffer}}
+    {actions, state} = maybe_buffer_action(action, ssrc, ctx, state)
     {{:ok, new_stream_actions ++ actions}, state}
   end
 
@@ -118,7 +120,8 @@ defmodule Membrane.RTP.SSRCRouter do
   def handle_event(_pad, %SRTP.KeyingMaterialEvent{} = event, ctx, state) do
     {actions, state} =
       Enum.flat_map_reduce(state.input_pads, state, fn {ssrc, _input}, state ->
-        maybe_buffer_action(:event, event, ssrc, ctx, state)
+        action = {:event, {Pad.ref(:output, ssrc), event}}
+        maybe_buffer_action(action, ssrc, ctx, state)
       end)
 
     {{:ok, actions}, %{state | srtp_keying_material_event: event}}
@@ -128,7 +131,8 @@ defmodule Membrane.RTP.SSRCRouter do
   def handle_event(Pad.ref(:input, _id), event, ctx, state) do
     {actions, state} =
       Enum.flat_map_reduce(state.input_pads, state, fn {ssrc, _input}, state ->
-        maybe_buffer_action(:event, event, ssrc, ctx, state)
+        action = {:event, {Pad.ref(:output, ssrc), event}}
+        maybe_buffer_action(action, ssrc, ctx, state)
       end)
 
     {{:ok, actions}, state}
@@ -168,17 +172,7 @@ defmodule Membrane.RTP.SSRCRouter do
     end
   end
 
-  defp maybe_buffer_action(:end_of_stream, ssrc, ctx, state) do
-    action = {:end_of_stream, Pad.ref(:output, ssrc)}
-    do_maybe_buffer_action(action, ssrc, ctx, state)
-  end
-
-  defp maybe_buffer_action(type, value, ssrc, ctx, state) do
-    action = {type, {Pad.ref(:output, ssrc), value}}
-    do_maybe_buffer_action(action, ssrc, ctx, state)
-  end
-
-  defp do_maybe_buffer_action(action, ssrc, ctx, state) do
+  defp maybe_buffer_action(action, ssrc, ctx, state) do
     if linked?(ssrc, ctx) do
       {[action], state}
     else
