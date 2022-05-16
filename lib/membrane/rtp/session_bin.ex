@@ -543,10 +543,16 @@ defmodule Membrane.RTP.SessionBin do
   end
 
   @impl true
-  def handle_pad_removed(Pad.ref(:output, ssrc), _ctx, state) do
+  def handle_pad_removed(Pad.ref(:output, ssrc), ctx, state) do
     # TODO: parent may not know when to unlink, we need to timout SSRCs and notify about that and BYE packets over RTCP
     state = %{state | ssrcs: Map.delete(state.ssrcs, ssrc)}
-    {{:ok, remove_child: {:stream_receive_bin, ssrc}}, state}
+    stream_receive_bin = Map.get(ctx.children, {:stream_receive_bin, ssrc})
+
+    if stream_receive_bin != nil and !stream_receive_bin.terminating? do
+      {{:ok, remove_child: {:stream_receive_bin, ssrc}}, state}
+    else
+      {:ok, state}
+    end
   end
 
   @impl true

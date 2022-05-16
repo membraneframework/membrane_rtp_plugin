@@ -5,7 +5,7 @@ defmodule Membrane.RTP.SSRCRouter do
   When receiving a new SSRC, it creates a new pad and notifies its parent (`t:new_stream_notification_t/0`) that should link
   the new output pad.
 
-  When an RTCP event arrives from some output pad the router tries to forward it do a proper input pad.
+  When an RTCP event arrives from some output pad the router tries to forward it to a proper input pad.
   The input pad gets chosen by the source input pad from which packets with given ssrc were previously sent,
   the source pad's id gets extracted and the router tries to send the event to an input
   pad of id `{:rtcp, id}`, if no such pad exists the router simply drops the event.
@@ -28,15 +28,13 @@ defmodule Membrane.RTP.SSRCRouter do
     alias Membrane.RTP
 
     @type t() :: %__MODULE__{
-            input_pads: %{RTP.ssrc_t() => [input_pad :: Pad.ref_t()]},
-            output_pad_ids: MapSet.t(),
-            linking_buffers: %{RTP.ssrc_t() => [Membrane.Buffer.t()]},
+            input_pads: %{RTP.ssrc_t() => input_pad :: Pad.ref_t()},
+            buffered_actions: %{RTP.ssrc_t() => [Membrane.Element.Action.t()]},
             srtp_keying_material_event: struct() | nil
           }
 
     defstruct input_pads: %{},
-              output_pad_ids: MapSet.new(),
-              linking_buffers: %{},
+              buffered_actions: %{},
               srtp_keying_material_event: nil
   end
 
@@ -52,8 +50,22 @@ defmodule Membrane.RTP.SSRCRouter do
   end
 
   @impl true
+  def handle_end_of_stream(Pad.ref(:input, _id) = pad, ctx, state) do
+    # multiple SSRCs might come from single input pad
+    {actions, state} =
+      state.input_pads
+      |> Enum.filter(fn {_ssrc, p} -> p == pad end)
+      |> Enum.flat_map_reduce(state, fn {ssrc, _pad}, state ->
+        action = {:end_of_stream, Pad.ref(:output, ssrc)}
+        maybe_buffer_action(action, ssrc, ctx, state)
+      end)
+
+    {{:ok, actions}, state}
+  end
+
+  @impl true
   def handle_pad_added(Pad.ref(:output, ssrc) = pad, _ctx, state) do
-    {buffered_actions, state} = pop_in(state, [:linking_buffers, ssrc])
+    {buffered_actions, state} = pop_in(state, [:buffered_actions, ssrc])
 
     events =
       if state.srtp_keying_material_event do
@@ -62,8 +74,7 @@ defmodule Membrane.RTP.SSRCRouter do
         []
       end
 
-    {{:ok, [caps: {pad, %RTP{}}] ++ events ++ Enum.reverse(buffered_actions || [])},
-     %State{state | output_pad_ids: MapSet.put(state.output_pad_ids, ssrc)}}
+    {{:ok, [caps: {pad, %RTP{}}] ++ events ++ Enum.reverse(buffered_actions || [])}, state}
   end
 
   @impl true
@@ -82,12 +93,7 @@ defmodule Membrane.RTP.SSRCRouter do
   end
 
   @impl true
-  def handle_pad_removed(Pad.ref(:output, ssrc), _ctx, state) do
-    {:ok, %State{state | output_pad_ids: MapSet.delete(state.output_pad_ids, ssrc)}}
-  end
-
-  @impl true
-  def handle_process(Pad.ref(:input, _id) = pad, buffer, _ctx, state) do
+  def handle_process(Pad.ref(:input, _id) = pad, buffer, ctx, state) do
     %Membrane.Buffer{
       metadata: %{rtp: %{ssrc: ssrc, payload_type: payload_type, extensions: extensions}}
     } = buffer
@@ -95,35 +101,38 @@ defmodule Membrane.RTP.SSRCRouter do
     {new_stream_actions, state} =
       maybe_handle_new_stream(pad, ssrc, payload_type, extensions, state)
 
-    {actions, state} = maybe_add_to_linking_buffer(:buffer, buffer, ssrc, state)
+    action = {:buffer, {Pad.ref(:output, ssrc), buffer}}
+    {actions, state} = maybe_buffer_action(action, ssrc, ctx, state)
     {{:ok, new_stream_actions ++ actions}, state}
   end
 
   @impl true
-  def handle_event(Pad.ref(:input, _id), %RTCPEvent{} = event, _ctx, state) do
+  def handle_event(Pad.ref(:input, _id), %RTCPEvent{} = event, ctx, state) do
     actions =
       event.ssrcs
-      |> Enum.filter(&MapSet.member?(state.output_pad_ids, &1))
       |> Enum.map(&{:event, {Pad.ref(:output, &1), event}})
+      |> Enum.filter(fn {:event, {pad, _event}} -> Map.has_key?(ctx.pads, pad) end)
 
     {{:ok, actions}, state}
   end
 
   @impl true
-  def handle_event(_pad, %SRTP.KeyingMaterialEvent{} = event, _ctx, state) do
+  def handle_event(_pad, %SRTP.KeyingMaterialEvent{} = event, ctx, state) do
     {actions, state} =
       Enum.flat_map_reduce(state.input_pads, state, fn {ssrc, _input}, state ->
-        maybe_add_to_linking_buffer(:event, event, ssrc, state)
+        action = {:event, {Pad.ref(:output, ssrc), event}}
+        maybe_buffer_action(action, ssrc, ctx, state)
       end)
 
     {{:ok, actions}, %{state | srtp_keying_material_event: event}}
   end
 
   @impl true
-  def handle_event(Pad.ref(:input, _id), event, _ctx, state) do
+  def handle_event(Pad.ref(:input, _id), event, ctx, state) do
     {actions, state} =
       Enum.flat_map_reduce(state.input_pads, state, fn {ssrc, _input}, state ->
-        maybe_add_to_linking_buffer(:event, event, ssrc, state)
+        action = {:event, {Pad.ref(:output, ssrc), event}}
+        maybe_buffer_action(action, ssrc, ctx, state)
       end)
 
     {{:ok, actions}, state}
@@ -157,22 +166,20 @@ defmodule Membrane.RTP.SSRCRouter do
       state =
         state
         |> put_in([:input_pads, ssrc], pad)
-        |> put_in([:linking_buffers, ssrc], [])
+        |> put_in([:buffered_actions, ssrc], [])
 
       {[notify: {:new_rtp_stream, ssrc, payload_type, extensions}], state}
     end
   end
 
-  defp maybe_add_to_linking_buffer(type, value, ssrc, state) do
-    action = {type, {Pad.ref(:output, ssrc), value}}
-
-    if waiting_for_linking?(ssrc, state) do
-      state = update_in(state, [:linking_buffers, ssrc], &[action | &1])
-      {[], state}
-    else
+  defp maybe_buffer_action(action, ssrc, ctx, state) do
+    if linked?(ssrc, ctx) do
       {[action], state}
+    else
+      state = update_in(state, [:buffered_actions, ssrc], &[action | &1])
+      {[], state}
     end
   end
 
-  defp waiting_for_linking?(ssrc, %State{linking_buffers: lb}), do: Map.has_key?(lb, ssrc)
+  defp linked?(ssrc, ctx), do: Map.has_key?(ctx.pads, Pad.ref(:output, ssrc))
 end
