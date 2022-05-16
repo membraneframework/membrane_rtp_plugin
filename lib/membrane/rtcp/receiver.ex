@@ -19,7 +19,8 @@ defmodule Membrane.RTCP.Receiver do
   def_options local_ssrc: [spec: RTP.ssrc_t()],
               remote_ssrc: [spec: RTP.ssrc_t()],
               report_interval: [spec: Membrane.Time.t() | nil, default: nil],
-              fir_interval: [spec: Membrane.Time.t() | nil, default: nil]
+              fir_interval: [spec: Membrane.Time.t() | nil, default: nil],
+              telemetry_metadata: [spec: [{atom(), any()}], default: []]
 
   @impl true
   def handle_init(opts) do
@@ -125,7 +126,10 @@ defmodule Membrane.RTCP.Receiver do
     Membrane.TelemetryMetrics.execute(
       [:sending_fir, :rtcp],
       %{},
-      %{ssrc: state.remote_ssrc}
+      %{
+        ssrc: state.remote_ssrc,
+        telemetry_metadata: state.telemetry_metadata
+      }
     )
 
     event = %RTCPEvent{rtcp: rtcp}
