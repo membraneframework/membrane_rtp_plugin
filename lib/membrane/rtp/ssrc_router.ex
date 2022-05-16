@@ -8,16 +8,14 @@ defmodule Membrane.RTP.SSRCRouter do
   When an RTCP event arrives from some output pad the router tries to forward it to a proper input pad.
   The input pad gets chosen by the source input pad from which packets with given ssrc were previously sent,
   the source pad's id gets extracted and the router tries to send the event to an input
-  pad of id `{:rtcp, id}`, if no such pad exists the router simply drops the event.
+  pad of id `{:input, id}`, if no such pad exists the router simply drops the event.
   """
 
   use Membrane.Filter
 
-  alias Membrane.{RTP, RTCPEvent, SRTP}
+  alias Membrane.{RTCP, RTP, RTCPEvent, SRTP}
 
-  def_input_pad :input, caps: RTP, availability: :on_request, demand_mode: :auto
-
-  def_input_pad :rtcp_input, caps: :any, availability: :on_request, demand_mode: :auto
+  def_input_pad :input, caps: [RTCP, RTP], availability: :on_request, demand_mode: :auto
 
   def_output_pad :output, caps: RTP, availability: :on_request, demand_mode: :auto
 

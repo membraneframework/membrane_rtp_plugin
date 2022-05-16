@@ -6,12 +6,12 @@ defmodule Membrane.RTCP.Parser do
   use Membrane.Filter
 
   alias Membrane.Buffer
-  alias Membrane.{RTCP, RTCPEvent, RTP, RemoteStream}
+  alias Membrane.{RTCP, RTCPEvent, RemoteStream}
 
   require Membrane.Logger
 
   def_input_pad :input,
-    caps: {RemoteStream, type: :packetized, content_format: one_of([nil, RTP])},
+    caps: {RemoteStream, type: :packetized, content_format: one_of([nil, RTCP])},
     demand_mode: :auto
 
   def_output_pad :output, caps: RTCP, demand_mode: :auto
