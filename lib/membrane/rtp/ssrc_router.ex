@@ -110,7 +110,7 @@ defmodule Membrane.RTP.SSRCRouter do
   end
 
   @impl true
-  def handle_pad_added(Pad.ref(:input, _id) = pad, ctx, state) do
+  def handle_pad_added(Pad.ref(:input, _id), _ctx, state) do
     {:ok, state}
   end
 
@@ -238,7 +238,7 @@ defmodule Membrane.RTP.SSRCRouter do
   end
 
   defp packet_arrival_telemetry_measurements(ssrc, payload, pad, state, ctx) do
-    %{bytes: byte_size(payload)}
+    %{ssrc: ssrc, bytes: byte_size(payload)}
     |> maybe_add_keyframe_indicator(ssrc, payload, state)
     |> maybe_add_frame_indicator(ssrc, payload, state)
     |> maybe_add_encoding(pad, ctx)
