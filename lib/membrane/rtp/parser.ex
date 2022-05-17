@@ -48,7 +48,10 @@ defmodule Membrane.RTP.Parser do
 
   def_output_pad :output, caps: RTP, demand_mode: :auto
 
-  def_output_pad :rtcp_output, mode: :push, caps: :any, availability: :on_request
+  def_output_pad :rtcp_output,
+    mode: :push,
+    caps: {RemoteStream, content_format: RTCP, type: :packetized},
+    availability: :on_request
 
   @impl true
   def handle_init(opts) do
@@ -61,9 +64,24 @@ defmodule Membrane.RTP.Parser do
   end
 
   @impl true
+  def handle_pad_added(Pad.ref(:rtcp_output, _ref) = pad, %{playback_state: :playing}, state) do
+    caps = {:caps, {pad, %RemoteStream{content_format: RTCP, type: :packetized}}}
+    {{:ok, [caps]}, %{state | rtcp_output_pad: pad}}
+  end
+
+  @impl true
   def handle_pad_added(Pad.ref(:rtcp_output, _ref) = pad, _ctx, state) do
     {:ok, %{state | rtcp_output_pad: pad}}
   end
+
+  @impl true
+  def handle_prepared_to_playing(_ctx, %{rtcp_output_pad: pad} = state) when pad != nil do
+    caps = {:caps, {pad, %RemoteStream{content_format: RTCP, type: :packetized}}}
+    {{:ok, [caps]}, state}
+  end
+
+  @impl true
+  def handle_prepared_to_playing(ctx, state), do: super(ctx, state)
 
   @impl true
   def handle_process(:input, %Buffer{payload: payload, metadata: metadata} = buffer, _ctx, state) do
@@ -88,7 +106,7 @@ defmodule Membrane.RTP.Parser do
         end
 
       {:error, reason} ->
-        Membrane.Logger.warn("""
+        Membrane.Logger.debug("""
         Couldn't parse rtp packet:
         #{inspect(payload, limit: :infinity)}
         Reason: #{inspect(reason)}. Ignoring packet.

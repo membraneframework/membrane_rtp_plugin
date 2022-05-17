@@ -49,7 +49,7 @@ defmodule Membrane.RTP.JitterBuffer.PipelineTest do
         end
       end)
 
-      {:ok, state}
+      {{:ok, caps: {:output, %Membrane.RTP{}}}, state}
     end
 
     @impl true
@@ -105,7 +105,6 @@ defmodule Membrane.RTP.JitterBuffer.PipelineTest do
         links: links
       })
 
-    Membrane.Pipeline.play(pipeline)
     assert_pipeline_playback_changed(pipeline, _, :prepared)
     assert_pipeline_playback_changed(pipeline, _, :playing)
 
@@ -136,6 +135,6 @@ defmodule Membrane.RTP.JitterBuffer.PipelineTest do
       end
     end)
 
-    Membrane.Pipeline.stop_and_terminate(pipeline, blocking?: true)
+    Membrane.Pipeline.terminate(pipeline, blocking?: true)
   end
 end

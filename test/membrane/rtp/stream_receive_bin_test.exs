@@ -54,8 +54,6 @@ defmodule Membrane.RTP.StreamReceiveBinTest do
 
     {:ok, pipeline} = Testing.Pipeline.start_link(opts)
 
-    Testing.Pipeline.play(pipeline)
-
     assert_pipeline_playback_changed(pipeline, _, :playing)
     assert_start_of_stream(pipeline, :rtp_parser)
     assert_start_of_stream(pipeline, :frame_counter)
@@ -64,7 +62,7 @@ defmodule Membrane.RTP.StreamReceiveBinTest do
     assert_pipeline_notified(pipeline, :frame_counter, {:frame_count, count})
     assert count == @frames_count
 
-    Testing.Pipeline.stop_and_terminate(pipeline, blocking?: true)
+    Testing.Pipeline.terminate(pipeline, blocking?: true)
   end
 
   test "RTCP reports are generated properly" do
@@ -97,13 +95,11 @@ defmodule Membrane.RTP.StreamReceiveBinTest do
 
     {:ok, pipeline} = Testing.Pipeline.start_link(opts)
 
-    Testing.Pipeline.play(pipeline)
-
     assert_pipeline_playback_changed(pipeline, _, :playing)
     assert_start_of_stream(pipeline, :rtp_parser)
     assert_start_of_stream(pipeline, :sink)
     assert_end_of_stream(pipeline, :rtp_parser, :input, 4000)
     assert_end_of_stream(pipeline, :sink)
-    Testing.Pipeline.stop_and_terminate(pipeline, blocking?: true)
+    Testing.Pipeline.terminate(pipeline, blocking?: true)
   end
 end

@@ -378,7 +378,7 @@ defmodule Membrane.RTP.SessionBin do
             |> via_out(:rtcp_output)
             |> then(if secure?, do: maybe_link_srtcp_decryptor, else: & &1)
             |> to({:rtcp_parser, ref}, RTCP.Parser)
-            |> via_out(:rtcp_output)
+            |> via_out(:receiver_report_output)
             |> then(if secure?, do: maybe_link_srtcp_encryptor, else: & &1)
             |> to_bin_output(rtcp_receiver_output),
             link({:rtcp_parser, ref})
@@ -571,10 +571,16 @@ defmodule Membrane.RTP.SessionBin do
   end
 
   @impl true
-  def handle_pad_removed(Pad.ref(:output, ssrc), _ctx, state) do
+  def handle_pad_removed(Pad.ref(:output, ssrc), ctx, state) do
     # TODO: parent may not know when to unlink, we need to timout SSRCs and notify about that and BYE packets over RTCP
     state = %{state | ssrcs: Map.delete(state.ssrcs, ssrc)}
-    {{:ok, remove_child: {:stream_receive_bin, ssrc}}, state}
+    stream_receive_bin = Map.get(ctx.children, {:stream_receive_bin, ssrc})
+
+    if stream_receive_bin != nil and !stream_receive_bin.terminating? do
+      {{:ok, remove_child: {:stream_receive_bin, ssrc}}, state}
+    else
+      {:ok, state}
+    end
   end
 
   @impl true
