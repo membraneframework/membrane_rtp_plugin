@@ -133,6 +133,9 @@ defmodule Membrane.RTP.SSRCRouter do
   end
 
   @impl true
+  def handle_pad_removed(pad, ctx, state), do: super(pad, ctx, state)
+
+  @impl true
   def handle_process(Pad.ref(:input, _id) = pad, buffer, ctx, state) do
     %Membrane.Buffer{
       metadata: %{rtp: %{ssrc: ssrc, payload_type: payload_type, extensions: extensions}}
