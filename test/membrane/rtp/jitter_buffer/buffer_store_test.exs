@@ -66,6 +66,18 @@ defmodule Membrane.RTP.JitterBuffer.BufferStoreTest do
       assert record_b.buffer.metadata.rtp.sequence_number == 1
     end
 
+    test "handles buffers with very big gaps" do
+      store = %BufferStore{}
+      first_buffer = BufferFactory.sample_buffer(20_072)
+      assert {:ok, store} = BufferStore.insert_buffer(store, first_buffer)
+
+      second_buffer = BufferFactory.sample_buffer(52_840)
+      assert {:ok, store} = BufferStore.insert_buffer(store, second_buffer)
+
+      third_buffer = BufferFactory.sample_buffer(52_841)
+      assert {:ok, _store} = BufferStore.insert_buffer(store, third_buffer)
+    end
+
     test "handles late buffers when starting with sequence_number 0" do
       store = %BufferStore{}
       buffer = BufferFactory.sample_buffer(0)
@@ -211,7 +223,8 @@ defmodule Membrane.RTP.JitterBuffer.BufferStoreTest do
     test "handles later rollovers" do
       m = @seq_number_limit
 
-      store = %BufferStore{prev_index: 3 * m - 6, rollover_count: 2}
+      prev_index = 3 * m - 6
+      store = %BufferStore{prev_index: prev_index, end_index: prev_index, rollover_count: 2}
 
       store =
         (Enum.into((m - 5)..(m - 1), []) ++ Enum.into(0..4, []))
@@ -223,7 +236,7 @@ defmodule Membrane.RTP.JitterBuffer.BufferStoreTest do
 
     test "handles late packets after a rollover" do
       indexes = [65_535, 0, 65_534]
-      store = enum_into_store(indexes, %BufferStore{prev_index: 65_533})
+      store = enum_into_store(indexes, %BufferStore{prev_index: 65_533, end_index: 65_533})
 
       Enum.each(indexes, fn _index ->
         assert {%Record{}, _store} = BufferStore.shift(store)

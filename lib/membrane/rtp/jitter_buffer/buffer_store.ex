@@ -60,33 +60,32 @@ defmodule Membrane.RTP.JitterBuffer.BufferStore do
   @spec do_insert_buffer(t(), Buffer.t(), RTP.Header.sequence_number_t()) ::
           {:ok, t()} | {:error, insert_error()}
   defp do_insert_buffer(%__MODULE__{prev_index: nil} = store, buffer, 0) do
-    store = add_record(store, Record.new(buffer, @seq_number_limit))
+    store = add_record(store, Record.new(buffer, @seq_number_limit), :next)
     {:ok, %__MODULE__{store | prev_index: @seq_number_limit - 1}}
   end
 
   defp do_insert_buffer(%__MODULE__{prev_index: nil} = store, buffer, seq_num) do
-    store = add_record(store, Record.new(buffer, seq_num))
+    store = add_record(store, Record.new(buffer, seq_num), :current)
     {:ok, %__MODULE__{store | prev_index: seq_num - 1}}
   end
 
   defp do_insert_buffer(
-         %__MODULE__{prev_index: prev_index, rollover_count: roc} = store,
+         %__MODULE__{prev_index: prev_index, end_index: end_index, rollover_count: roc} = store,
          buffer,
          seq_num
        ) do
-    prev_seq_num = rem(prev_index, @seq_number_limit)
+    prev_seq_num = rem(end_index, @seq_number_limit)
 
-    index =
+    {epoch, index} =
       case Utils.from_which_cycle(prev_seq_num, seq_num, @seq_number_limit) do
-        :current -> seq_num + roc * @seq_number_limit
-        :previous -> seq_num + (roc - 1) * @seq_number_limit
-        :next -> seq_num + (roc + 1) * @seq_number_limit
+        :current -> {:current, seq_num + roc * @seq_number_limit}
+        :previous -> {:previous, seq_num + (roc - 1) * @seq_number_limit}
+        :next -> {:next, seq_num + (roc + 1) * @seq_number_limit}
       end
 
-    # TODO: Consider taking some action if the gap between indices is too big
     if is_fresh_packet?(prev_index, index) do
       record = Record.new(buffer, index)
-      {:ok, add_record(store, record)}
+      {:ok, add_record(store, record, epoch)}
     else
       {:error, :late_packet}
     end
@@ -211,18 +210,15 @@ defmodule Membrane.RTP.JitterBuffer.BufferStore do
     end
   end
 
-  defp add_record(%__MODULE__{heap: heap, set: set} = store, %Record{} = record) do
+  defp add_record(%__MODULE__{heap: heap, set: set} = store, %Record{} = record, record_epoch) do
     if set |> MapSet.member?(record.index) do
       store
     else
       %__MODULE__{store | heap: Heap.push(heap, record), set: MapSet.put(set, record.index)}
       |> update_end_index(record.index)
+      |> update_roc(record_epoch)
     end
   end
-
-  defp bump_prev_index(%{prev_index: prev, rollover_count: roc} = store)
-       when rem(prev + 1, @seq_number_limit) == 0,
-       do: %__MODULE__{store | prev_index: prev + 1, rollover_count: roc + 1}
 
   defp bump_prev_index(store), do: %__MODULE__{store | prev_index: store.prev_index + 1}
 
@@ -233,4 +229,9 @@ defmodule Membrane.RTP.JitterBuffer.BufferStore do
   defp update_end_index(%__MODULE__{end_index: last} = store, added_index)
        when last >= added_index,
        do: store
+
+  defp update_roc(%{rollover_count: roc} = store, :next),
+    do: %__MODULE__{store | rollover_count: roc + 1}
+
+  defp update_roc(store, _record_epoch), do: store
 end
