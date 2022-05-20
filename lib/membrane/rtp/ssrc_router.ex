@@ -94,6 +94,7 @@ defmodule Membrane.RTP.SSRCRouter do
     {buffered_actions, state} = pop_in(state, [:buffered_actions, ssrc])
     buffered_actions = Enum.reverse(buffered_actions || [])
 
+    register_packet_arrival_event(pad, ctx)
     maybe_emit_telemetry_events(buffered_actions, state, ctx)
 
     events =
@@ -234,13 +235,22 @@ defmodule Membrane.RTP.SSRCRouter do
     end
   end
 
+  defp register_packet_arrival_event(pad, ctx) do
+    Membrane.TelemetryMetrics.register_event_with_telemetry_metadata(
+      telemetry_event_name(),
+      ctx.pads[pad].options.telemetry_metadata
+    )
+  end
+
   defp emit_packet_arrival_event(ssrc, payload, pad, state, ctx) do
     Membrane.TelemetryMetrics.execute(
-      [:packet_arrival, :rtp],
+      telemetry_event_name(),
       packet_arrival_telemetry_measurements(ssrc, payload, pad, state, ctx),
       %{ssrc: ssrc, telemetry_metadata: ctx.pads[pad].options.telemetry_metadata}
     )
   end
+
+  defp telemetry_event_name(), do: [:packet_arrival, :rtp]
 
   defp packet_arrival_telemetry_measurements(ssrc, payload, pad, state, ctx) do
     %{ssrc: ssrc, bytes: byte_size(payload)}

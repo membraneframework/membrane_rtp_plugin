@@ -22,6 +22,8 @@ defmodule Membrane.RTCP.Receiver do
               fir_interval: [spec: Membrane.Time.t() | nil, default: nil],
               telemetry_metadata: [spec: [{atom(), any()}], default: []]
 
+  @event_name [:sending_fir, :rtcp]
+
   @impl true
   def handle_init(opts) do
     {:ok, Map.from_struct(opts) |> Map.merge(%{fir_seq_num: 0, sr_info: %{}})}
@@ -36,6 +38,11 @@ defmodule Membrane.RTCP.Receiver do
       if state.report_interval,
         do: [start_timer: {:report_timer, state.report_interval}],
         else: []
+
+    Membrane.TelemetryMetrics.register_event_with_telemetry_metadata(
+      @event_name,
+      state.telemetry_metadata
+    )
 
     {{:ok, fir_timer ++ report_timer}, state}
   end
@@ -124,7 +131,7 @@ defmodule Membrane.RTCP.Receiver do
     }
 
     Membrane.TelemetryMetrics.execute(
-      [:sending_fir, :rtcp],
+      @event_name,
       %{},
       %{
         ssrc: state.remote_ssrc,
