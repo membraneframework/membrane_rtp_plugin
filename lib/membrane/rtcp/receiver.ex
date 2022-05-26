@@ -20,12 +20,13 @@ defmodule Membrane.RTCP.Receiver do
               remote_ssrc: [spec: RTP.ssrc_t()],
               report_interval: [spec: Membrane.Time.t() | nil, default: nil],
               fir_interval: [spec: Membrane.Time.t() | nil, default: nil],
-              telemetry_metadata: [spec: [{atom(), any()}], default: []]
+              telemetry_label: [spec: [{atom(), any()}], default: []]
 
   @event_name [:sending_fir, :rtcp]
 
   @impl true
   def handle_init(opts) do
+    Membrane.TelemetryMetrics.register(@event_name, opts.telemetry_label)
     {:ok, Map.from_struct(opts) |> Map.merge(%{fir_seq_num: 0, sr_info: %{}})}
   end
 
@@ -38,11 +39,6 @@ defmodule Membrane.RTCP.Receiver do
       if state.report_interval,
         do: [start_timer: {:report_timer, state.report_interval}],
         else: []
-
-    Membrane.TelemetryMetrics.register_event_with_telemetry_metadata(
-      @event_name,
-      state.telemetry_metadata
-    )
 
     {{:ok, fir_timer ++ report_timer}, state}
   end
@@ -130,14 +126,7 @@ defmodule Membrane.RTCP.Receiver do
       }
     }
 
-    Membrane.TelemetryMetrics.execute(
-      @event_name,
-      %{},
-      %{
-        ssrc: state.remote_ssrc,
-        telemetry_metadata: state.telemetry_metadata
-      }
-    )
+    Membrane.TelemetryMetrics.execute(@event_name, %{}, %{}, state.telemetry_label)
 
     event = %RTCPEvent{rtcp: rtcp}
     state = Map.update!(state, :fir_seq_num, &(&1 + 1))

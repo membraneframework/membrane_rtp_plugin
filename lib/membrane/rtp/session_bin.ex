@@ -206,7 +206,7 @@ defmodule Membrane.RTP.SessionBin do
         spec: function() | nil,
         default: nil
       ],
-      telemetry_metadata: [
+      telemetry_label: [
         spec: [{atom(), any()}],
         default: []
       ],
@@ -402,7 +402,7 @@ defmodule Membrane.RTP.SessionBin do
       rtp_extensions: rtp_extensions,
       rtcp_fir_interval: fir_interval,
       encoding: encoding,
-      telemetry_metadata: telemetry_metadata,
+      telemetry_label: telemetry_label,
       extensions: extensions
     } = ctx.pads[pad].options
 
@@ -422,7 +422,7 @@ defmodule Membrane.RTP.SessionBin do
         remote_ssrc: ssrc,
         rtcp_report_interval: state.rtcp_receiver_report_interval,
         rtcp_fir_interval: fir_interval,
-        telemetry_metadata: telemetry_metadata,
+        telemetry_label: telemetry_label,
         secure?: state.secure?,
         srtp_policies: state.srtp_policies
       }
@@ -435,7 +435,7 @@ defmodule Membrane.RTP.SessionBin do
       keyframe_detector: keyframe_detector,
       frame_detector: frame_detector,
       encoding: encoding,
-      telemetry_metadata: telemetry_metadata
+      telemetry_label: telemetry_label
     ]
 
     router_link =

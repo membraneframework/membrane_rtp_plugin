@@ -31,7 +31,7 @@ defmodule Membrane.RTP.StreamReceiveBin do
               remote_ssrc: [spec: Membrane.RTP.ssrc_t()],
               rtcp_report_interval: [spec: Membrane.Time.t() | nil],
               rtcp_fir_interval: [spec: Membrane.Time.t() | nil],
-              telemetry_metadata: [
+              telemetry_label: [
                 spec: [{atom(), any()}],
                 default: []
               ]
@@ -61,7 +61,7 @@ defmodule Membrane.RTP.StreamReceiveBin do
         remote_ssrc: opts.remote_ssrc,
         report_interval: opts.rtcp_report_interval,
         fir_interval: opts.rtcp_fir_interval,
-        telemetry_metadata: opts.telemetry_metadata
+        telemetry_label: opts.telemetry_label
       })
       |> to(:packet_tracker, %Membrane.RTP.InboundPacketTracker{
         clock_rate: opts.clock_rate,

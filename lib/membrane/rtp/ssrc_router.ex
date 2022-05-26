@@ -32,7 +32,7 @@ defmodule Membrane.RTP.SSRCRouter do
         spec: function() | nil,
         default: nil
       ],
-      telemetry_metadata: [
+      telemetry_label: [
         spec: [{atom(), atom()}],
         default: []
       ],
@@ -236,9 +236,9 @@ defmodule Membrane.RTP.SSRCRouter do
   end
 
   defp register_packet_arrival_event(pad, ctx) do
-    Membrane.TelemetryMetrics.register_event_with_telemetry_metadata(
+    Membrane.TelemetryMetrics.register(
       telemetry_event_name(),
-      ctx.pads[pad].options.telemetry_metadata
+      ctx.pads[pad].options.telemetry_label
     )
   end
 
@@ -246,7 +246,8 @@ defmodule Membrane.RTP.SSRCRouter do
     Membrane.TelemetryMetrics.execute(
       telemetry_event_name(),
       packet_arrival_telemetry_measurements(ssrc, payload, pad, state, ctx),
-      %{ssrc: ssrc, telemetry_metadata: ctx.pads[pad].options.telemetry_metadata}
+      %{},
+      ctx.pads[pad].options.telemetry_label
     )
   end
 
