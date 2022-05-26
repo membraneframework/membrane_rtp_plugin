@@ -124,7 +124,7 @@ defmodule Membrane.RTP.VAD do
     buffer = Header.Extension.put(buffer, new_extension)
 
     rtp_timestamp = buffer.metadata.rtp.timestamp
-    epoch = Utils.from_which_cycle(state.current_timestamp, rtp_timestamp, @timestamp_limit)
+    epoch = Utils.from_which_epoch(state.current_timestamp, rtp_timestamp, @timestamp_limit)
     current_timestamp = state.current_timestamp || 0
 
     cond do

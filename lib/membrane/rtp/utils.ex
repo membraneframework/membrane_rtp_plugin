@@ -30,12 +30,12 @@ defmodule Membrane.RTP.Utils do
     end
   end
 
-  @spec from_which_cycle(number() | nil, number(), number()) :: :current | :previous | :next
-  def from_which_cycle(previous_value, new_value, cycle_length)
+  @spec from_which_epoch(number() | nil, number(), number()) :: :current | :previous | :next
+  def from_which_epoch(previous_value, new_value, cycle_length)
 
-  def from_which_cycle(nil, _new, _cycle_length), do: :current
+  def from_which_epoch(nil, _new, _cycle_length), do: :current
 
-  def from_which_cycle(previous_value, new_value, cycle_length) do
+  def from_which_epoch(previous_value, new_value, cycle_length) do
     # a) current cycle
     distance_if_current = abs(previous_value - new_value)
     # b) new_value is from the previous cycle

@@ -77,7 +77,7 @@ defmodule Membrane.RTP.JitterBuffer.BufferStore do
     prev_seq_num = rem(end_index, @seq_number_limit)
 
     {epoch, index} =
-      case Utils.from_which_cycle(prev_seq_num, seq_num, @seq_number_limit) do
+      case Utils.from_which_epoch(prev_seq_num, seq_num, @seq_number_limit) do
         :current -> {:current, seq_num + roc * @seq_number_limit}
         :previous -> {:previous, seq_num + (roc - 1) * @seq_number_limit}
         :next -> {:next, seq_num + (roc + 1) * @seq_number_limit}
