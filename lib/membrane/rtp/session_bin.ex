@@ -200,15 +200,18 @@ defmodule Membrane.RTP.SessionBin do
       ],
       keyframe_detector: [
         spec: function() | nil,
-        default: nil
+        default: nil,
+        description: "Function detecting, if packet contains keyframe"
       ],
       frame_detector: [
         spec: function() | nil,
-        default: nil
+        default: nil,
+        description: "Function detecting, if packet contains frame"
       ],
       telemetry_label: [
-        spec: [{atom(), any()}],
-        default: []
+        spec: Membrane.TelemetryMetrics.label(),
+        default: [],
+        description: "Label passed to Membrane.TelemetryMetrics functions"
       ],
       encoding: [
         spec: RTP.encoding_name_t() | nil,

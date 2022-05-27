@@ -20,7 +20,7 @@ defmodule Membrane.RTCP.Receiver do
               remote_ssrc: [spec: RTP.ssrc_t()],
               report_interval: [spec: Membrane.Time.t() | nil, default: nil],
               fir_interval: [spec: Membrane.Time.t() | nil, default: nil],
-              telemetry_label: [spec: [{atom(), any()}], default: []]
+              telemetry_label: [spec: Membrane.TelemetryMetrics.label(), default: []]
 
   @event_name [:sending_fir, :rtcp]
 
