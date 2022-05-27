@@ -198,16 +198,6 @@ defmodule Membrane.RTP.SessionBin do
         If set to nil then the depayloading process gets skipped.
         """
       ],
-      keyframe_detector: [
-        spec: function() | nil,
-        default: nil,
-        description: "Function detecting, if packet contains keyframe"
-      ],
-      frame_detector: [
-        spec: function() | nil,
-        default: nil,
-        description: "Function detecting, if packet contains frame"
-      ],
       telemetry_label: [
         spec: Membrane.TelemetryMetrics.label(),
         default: [],
@@ -399,8 +389,6 @@ defmodule Membrane.RTP.SessionBin do
   def handle_pad_added(Pad.ref(:output, ssrc) = pad, ctx, state) do
     %{
       depayloader: depayloader,
-      keyframe_detector: keyframe_detector,
-      frame_detector: frame_detector,
       clock_rate: clock_rate,
       rtp_extensions: rtp_extensions,
       rtcp_fir_interval: fir_interval,
@@ -435,8 +423,6 @@ defmodule Membrane.RTP.SessionBin do
       maybe_handle_twcc_receiver(rtp_extensions, ssrc, ctx, state)
 
     ssrc_router_pad_options = [
-      keyframe_detector: keyframe_detector,
-      frame_detector: frame_detector,
       encoding: encoding,
       telemetry_label: telemetry_label
     ]

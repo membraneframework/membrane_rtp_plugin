@@ -24,14 +24,6 @@ defmodule Membrane.RTP.SSRCRouter do
     availability: :on_request,
     demand_mode: :auto,
     options: [
-      keyframe_detector: [
-        spec: function() | nil,
-        default: nil
-      ],
-      frame_detector: [
-        spec: function() | nil,
-        default: nil
-      ],
       telemetry_label: [
         spec: [{atom(), atom()}],
         default: []
@@ -51,16 +43,12 @@ defmodule Membrane.RTP.SSRCRouter do
     @type t() :: %__MODULE__{
             input_pads: %{RTP.ssrc_t() => [input_pad :: Pad.ref_t()]},
             buffered_actions: %{RTP.ssrc_t() => [Membrane.Element.Action.t()]},
-            srtp_keying_material_event: struct() | nil,
-            ssrc_to_keyframe_detector: %{RTP.ssrc_t() => function() | nil},
-            ssrc_to_frame_detector: %{RTP.ssrc_t() => function() | nil}
+            srtp_keying_material_event: struct() | nil
           }
 
     defstruct input_pads: %{},
               buffered_actions: %{},
-              srtp_keying_material_event: nil,
-              ssrc_to_keyframe_detector: %{},
-              ssrc_to_frame_detector: %{}
+              srtp_keying_material_event: nil
   end
 
   @typedoc """
@@ -89,8 +77,6 @@ defmodule Membrane.RTP.SSRCRouter do
 
   @impl true
   def handle_pad_added(Pad.ref(:output, ssrc) = pad, ctx, state) do
-    keyframe_detector = ctx.pads[pad].options.keyframe_detector
-    frame_detector = ctx.pads[pad].options.frame_detector
     {buffered_actions, state} = pop_in(state, [:buffered_actions, ssrc])
     buffered_actions = Enum.reverse(buffered_actions || [])
 
@@ -103,17 +89,6 @@ defmodule Membrane.RTP.SSRCRouter do
       else
         []
       end
-
-    state =
-      state
-      |> Map.update!(
-        :ssrc_to_keyframe_detector,
-        &Map.put(&1, ssrc, keyframe_detector)
-      )
-      |> Map.update!(
-        :ssrc_to_frame_detector,
-        &Map.put(&1, ssrc, frame_detector)
-      )
 
     {{:ok, [caps: {pad, %RTP{}}] ++ events ++ buffered_actions}, state}
   end
@@ -253,31 +228,9 @@ defmodule Membrane.RTP.SSRCRouter do
 
   defp telemetry_event_name(), do: [:packet_arrival, :rtp]
 
-  defp packet_arrival_telemetry_measurements(ssrc, payload, pad, state, ctx) do
+  defp packet_arrival_telemetry_measurements(ssrc, payload, pad, _state, ctx) do
     %{ssrc: ssrc, bytes: byte_size(payload)}
-    |> maybe_add_keyframe_indicator(ssrc, payload, state)
-    |> maybe_add_frame_indicator(ssrc, payload, state)
     |> maybe_add_encoding(pad, ctx)
-  end
-
-  defp maybe_add_keyframe_indicator(measurements, ssrc, payload, state) do
-    detector = state.ssrc_to_keyframe_detector[ssrc]
-
-    cond do
-      detector == nil -> measurements
-      detector.(payload) -> Map.put(measurements, :keyframe_indicator, 1)
-      true -> Map.put(measurements, :keyframe_indicator, 0)
-    end
-  end
-
-  defp maybe_add_frame_indicator(measurements, ssrc, payload, state) do
-    detector = state.ssrc_to_frame_detector[ssrc]
-
-    cond do
-      detector == nil -> measurements
-      detector.(payload) -> Map.put(measurements, :frame_indicator, 1)
-      true -> Map.put(measurements, :frame_indicator, 0)
-    end
   end
 
   defp maybe_add_encoding(measurements, pad, ctx) do

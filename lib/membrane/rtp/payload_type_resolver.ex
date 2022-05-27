@@ -31,6 +31,7 @@ defmodule Membrane.RTP.PayloadFormatResolver do
     end
   end
 
+  @spec keyframe_detector(atom()) :: {:ok, function()} | :error
   def keyframe_detector(encoding) do
     case PayloadFormat.get(encoding).keyframe_detector do
       nil -> :error
@@ -38,6 +39,7 @@ defmodule Membrane.RTP.PayloadFormatResolver do
     end
   end
 
+  @spec frame_detector(atom()) :: {:ok, function()} | :error
   def frame_detector(encoding) do
     case PayloadFormat.get(encoding).frame_detector do
       nil -> :error
