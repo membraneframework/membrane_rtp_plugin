@@ -1,6 +1,11 @@
 defmodule Membrane.RTP.Metrics do
-  @moduledoc false
+  @moduledoc """
+  Defines list of metrics, that can be aggregated based on events from membrane_rtp_plugin.
+  """
 
+  @doc """
+  Returns list of metrics, that can be aggregated based on events from membrane_rtp_plugin.
+  """
   @spec metrics() :: [Telemetry.Metrics.t()]
   def metrics() do
     [
