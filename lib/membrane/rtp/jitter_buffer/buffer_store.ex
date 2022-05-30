@@ -4,13 +4,6 @@ defmodule Membrane.RTP.JitterBuffer.BufferStore do
   # Store for RTP packets. Packets are stored in `Heap` ordered by packet index. Packet index is
   # defined in RFC 3711 (SRTP) as: 2^16 * rollover count + sequence number.
 
-  # ## Fields
-  #   - `rollover_count` - count of all performed rollovers (cycles of sequence number)
-  #   - `heap` - contains records containing buffers
-  #   - `prev_index` - index of the last packet that has been served
-  #   - `end_index` - the highest index in the buffer so far, mapping to the most recently produced
-  #                   RTP packet placed in JitterBuffer
-
   use Bunch
   use Bunch.Access
   alias Membrane.{Buffer, RTP}
@@ -27,6 +20,17 @@ defmodule Membrane.RTP.JitterBuffer.BufferStore do
             set: MapSet.new(),
             rollover_count: 0
 
+  @typedoc """
+  Type describing BufferStore structure.
+
+  Fields:
+  - `rollover_count` - count of all performed rollovers (cycles of sequence number)
+  - `heap` - contains records containing buffers
+  - `set` - helper structure for faster read operations; content is the same as in `heap`
+  - `prev_index` - index of the last packet that has been served
+  - `end_index` - the highest index in the buffer so far, mapping to the most recently produced
+  RTP packet placed in JitterBuffer
+  """
   @type t :: %__MODULE__{
           prev_index: JitterBuffer.packet_index() | nil,
           end_index: JitterBuffer.packet_index() | nil,
