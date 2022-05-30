@@ -96,27 +96,6 @@ defmodule Membrane.RTP.JitterBuffer.BufferStore do
   end
 
   @doc """
-  Calculates size of the Store.
-
-  Size is calculated by counting `slots` between youngest (buffer with
-  smallest sequence number) and oldest buffer.
-
-  If Store has buffers [1,2,10] its size would be 10.
-  """
-  @spec size(__MODULE__.t()) :: number()
-  def size(store)
-  def size(%__MODULE__{heap: %Heap{data: nil}}), do: 0
-
-  def size(%__MODULE__{prev_index: nil, end_index: last, heap: heap}) do
-    size = if Heap.size(heap) == 1, do: 1, else: last - Heap.root(heap).index + 1
-    size
-  end
-
-  def size(%__MODULE__{prev_index: prev_index, end_index: end_index}) do
-    end_index - prev_index
-  end
-
-  @doc """
   Shifts the store to the buffer with the next sequence number.
 
   If this buffer is present, it will be returned.
