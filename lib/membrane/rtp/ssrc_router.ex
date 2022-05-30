@@ -28,7 +28,7 @@ defmodule Membrane.RTP.SSRCRouter do
     demand_mode: :auto,
     options: [
       telemetry_label: [
-        spec: [{atom(), atom()}],
+        spec: Membrane.TelemetryMetrics.label(),
         default: []
       ],
       encoding: [
@@ -65,6 +65,7 @@ defmodule Membrane.RTP.SSRCRouter do
     {:ok, %State{}}
   end
 
+  @impl true
   def handle_end_of_stream(Pad.ref(:input, _id) = pad, ctx, state) do
     # multiple SSRCs might come from single input pad
     {actions, state} =
@@ -239,7 +240,7 @@ defmodule Membrane.RTP.SSRCRouter do
     )
   end
 
-  def emit_new_inbound_track_event(ssrc, pad, ctx) do
+  defp emit_new_inbound_track_event(ssrc, pad, ctx) do
     Membrane.TelemetryMetrics.execute(
       @new_inbound_track_event,
       %{ssrc: ssrc} |> maybe_add_encoding(pad, ctx),
