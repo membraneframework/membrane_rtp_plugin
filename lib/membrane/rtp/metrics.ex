@@ -6,25 +6,25 @@ defmodule Membrane.RTP.Metrics do
     [
       Telemetry.Metrics.counter(
         "inbound-rtp.keyframe_request_sent",
-        event_name: [:RTCP, :fir, :sending]
+        event_name: [Membrane.RTP, :RTCP, :fir, :sending]
       ),
       Telemetry.Metrics.counter(
         "inbound-rtp.packets",
-        event_name: [:RTP, :packet, :arrival]
+        event_name: [Membrane.RTP, :RTP, :packet, :arrival]
       ),
       Telemetry.Metrics.sum(
         "inbound-rtp.bytes_received",
-        event_name: [:RTP, :packet, :arrival],
+        event_name: [Membrane.RTP, :RTP, :packet, :arrival],
         measurement: :bytes
       ),
       Telemetry.Metrics.last_value(
         "inbound-rtp.encoding",
-        event_name: [:RTP, :inbound_track, :new],
+        event_name: [Membrane.RTP, :RTP, :inbound_track, :new],
         measurement: :encoding
       ),
       Telemetry.Metrics.last_value(
         "inbound-rtp.ssrc",
-        event_name: [:RTP, :inbound_track, :new],
+        event_name: [Membrane.RTP, :RTP, :inbound_track, :new],
         measurement: :ssrc
       )
     ]
