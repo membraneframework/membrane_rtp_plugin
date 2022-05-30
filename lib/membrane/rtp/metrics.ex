@@ -11,7 +11,7 @@ defmodule Membrane.RTP.Metrics do
     [
       Telemetry.Metrics.counter(
         "inbound-rtp.keyframe_request_sent",
-        event_name: [Membrane.RTP, :RTCP, :fir, :sending]
+        event_name: [Membrane.RTP, :RTCP, :fir, :sent]
       ),
       Telemetry.Metrics.counter(
         "inbound-rtp.packets",
