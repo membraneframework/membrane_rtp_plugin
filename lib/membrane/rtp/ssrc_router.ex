@@ -17,8 +17,8 @@ defmodule Membrane.RTP.SSRCRouter do
 
   require Membrane.TelemetryMetrics
 
-  @packet_arrival_event [Membrane.RTP, :RTP, :packet, :arrival]
-  @new_inbound_track_event [Membrane.RTP, :RTP, :inbound_track, :new]
+  @packet_arrival_event [Membrane.RTP, :packet, :arrival]
+  @new_inbound_track_event [Membrane.RTP, :inbound_track, :new]
 
   def_input_pad :input, caps: [RTCP, RTP], availability: :on_request, demand_mode: :auto
 

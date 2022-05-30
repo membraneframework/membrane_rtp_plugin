@@ -22,7 +22,7 @@ defmodule Membrane.RTCP.Receiver do
               fir_interval: [spec: Membrane.Time.t() | nil, default: nil],
               telemetry_label: [spec: Membrane.TelemetryMetrics.label(), default: []]
 
-  @event_name [Membrane.RTP, :RTCP, :fir, :sent]
+  @event_name [Membrane.RTP, :rtcp, :fir, :sent]
 
   @impl true
   def handle_init(opts) do
