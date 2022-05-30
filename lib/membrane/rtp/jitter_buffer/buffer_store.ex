@@ -27,8 +27,8 @@ defmodule Membrane.RTP.JitterBuffer.BufferStore do
   - `rollover_count` - count of all performed rollovers (cycles of sequence number)
   - `heap` - contains records containing buffers
   - `set` - helper structure for faster read operations; content is the same as in `heap`
-  - `flush_index` - index of the last packet that has been emitted as a result of a call
-  to one of the `flush` functions
+  - `flush_index` - index of the last packet that has been emitted (or would habe been
+  emitted, but never arrived) as a result of a call to one of the `flush` functions
   - `highest_incoming_index` - the highest index in the buffer so far, mapping to the most recently produced
   RTP packet placed in JitterBuffer
   """
@@ -132,7 +132,7 @@ defmodule Membrane.RTP.JitterBuffer.BufferStore do
         {nil, store}
       end
 
-    {result, %__MODULE__{store | flush_index: store.flush_index + 1}}
+    {result, %__MODULE__{store | flush_index: expected_next_index}}
   end
 
   @doc """
