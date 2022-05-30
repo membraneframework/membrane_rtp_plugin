@@ -65,7 +65,7 @@ defmodule Membrane.RTP.TWCCReceiver.PacketInfoStore do
       seq_to_timestamp: seq_to_timestamp
     } = store
 
-    case Utils.from_which_epoch(base_seq_num, new_seq_num, @seq_number_limit) do
+    case Utils.from_which_rollover(base_seq_num, new_seq_num, @seq_number_limit) do
       :current ->
         {store, new_seq_num}
 

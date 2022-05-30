@@ -172,7 +172,7 @@ defmodule Membrane.RTP.JitterBuffer do
     # https://datatracker.ietf.org/doc/html/rfc3550#section-5.1
 
     timestamp_base =
-      case Utils.from_which_epoch(previous_timestamp, rtp_timestamp, @timestamp_limit) do
+      case Utils.from_which_rollover(previous_timestamp, rtp_timestamp, @timestamp_limit) do
         :next -> timestamp_base - @timestamp_limit
         :previous -> timestamp_base + @timestamp_limit
         :current -> timestamp_base

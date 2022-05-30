@@ -85,8 +85,8 @@ defmodule Membrane.RTP.JitterBuffer.BufferStore do
        ) do
     highest_seq_num = rem(highest_incoming_index, @seq_number_limit)
 
-    {epoch, index} =
-      case Utils.from_which_epoch(highest_seq_num, seq_num, @seq_number_limit) do
+    {rollover, index} =
+      case Utils.from_which_rollover(highest_seq_num, seq_num, @seq_number_limit) do
         :current -> {:current, seq_num + roc * @seq_number_limit}
         :previous -> {:previous, seq_num + (roc - 1) * @seq_number_limit}
         :next -> {:next, seq_num + (roc + 1) * @seq_number_limit}
@@ -94,7 +94,7 @@ defmodule Membrane.RTP.JitterBuffer.BufferStore do
 
     if is_fresh_packet?(flush_index, index) do
       record = Record.new(buffer, index)
-      {:ok, add_record(store, record, epoch)}
+      {:ok, add_record(store, record, rollover)}
     else
       {:error, :late_packet}
     end
@@ -198,13 +198,13 @@ defmodule Membrane.RTP.JitterBuffer.BufferStore do
     end
   end
 
-  defp add_record(%__MODULE__{heap: heap, set: set} = store, %Record{} = record, record_epoch) do
+  defp add_record(%__MODULE__{heap: heap, set: set} = store, %Record{} = record, record_rollover) do
     if set |> MapSet.member?(record.index) do
       store
     else
       %__MODULE__{store | heap: Heap.push(heap, record), set: MapSet.put(set, record.index)}
       |> update_highest_incoming_index(record.index)
-      |> update_roc(record_epoch)
+      |> update_roc(record_rollover)
     end
   end
 
@@ -225,5 +225,5 @@ defmodule Membrane.RTP.JitterBuffer.BufferStore do
   defp update_roc(%{rollover_count: roc} = store, :next),
     do: %__MODULE__{store | rollover_count: roc + 1}
 
-  defp update_roc(store, _record_epoch), do: store
+  defp update_roc(store, _record_rollover), do: store
 end
