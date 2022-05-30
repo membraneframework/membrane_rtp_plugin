@@ -126,10 +126,10 @@ defmodule Membrane.RTP.JitterBuffer do
   end
 
   defp send_buffers(%State{store: store} = state) do
-    # Shift buffers that stayed in queue longer than latency and any gaps before them
-    {too_old_records, store} = BufferStore.shift_older_than(store, state.latency)
-    # Additionally, shift buffers as long as there are no gaps
-    {buffers, store} = BufferStore.shift_ordered(store)
+    # Flushes buffers that stayed in queue longer than latency and any gaps before them
+    {too_old_records, store} = BufferStore.flush_older_than(store, state.latency)
+    # Additionally, flush buffers as long as there are no gaps
+    {buffers, store} = BufferStore.flush_ordered(store)
 
     {actions, state} = (too_old_records ++ buffers) |> Enum.map_reduce(state, &record_to_action/2)
 
