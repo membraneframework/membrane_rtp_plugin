@@ -157,20 +157,20 @@ defmodule Membrane.RTP.JitterBuffer.BufferStoreTest do
       assert {%Record{} = record, empty_store} = BufferStore.shift(store)
       assert record.buffer == buffer
       assert empty_store.heap.size == 0
-      assert empty_store.prev_index == record.index
+      assert empty_store.shift_index == record.index
     end
 
-    test "returns nil when store is empty and bumps prev_index", %{base_store: store} do
+    test "returns nil when store is empty and bumps shift_index", %{base_store: store} do
       assert {nil, new_store} = BufferStore.shift(store)
-      assert new_store.prev_index == store.prev_index + 1
+      assert new_store.shift_index == store.shift_index + 1
     end
 
     test "returns nil when heap is not empty, but the next buffer is not present", %{
       store: store
     } do
-      broken_store = %BufferStore{store | prev_index: @base_index - 1}
+      broken_store = %BufferStore{store | shift_index: @base_index - 1}
       assert {nil, new_store} = BufferStore.shift(broken_store)
-      assert new_store.prev_index == @base_index
+      assert new_store.shift_index == @base_index
     end
 
     test "sorts buffers by index number", %{base_store: store} do
@@ -189,7 +189,7 @@ defmodule Membrane.RTP.JitterBuffer.BufferStoreTest do
     end
 
     test "handles rollover", %{base_store: base_store} do
-      store = %BufferStore{base_store | prev_index: 65_533}
+      store = %BufferStore{base_store | shift_index: 65_533}
       before_rollover_seq_nums = 65_534..65_535
       after_rollover_seq_nums = 0..10
 
@@ -209,7 +209,7 @@ defmodule Membrane.RTP.JitterBuffer.BufferStoreTest do
     end
 
     test "handles empty rollover", %{base_store: base_store} do
-      store = %BufferStore{base_store | prev_index: 65_533}
+      store = %BufferStore{base_store | shift_index: 65_533}
       base_data = Enum.into(65_534..65_535, [])
       store = enum_into_store(base_data, store)
 
@@ -223,8 +223,8 @@ defmodule Membrane.RTP.JitterBuffer.BufferStoreTest do
     test "handles later rollovers" do
       m = @seq_number_limit
 
-      prev_index = 3 * m - 6
-      store = %BufferStore{prev_index: prev_index, end_index: prev_index, rollover_count: 2}
+      shift_index = 3 * m - 6
+      store = %BufferStore{shift_index: shift_index, end_index: shift_index, rollover_count: 2}
 
       store =
         (Enum.into((m - 5)..(m - 1), []) ++ Enum.into(0..4, []))
@@ -236,7 +236,7 @@ defmodule Membrane.RTP.JitterBuffer.BufferStoreTest do
 
     test "handles late packets after a rollover" do
       indexes = [65_535, 0, 65_534]
-      store = enum_into_store(indexes, %BufferStore{prev_index: 65_533, end_index: 65_533})
+      store = enum_into_store(indexes, %BufferStore{shift_index: 65_533, end_index: 65_533})
 
       Enum.each(indexes, fn _index ->
         assert {%Record{}, _store} = BufferStore.shift(store)
@@ -259,7 +259,7 @@ defmodule Membrane.RTP.JitterBuffer.BufferStoreTest do
 
   defp new_testing_store(index) do
     %BufferStore{
-      prev_index: index,
+      shift_index: index,
       end_index: index,
       heap: Heap.new(&Record.rtp_comparator/2)
     }

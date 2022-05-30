@@ -14,7 +14,7 @@ defmodule Membrane.RTP.JitterBuffer.BufferStore do
 
   @seq_number_limit Bitwise.bsl(1, 16)
 
-  defstruct prev_index: nil,
+  defstruct shift_index: nil,
             end_index: nil,
             heap: Heap.new(&Record.rtp_comparator/2),
             set: MapSet.new(),
@@ -27,12 +27,13 @@ defmodule Membrane.RTP.JitterBuffer.BufferStore do
   - `rollover_count` - count of all performed rollovers (cycles of sequence number)
   - `heap` - contains records containing buffers
   - `set` - helper structure for faster read operations; content is the same as in `heap`
-  - `prev_index` - index of the last packet that has been served
+  - `shift_index` - index of the last packet that has been emitted as a result of a call
+  to one of the `shift` functions
   - `end_index` - the highest index in the buffer so far, mapping to the most recently produced
   RTP packet placed in JitterBuffer
   """
   @type t :: %__MODULE__{
-          prev_index: JitterBuffer.packet_index() | nil,
+          shift_index: JitterBuffer.packet_index() | nil,
           end_index: JitterBuffer.packet_index() | nil,
           heap: Heap.t(),
           set: MapSet.t(),
@@ -63,18 +64,18 @@ defmodule Membrane.RTP.JitterBuffer.BufferStore do
 
   @spec do_insert_buffer(t(), Buffer.t(), RTP.Header.sequence_number_t()) ::
           {:ok, t()} | {:error, insert_error()}
-  defp do_insert_buffer(%__MODULE__{prev_index: nil} = store, buffer, 0) do
+  defp do_insert_buffer(%__MODULE__{shift_index: nil} = store, buffer, 0) do
     store = add_record(store, Record.new(buffer, @seq_number_limit), :next)
-    {:ok, %__MODULE__{store | prev_index: @seq_number_limit - 1}}
+    {:ok, %__MODULE__{store | shift_index: @seq_number_limit - 1}}
   end
 
-  defp do_insert_buffer(%__MODULE__{prev_index: nil} = store, buffer, seq_num) do
+  defp do_insert_buffer(%__MODULE__{shift_index: nil} = store, buffer, seq_num) do
     store = add_record(store, Record.new(buffer, seq_num), :current)
-    {:ok, %__MODULE__{store | prev_index: seq_num - 1}}
+    {:ok, %__MODULE__{store | shift_index: seq_num - 1}}
   end
 
   defp do_insert_buffer(
-         %__MODULE__{prev_index: prev_index, end_index: end_index, rollover_count: roc} = store,
+         %__MODULE__{shift_index: shift_index, end_index: end_index, rollover_count: roc} = store,
          buffer,
          seq_num
        ) do
@@ -87,7 +88,7 @@ defmodule Membrane.RTP.JitterBuffer.BufferStore do
         :next -> {:next, seq_num + (roc + 1) * @seq_number_limit}
       end
 
-    if is_fresh_packet?(prev_index, index) do
+    if is_fresh_packet?(shift_index, index) do
       record = Record.new(buffer, index)
       {:ok, add_record(store, record, epoch)}
     else
@@ -104,14 +105,14 @@ defmodule Membrane.RTP.JitterBuffer.BufferStore do
   @spec shift(t) :: {Record.t() | nil, t}
   def shift(store)
 
-  def shift(%__MODULE__{prev_index: nil} = store) do
+  def shift(%__MODULE__{shift_index: nil} = store) do
     {nil, store}
   end
 
-  def shift(%__MODULE__{prev_index: prev_index, heap: heap, set: set} = store) do
+  def shift(%__MODULE__{shift_index: shift_index, heap: heap, set: set} = store) do
     record = Heap.root(heap)
 
-    expected_next_index = prev_index + 1
+    expected_next_index = shift_index + 1
 
     {result, store} =
       if record != nil and record.index == expected_next_index do
@@ -127,7 +128,7 @@ defmodule Membrane.RTP.JitterBuffer.BufferStore do
         {nil, store}
       end
 
-    {result, %__MODULE__{store | prev_index: store.prev_index + 1}}
+    {result, %__MODULE__{store | shift_index: store.shift_index + 1}}
   end
 
   @doc """
@@ -135,8 +136,8 @@ defmodule Membrane.RTP.JitterBuffer.BufferStore do
   """
   @spec shift_ordered(t) :: {[Record.t() | nil], t}
   def shift_ordered(store) do
-    shift_while(store, fn %__MODULE__{prev_index: prev_index}, %Record{index: index} ->
-      index == prev_index + 1
+    shift_while(store, fn %__MODULE__{shift_index: shift_index}, %Record{index: index} ->
+      index == shift_index + 1
     end)
   end
 
@@ -172,7 +173,7 @@ defmodule Membrane.RTP.JitterBuffer.BufferStore do
     end
   end
 
-  defp is_fresh_packet?(prev_index, index), do: index > prev_index
+  defp is_fresh_packet?(shift_index, index), do: index > shift_index
 
   @spec shift_while(t, (t, Record.t() -> boolean), [Record.t() | nil]) ::
           {[Record.t() | nil], t}
