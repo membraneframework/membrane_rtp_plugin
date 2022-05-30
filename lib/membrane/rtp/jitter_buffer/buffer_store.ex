@@ -15,7 +15,7 @@ defmodule Membrane.RTP.JitterBuffer.BufferStore do
   @seq_number_limit Bitwise.bsl(1, 16)
 
   defstruct shift_index: nil,
-            end_index: nil,
+            highest_incoming_index: nil,
             heap: Heap.new(&Record.rtp_comparator/2),
             set: MapSet.new(),
             rollover_count: 0
@@ -29,12 +29,12 @@ defmodule Membrane.RTP.JitterBuffer.BufferStore do
   - `set` - helper structure for faster read operations; content is the same as in `heap`
   - `shift_index` - index of the last packet that has been emitted as a result of a call
   to one of the `shift` functions
-  - `end_index` - the highest index in the buffer so far, mapping to the most recently produced
+  - `highest_incoming_index` - the highest index in the buffer so far, mapping to the most recently produced
   RTP packet placed in JitterBuffer
   """
   @type t :: %__MODULE__{
           shift_index: JitterBuffer.packet_index() | nil,
-          end_index: JitterBuffer.packet_index() | nil,
+          highest_incoming_index: JitterBuffer.packet_index() | nil,
           heap: Heap.t(),
           set: MapSet.t(),
           rollover_count: non_neg_integer()
@@ -75,14 +75,18 @@ defmodule Membrane.RTP.JitterBuffer.BufferStore do
   end
 
   defp do_insert_buffer(
-         %__MODULE__{shift_index: shift_index, end_index: end_index, rollover_count: roc} = store,
+         %__MODULE__{
+           shift_index: shift_index,
+           highest_incoming_index: highest_incoming_index,
+           rollover_count: roc
+         } = store,
          buffer,
          seq_num
        ) do
-    prev_seq_num = rem(end_index, @seq_number_limit)
+    highest_seq_num = rem(highest_incoming_index, @seq_number_limit)
 
     {epoch, index} =
-      case Utils.from_which_epoch(prev_seq_num, seq_num, @seq_number_limit) do
+      case Utils.from_which_epoch(highest_seq_num, seq_num, @seq_number_limit) do
         :current -> {:current, seq_num + roc * @seq_number_limit}
         :previous -> {:previous, seq_num + (roc - 1) * @seq_number_limit}
         :next -> {:next, seq_num + (roc + 1) * @seq_number_limit}
@@ -199,16 +203,22 @@ defmodule Membrane.RTP.JitterBuffer.BufferStore do
       store
     else
       %__MODULE__{store | heap: Heap.push(heap, record), set: MapSet.put(set, record.index)}
-      |> update_end_index(record.index)
+      |> update_highest_incoming_index(record.index)
       |> update_roc(record_epoch)
     end
   end
 
-  defp update_end_index(%__MODULE__{end_index: last} = store, added_index)
+  defp update_highest_incoming_index(
+         %__MODULE__{highest_incoming_index: last} = store,
+         added_index
+       )
        when added_index > last or last == nil,
-       do: %__MODULE__{store | end_index: added_index}
+       do: %__MODULE__{store | highest_incoming_index: added_index}
 
-  defp update_end_index(%__MODULE__{end_index: last} = store, added_index)
+  defp update_highest_incoming_index(
+         %__MODULE__{highest_incoming_index: last} = store,
+         added_index
+       )
        when last >= added_index,
        do: store
 

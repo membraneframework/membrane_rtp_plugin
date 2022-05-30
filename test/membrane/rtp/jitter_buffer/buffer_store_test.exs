@@ -224,7 +224,12 @@ defmodule Membrane.RTP.JitterBuffer.BufferStoreTest do
       m = @seq_number_limit
 
       shift_index = 3 * m - 6
-      store = %BufferStore{shift_index: shift_index, end_index: shift_index, rollover_count: 2}
+
+      store = %BufferStore{
+        shift_index: shift_index,
+        highest_incoming_index: shift_index,
+        rollover_count: 2
+      }
 
       store =
         (Enum.into((m - 5)..(m - 1), []) ++ Enum.into(0..4, []))
@@ -236,7 +241,9 @@ defmodule Membrane.RTP.JitterBuffer.BufferStoreTest do
 
     test "handles late packets after a rollover" do
       indexes = [65_535, 0, 65_534]
-      store = enum_into_store(indexes, %BufferStore{shift_index: 65_533, end_index: 65_533})
+
+      store =
+        enum_into_store(indexes, %BufferStore{shift_index: 65_533, highest_incoming_index: 65_533})
 
       Enum.each(indexes, fn _index ->
         assert {%Record{}, _store} = BufferStore.shift(store)
@@ -260,7 +267,7 @@ defmodule Membrane.RTP.JitterBuffer.BufferStoreTest do
   defp new_testing_store(index) do
     %BufferStore{
       shift_index: index,
-      end_index: index,
+      highest_incoming_index: index,
       heap: Heap.new(&Record.rtp_comparator/2)
     }
   end

@@ -44,7 +44,7 @@ defmodule Membrane.RTP.JitterBufferTest do
   describe "When new buffer arrives when not waiting and already pushed some buffer" do
     setup %{state: state} do
       shift_index = @base_seq_number - 1
-      store = %{state.store | shift_index: shift_index, end_index: shift_index}
+      store = %{state.store | shift_index: shift_index, highest_incoming_index: shift_index}
       [state: %{state | waiting?: false, store: store}]
     end
 
@@ -68,7 +68,12 @@ defmodule Membrane.RTP.JitterBufferTest do
       third_buffer = BufferFactory.sample_buffer(@base_seq_number + 2)
 
       shift_index = @base_seq_number - 1
-      store = %BufferStore{state.store | shift_index: shift_index, end_index: shift_index}
+
+      store = %BufferStore{
+        state.store
+        | shift_index: shift_index,
+          highest_incoming_index: shift_index
+      }
 
       store =
         with {:ok, store} <- BufferStore.insert_buffer(store, second_buffer),
@@ -91,7 +96,12 @@ defmodule Membrane.RTP.JitterBufferTest do
   describe "When latency pasess without filling the gap, JitterBuffer" do
     test "outputs discontinuity and late buffer", %{state: state, buffer: buffer} do
       shift_index = @base_seq_number - 2
-      store = %BufferStore{state.store | shift_index: shift_index, end_index: shift_index}
+
+      store = %BufferStore{
+        state.store
+        | shift_index: shift_index,
+          highest_incoming_index: shift_index
+      }
 
       state = %{state | store: store, waiting?: false}
 
@@ -111,7 +121,12 @@ defmodule Membrane.RTP.JitterBufferTest do
   describe "When event arrives" do
     test "dumps store if event was end of stream", %{state: state, buffer: buffer} do
       shift_index = @base_seq_number - 2
-      store = %BufferStore{state.store | shift_index: shift_index, end_index: shift_index}
+
+      store = %BufferStore{
+        state.store
+        | shift_index: shift_index,
+          highest_incoming_index: shift_index
+      }
 
       {:ok, store} = BufferStore.insert_buffer(store, buffer)
       state = %{state | store: store}
