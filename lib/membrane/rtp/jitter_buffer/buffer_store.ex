@@ -148,7 +148,7 @@ defmodule Membrane.RTP.JitterBuffer.BufferStore do
         {nil, store}
       end
 
-    {result, bump_prev_index(store)}
+    {result, %__MODULE__{store | prev_index: store.prev_index + 1}}
   end
 
   @doc """
@@ -223,8 +223,6 @@ defmodule Membrane.RTP.JitterBuffer.BufferStore do
       |> update_roc(record_epoch)
     end
   end
-
-  defp bump_prev_index(store), do: %__MODULE__{store | prev_index: store.prev_index + 1}
 
   defp update_end_index(%__MODULE__{end_index: last} = store, added_index)
        when added_index > last or last == nil,
