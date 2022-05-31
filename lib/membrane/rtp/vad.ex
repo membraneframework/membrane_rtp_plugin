@@ -124,14 +124,14 @@ defmodule Membrane.RTP.VAD do
     buffer = Header.Extension.put(buffer, new_extension)
 
     rtp_timestamp = buffer.metadata.rtp.timestamp
-    epoch = Utils.from_which_cycle(state.current_timestamp, rtp_timestamp, @timestamp_limit)
+    rollover = Utils.from_which_rollover(state.current_timestamp, rtp_timestamp, @timestamp_limit)
     current_timestamp = state.current_timestamp || 0
 
     cond do
-      epoch == :current && rtp_timestamp > current_timestamp ->
+      rollover == :current && rtp_timestamp > current_timestamp ->
         handle_vad(buffer, rtp_timestamp, level, state)
 
-      epoch == :next ->
+      rollover == :next ->
         {:ok, state} = handle_init(state)
         {{:ok, buffer: {:output, buffer}}, state}
 

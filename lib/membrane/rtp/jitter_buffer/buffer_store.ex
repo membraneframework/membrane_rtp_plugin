@@ -4,13 +4,6 @@ defmodule Membrane.RTP.JitterBuffer.BufferStore do
   # Store for RTP packets. Packets are stored in `Heap` ordered by packet index. Packet index is
   # defined in RFC 3711 (SRTP) as: 2^16 * rollover count + sequence number.
 
-  # ## Fields
-  #   - `rollover_count` - count of all performed rollovers (cycles of sequence number)
-  #   - `heap` - contains records containing buffers
-  #   - `prev_index` - index of the last packet that has been served
-  #   - `end_index` - the highest index in the buffer so far, mapping to the most recently produced
-  #                   RTP packet placed in JitterBuffer
-
   use Bunch
   use Bunch.Access
   alias Membrane.{Buffer, RTP}
@@ -21,15 +14,27 @@ defmodule Membrane.RTP.JitterBuffer.BufferStore do
 
   @seq_number_limit Bitwise.bsl(1, 16)
 
-  defstruct prev_index: nil,
-            end_index: nil,
+  defstruct flush_index: nil,
+            highest_incoming_index: nil,
             heap: Heap.new(&Record.rtp_comparator/2),
             set: MapSet.new(),
             rollover_count: 0
 
+  @typedoc """
+  Type describing BufferStore structure.
+
+  Fields:
+  - `rollover_count` - count of all performed rollovers (cycles of sequence number)
+  - `heap` - contains records containing buffers
+  - `set` - helper structure for faster read operations; content is the same as in `heap`
+  - `flush_index` - index of the last packet that has been emitted (or would habe been
+  emitted, but never arrived) as a result of a call to one of the `flush` functions
+  - `highest_incoming_index` - the highest index in the buffer so far, mapping to the most recently produced
+  RTP packet placed in JitterBuffer
+  """
   @type t :: %__MODULE__{
-          prev_index: JitterBuffer.packet_index() | nil,
-          end_index: JitterBuffer.packet_index() | nil,
+          flush_index: JitterBuffer.packet_index() | nil,
+          highest_incoming_index: JitterBuffer.packet_index() | nil,
           heap: Heap.t(),
           set: MapSet.t(),
           rollover_count: non_neg_integer()
@@ -59,77 +64,59 @@ defmodule Membrane.RTP.JitterBuffer.BufferStore do
 
   @spec do_insert_buffer(t(), Buffer.t(), RTP.Header.sequence_number_t()) ::
           {:ok, t()} | {:error, insert_error()}
-  defp do_insert_buffer(%__MODULE__{prev_index: nil} = store, buffer, 0) do
-    store = add_record(store, Record.new(buffer, @seq_number_limit))
-    {:ok, %__MODULE__{store | prev_index: @seq_number_limit - 1}}
+  defp do_insert_buffer(%__MODULE__{flush_index: nil} = store, buffer, 0) do
+    store = add_record(store, Record.new(buffer, @seq_number_limit), :next)
+    {:ok, %__MODULE__{store | flush_index: @seq_number_limit - 1}}
   end
 
-  defp do_insert_buffer(%__MODULE__{prev_index: nil} = store, buffer, seq_num) do
-    store = add_record(store, Record.new(buffer, seq_num))
-    {:ok, %__MODULE__{store | prev_index: seq_num - 1}}
+  defp do_insert_buffer(%__MODULE__{flush_index: nil} = store, buffer, seq_num) do
+    store = add_record(store, Record.new(buffer, seq_num), :current)
+    {:ok, %__MODULE__{store | flush_index: seq_num - 1}}
   end
 
   defp do_insert_buffer(
-         %__MODULE__{prev_index: prev_index, rollover_count: roc} = store,
+         %__MODULE__{
+           flush_index: flush_index,
+           highest_incoming_index: highest_incoming_index,
+           rollover_count: roc
+         } = store,
          buffer,
          seq_num
        ) do
-    prev_seq_num = rem(prev_index, @seq_number_limit)
+    highest_seq_num = rem(highest_incoming_index, @seq_number_limit)
 
-    index =
-      case Utils.from_which_cycle(prev_seq_num, seq_num, @seq_number_limit) do
-        :current -> seq_num + roc * @seq_number_limit
-        :previous -> seq_num + (roc - 1) * @seq_number_limit
-        :next -> seq_num + (roc + 1) * @seq_number_limit
+    {rollover, index} =
+      case Utils.from_which_rollover(highest_seq_num, seq_num, @seq_number_limit) do
+        :current -> {:current, seq_num + roc * @seq_number_limit}
+        :previous -> {:previous, seq_num + (roc - 1) * @seq_number_limit}
+        :next -> {:next, seq_num + (roc + 1) * @seq_number_limit}
       end
 
-    # TODO: Consider taking some action if the gap between indices is too big
-    if is_fresh_packet?(prev_index, index) do
+    if is_fresh_packet?(flush_index, index) do
       record = Record.new(buffer, index)
-      {:ok, add_record(store, record)}
+      {:ok, add_record(store, record, rollover)}
     else
       {:error, :late_packet}
     end
   end
 
   @doc """
-  Calculates size of the Store.
-
-  Size is calculated by counting `slots` between youngest (buffer with
-  smallest sequence number) and oldest buffer.
-
-  If Store has buffers [1,2,10] its size would be 10.
-  """
-  @spec size(__MODULE__.t()) :: number()
-  def size(store)
-  def size(%__MODULE__{heap: %Heap{data: nil}}), do: 0
-
-  def size(%__MODULE__{prev_index: nil, end_index: last, heap: heap}) do
-    size = if Heap.size(heap) == 1, do: 1, else: last - Heap.root(heap).index + 1
-    size
-  end
-
-  def size(%__MODULE__{prev_index: prev_index, end_index: end_index}) do
-    end_index - prev_index
-  end
-
-  @doc """
-  Shifts the store to the buffer with the next sequence number.
+  Flushes the store to the buffer with the next sequence number.
 
   If this buffer is present, it will be returned.
   Otherwise it will be treated as late and rejected on attempt to insert into the store.
   """
-  @spec shift(t) :: {Record.t() | nil, t}
-  def shift(store)
+  @spec flush_one(t) :: {Record.t() | nil, t}
+  def flush_one(store)
 
-  def shift(%__MODULE__{prev_index: nil} = store) do
+  def flush_one(%__MODULE__{flush_index: nil} = store) do
     {nil, store}
   end
 
-  def shift(%__MODULE__{prev_index: prev_index, heap: heap, set: set} = store) do
+  def flush_one(%__MODULE__{flush_index: flush_index, heap: heap, set: set} = store) do
     record = Heap.root(heap)
 
-    expected_next_index = prev_index + 1
+    expected_next_index = flush_index + 1
 
     {result, store} =
       if record != nil and record.index == expected_next_index do
@@ -145,27 +132,27 @@ defmodule Membrane.RTP.JitterBuffer.BufferStore do
         {nil, store}
       end
 
-    {result, bump_prev_index(store)}
+    {result, %__MODULE__{store | flush_index: expected_next_index}}
   end
 
   @doc """
-  Shifts the store until the first gap in sequence numbers of records
+  Flushes the store until the first gap in sequence numbers of records
   """
-  @spec shift_ordered(t) :: {[Record.t() | nil], t}
-  def shift_ordered(store) do
-    shift_while(store, fn %__MODULE__{prev_index: prev_index}, %Record{index: index} ->
-      index == prev_index + 1
+  @spec flush_ordered(t) :: {[Record.t() | nil], t}
+  def flush_ordered(store) do
+    flush_while(store, fn %__MODULE__{flush_index: flush_index}, %Record{index: index} ->
+      index == flush_index + 1
     end)
   end
 
   @doc """
-  Shifts the store as long as it contains a buffer with the timestamp older than provided duration
+  Flushes the store as long as it contains a buffer with the timestamp older than provided duration
   """
-  @spec shift_older_than(t, Membrane.Time.t()) :: {[Record.t() | nil], t}
-  def shift_older_than(store, max_age) do
+  @spec flush_older_than(t, Membrane.Time.t()) :: {[Record.t() | nil], t}
+  def flush_older_than(store, max_age) do
     max_age_timestamp = Membrane.Time.monotonic_time() - max_age
 
-    shift_while(store, fn _store, %Record{timestamp: timestamp} ->
+    flush_while(store, fn _store, %Record{timestamp: timestamp} ->
       timestamp <= max_age_timestamp
     end)
   end
@@ -175,7 +162,7 @@ defmodule Membrane.RTP.JitterBuffer.BufferStore do
   """
   @spec dump(t()) :: [Record.t()]
   def dump(%__MODULE__{} = store) do
-    {records, _store} = shift_while(store, fn _store, _record -> true end)
+    {records, _store} = flush_while(store, fn _store, _record -> true end)
     records
   end
 
@@ -190,11 +177,11 @@ defmodule Membrane.RTP.JitterBuffer.BufferStore do
     end
   end
 
-  defp is_fresh_packet?(prev_index, index), do: index > prev_index
+  defp is_fresh_packet?(flush_index, index), do: index > flush_index
 
-  @spec shift_while(t, (t, Record.t() -> boolean), [Record.t() | nil]) ::
+  @spec flush_while(t, (t, Record.t() -> boolean), [Record.t() | nil]) ::
           {[Record.t() | nil], t}
-  defp shift_while(%__MODULE__{heap: heap} = store, fun, acc \\ []) do
+  defp flush_while(%__MODULE__{heap: heap} = store, fun, acc \\ []) do
     heap
     |> Heap.root()
     |> case do
@@ -203,34 +190,40 @@ defmodule Membrane.RTP.JitterBuffer.BufferStore do
 
       record ->
         if fun.(store, record) do
-          {record, store} = shift(store)
-          shift_while(store, fun, [record | acc])
+          {record, store} = flush_one(store)
+          flush_while(store, fun, [record | acc])
         else
           {Enum.reverse(acc), store}
         end
     end
   end
 
-  defp add_record(%__MODULE__{heap: heap, set: set} = store, %Record{} = record) do
+  defp add_record(%__MODULE__{heap: heap, set: set} = store, %Record{} = record, record_rollover) do
     if set |> MapSet.member?(record.index) do
       store
     else
       %__MODULE__{store | heap: Heap.push(heap, record), set: MapSet.put(set, record.index)}
-      |> update_end_index(record.index)
+      |> update_highest_incoming_index(record.index)
+      |> update_roc(record_rollover)
     end
   end
 
-  defp bump_prev_index(%{prev_index: prev, rollover_count: roc} = store)
-       when rem(prev + 1, @seq_number_limit) == 0,
-       do: %__MODULE__{store | prev_index: prev + 1, rollover_count: roc + 1}
-
-  defp bump_prev_index(store), do: %__MODULE__{store | prev_index: store.prev_index + 1}
-
-  defp update_end_index(%__MODULE__{end_index: last} = store, added_index)
+  defp update_highest_incoming_index(
+         %__MODULE__{highest_incoming_index: last} = store,
+         added_index
+       )
        when added_index > last or last == nil,
-       do: %__MODULE__{store | end_index: added_index}
+       do: %__MODULE__{store | highest_incoming_index: added_index}
 
-  defp update_end_index(%__MODULE__{end_index: last} = store, added_index)
+  defp update_highest_incoming_index(
+         %__MODULE__{highest_incoming_index: last} = store,
+         added_index
+       )
        when last >= added_index,
        do: store
+
+  defp update_roc(%{rollover_count: roc} = store, :next),
+    do: %__MODULE__{store | rollover_count: roc + 1}
+
+  defp update_roc(store, _record_rollover), do: store
 end

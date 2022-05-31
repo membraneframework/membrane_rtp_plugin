@@ -30,18 +30,18 @@ defmodule Membrane.RTP.Utils do
     end
   end
 
-  @spec from_which_cycle(number() | nil, number(), number()) :: :current | :previous | :next
-  def from_which_cycle(previous_value, new_value, cycle_length)
+  @spec from_which_rollover(number() | nil, number(), number()) :: :current | :previous | :next
+  def from_which_rollover(previous_value, new_value, rollover_length)
 
-  def from_which_cycle(nil, _new, _cycle_length), do: :current
+  def from_which_rollover(nil, _new, _rollover_length), do: :current
 
-  def from_which_cycle(previous_value, new_value, cycle_length) do
-    # a) current cycle
+  def from_which_rollover(previous_value, new_value, rollover_length) do
+    # a) current rollover
     distance_if_current = abs(previous_value - new_value)
-    # b) new_value is from the previous cycle
-    distance_if_previous = abs(previous_value - (new_value - cycle_length))
-    # c) new_value is in the next cycle
-    distance_if_next = abs(previous_value - (new_value + cycle_length))
+    # b) new_value is from the previous rollover
+    distance_if_previous = abs(previous_value - (new_value - rollover_length))
+    # c) new_value is in the next rollover
+    distance_if_next = abs(previous_value - (new_value + rollover_length))
 
     [
       {:current, distance_if_current},
