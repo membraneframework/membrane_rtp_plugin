@@ -15,9 +15,27 @@ defmodule Membrane.RTP.SSRCRouter do
 
   alias Membrane.{RTCP, RTP, RTCPEvent, SRTP}
 
+  require Membrane.TelemetryMetrics
+
+  @packet_arrival_event [Membrane.RTP, :packet, :arrival]
+  @new_inbound_track_event [Membrane.RTP, :inbound_track, :new]
+
   def_input_pad :input, caps: [RTCP, RTP], availability: :on_request, demand_mode: :auto
 
-  def_output_pad :output, caps: RTP, availability: :on_request, demand_mode: :auto
+  def_output_pad :output,
+    caps: RTP,
+    availability: :on_request,
+    demand_mode: :auto,
+    options: [
+      telemetry_label: [
+        spec: Membrane.TelemetryMetrics.label(),
+        default: []
+      ],
+      encoding: [
+        spec: atom() | nil,
+        default: nil
+      ]
+    ]
 
   defmodule State do
     @moduledoc false
@@ -26,7 +44,7 @@ defmodule Membrane.RTP.SSRCRouter do
     alias Membrane.RTP
 
     @type t() :: %__MODULE__{
-            input_pads: %{RTP.ssrc_t() => input_pad :: Pad.ref_t()},
+            input_pads: %{RTP.ssrc_t() => [input_pad :: Pad.ref_t()]},
             buffered_actions: %{RTP.ssrc_t() => [Membrane.Element.Action.t()]},
             srtp_keying_material_event: struct() | nil
           }
@@ -62,8 +80,15 @@ defmodule Membrane.RTP.SSRCRouter do
   end
 
   @impl true
-  def handle_pad_added(Pad.ref(:output, ssrc) = pad, _ctx, state) do
+  def handle_pad_added(Pad.ref(:output, ssrc) = pad, ctx, state) do
     {buffered_actions, state} = pop_in(state, [:buffered_actions, ssrc])
+    buffered_actions = Enum.reverse(buffered_actions || [])
+
+    register_packet_arrival_event(pad, ctx)
+    emit_packet_arrival_events(buffered_actions, ctx)
+
+    register_new_inbound_track_event(pad, ctx)
+    emit_new_inbound_track_event(ssrc, pad, ctx)
 
     events =
       if state.srtp_keying_material_event do
@@ -72,7 +97,7 @@ defmodule Membrane.RTP.SSRCRouter do
         []
       end
 
-    {{:ok, [caps: {pad, %RTP{}}] ++ events ++ Enum.reverse(buffered_actions || [])}, state}
+    {{:ok, [caps: {pad, %RTP{}}] ++ events ++ buffered_actions}, state}
   end
 
   @impl true
@@ -104,6 +129,8 @@ defmodule Membrane.RTP.SSRCRouter do
 
     action = {:buffer, {Pad.ref(:output, ssrc), buffer}}
     {actions, state} = maybe_buffer_action(action, ssrc, ctx, state)
+    emit_packet_arrival_events(actions, ctx)
+
     {{:ok, new_stream_actions ++ actions}, state}
   end
 
@@ -179,6 +206,53 @@ defmodule Membrane.RTP.SSRCRouter do
     else
       state = update_in(state, [:buffered_actions, ssrc], &[action | &1])
       {[], state}
+    end
+  end
+
+  defp emit_packet_arrival_events(actions, ctx) do
+    for action <- actions do
+      with {:buffer, {pad, buffer}} <- action do
+        emit_packet_arrival_event(buffer.payload, pad, ctx)
+      end
+    end
+  end
+
+  defp register_packet_arrival_event(pad, ctx) do
+    Membrane.TelemetryMetrics.register(
+      @packet_arrival_event,
+      ctx.pads[pad].options.telemetry_label
+    )
+  end
+
+  defp register_new_inbound_track_event(pad, ctx) do
+    Membrane.TelemetryMetrics.register(
+      @new_inbound_track_event,
+      ctx.pads[pad].options.telemetry_label
+    )
+  end
+
+  defp emit_packet_arrival_event(payload, pad, ctx) do
+    Membrane.TelemetryMetrics.execute(
+      @packet_arrival_event,
+      %{bytes: byte_size(payload)},
+      %{},
+      ctx.pads[pad].options.telemetry_label
+    )
+  end
+
+  defp emit_new_inbound_track_event(ssrc, pad, ctx) do
+    Membrane.TelemetryMetrics.execute(
+      @new_inbound_track_event,
+      %{ssrc: ssrc} |> maybe_add_encoding(pad, ctx),
+      %{},
+      ctx.pads[pad].options.telemetry_label
+    )
+  end
+
+  defp maybe_add_encoding(measurements, pad, ctx) do
+    case ctx.pads[pad].options.encoding do
+      nil -> measurements
+      encoding -> Map.put(measurements, :encoding, encoding)
     end
   end
 

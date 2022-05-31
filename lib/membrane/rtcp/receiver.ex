@@ -11,6 +11,7 @@ defmodule Membrane.RTCP.Receiver do
   alias Membrane.Time
 
   require Membrane.Logger
+  require Membrane.TelemetryMetrics
 
   def_input_pad :input, caps: :any, demand_mode: :auto
   def_output_pad :output, caps: :any, demand_mode: :auto
@@ -18,10 +19,14 @@ defmodule Membrane.RTCP.Receiver do
   def_options local_ssrc: [spec: RTP.ssrc_t()],
               remote_ssrc: [spec: RTP.ssrc_t()],
               report_interval: [spec: Membrane.Time.t() | nil, default: nil],
-              fir_interval: [spec: Membrane.Time.t() | nil, default: nil]
+              fir_interval: [spec: Membrane.Time.t() | nil, default: nil],
+              telemetry_label: [spec: Membrane.TelemetryMetrics.label(), default: []]
+
+  @event_name [Membrane.RTP, :rtcp, :fir, :sent]
 
   @impl true
   def handle_init(opts) do
+    Membrane.TelemetryMetrics.register(@event_name, opts.telemetry_label)
     {:ok, Map.from_struct(opts) |> Map.merge(%{fir_seq_num: 0, sr_info: %{}})}
   end
 
@@ -120,6 +125,8 @@ defmodule Membrane.RTCP.Receiver do
         seq_num: state.fir_seq_num
       }
     }
+
+    Membrane.TelemetryMetrics.execute(@event_name, %{}, %{}, state.telemetry_label)
 
     event = %RTCPEvent{rtcp: rtcp}
     state = Map.update!(state, :fir_seq_num, &(&1 + 1))

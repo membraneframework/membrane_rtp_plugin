@@ -30,4 +30,20 @@ defmodule Membrane.RTP.PayloadFormatResolver do
       payloader -> {:ok, payloader}
     end
   end
+
+  @spec keyframe_detector(atom()) :: {:ok, (binary() -> boolean())} | :error
+  def keyframe_detector(encoding) do
+    case PayloadFormat.get(encoding).keyframe_detector do
+      nil -> :error
+      keyframe_detector -> {:ok, keyframe_detector}
+    end
+  end
+
+  @spec frame_detector(atom()) :: {:ok, (binary() -> boolean())} | :error
+  def frame_detector(encoding) do
+    case PayloadFormat.get(encoding).frame_detector do
+      nil -> :error
+      frame_detector -> {:ok, frame_detector}
+    end
+  end
 end

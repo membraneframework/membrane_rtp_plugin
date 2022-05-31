@@ -67,8 +67,9 @@ defmodule Membrane.RTP.Plugin.MixProject do
 
   defp deps do
     [
+      {:membrane_telemetry_metrics, github: "membraneframework/membrane_telemetry_metrics"},
       {:membrane_core, "~> 0.10.0"},
-      {:membrane_rtp_format, "~> 0.4.0"},
+      {:membrane_rtp_format, github: "membraneframework/membrane_rtp_format", override: true},
       {:ex_libsrtp, "~> 0.4.0", optional: true},
       {:qex, "~> 0.5.1"},
       {:bunch, "~> 1.0"},
@@ -76,7 +77,8 @@ defmodule Membrane.RTP.Plugin.MixProject do
       {:bimap, "~> 1.1.0"},
 
       # Test
-      {:membrane_rtp_h264_plugin, "~> 0.11", only: :test},
+      {:membrane_rtp_h264_plugin,
+       github: "membraneframework/membrane_rtp_h264_plugin", only: :test},
       {:membrane_rtp_mpegaudio_plugin, "~> 0.9", only: :test},
       {:membrane_h264_ffmpeg_plugin, "~> 0.19", only: :test},
       {:membrane_pcap_plugin,

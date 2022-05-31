@@ -198,6 +198,15 @@ defmodule Membrane.RTP.SessionBin do
         If set to nil then the depayloading process gets skipped.
         """
       ],
+      telemetry_label: [
+        spec: Membrane.TelemetryMetrics.label(),
+        default: [],
+        description: "Label passed to Membrane.TelemetryMetrics functions"
+      ],
+      encoding: [
+        spec: RTP.encoding_name_t() | nil,
+        default: nil
+      ],
       clock_rate: [
         spec: integer() | nil,
         default: nil,
@@ -383,6 +392,8 @@ defmodule Membrane.RTP.SessionBin do
       clock_rate: clock_rate,
       rtp_extensions: rtp_extensions,
       rtcp_fir_interval: fir_interval,
+      encoding: encoding,
+      telemetry_label: telemetry_label,
       extensions: extensions
     } = ctx.pads[pad].options
 
@@ -402,6 +413,7 @@ defmodule Membrane.RTP.SessionBin do
         remote_ssrc: ssrc,
         rtcp_report_interval: state.rtcp_receiver_report_interval,
         rtcp_fir_interval: fir_interval,
+        telemetry_label: telemetry_label,
         secure?: state.secure?,
         srtp_policies: state.srtp_policies
       }
@@ -410,9 +422,14 @@ defmodule Membrane.RTP.SessionBin do
     {rtp_extensions, maybe_link_twcc_receiver, state} =
       maybe_handle_twcc_receiver(rtp_extensions, ssrc, ctx, state)
 
+    ssrc_router_pad_options = [
+      encoding: encoding,
+      telemetry_label: telemetry_label
+    ]
+
     router_link =
       link(:ssrc_router)
-      |> via_out(Pad.ref(:output, ssrc))
+      |> via_out(Pad.ref(:output, ssrc), options: ssrc_router_pad_options)
       |> then(maybe_link_twcc_receiver)
       |> to(rtp_stream_name)
 
