@@ -47,7 +47,7 @@ defmodule Membrane.RTCP.Parser do
         {{:ok, actions}, state}
 
       {:error, reason} ->
-        Membrane.Logger.debug("""
+        Membrane.Logger.warn("""
         Couldn't parse rtcp packet:
         #{inspect(payload, limit: :infinity)}
         Reason: #{inspect(reason)}. Ignoring packet.
@@ -63,16 +63,14 @@ defmodule Membrane.RTCP.Parser do
     {{:ok, buffer: {:receiver_report_output, buffer}}, state}
   end
 
-  @impl true
-  def handle_event(pad, event, ctx, state), do: super(pad, event, ctx, state)
-
   defp process_packets(rtcp, metadata) do
     Enum.flat_map(rtcp, &process_rtcp(&1, metadata))
   end
 
-  defp process_rtcp(%RTCP.FeedbackPacket{payload: %RTCP.FeedbackPacket.PLI{}}, _metadata) do
-    Membrane.Logger.debug("Received packet loss indicator RTCP packet")
-    []
+  defp process_rtcp(%RTCP.FeedbackPacket{payload: %keyframe_request{}} = packet, metadata)
+       when keyframe_request in [RTCP.FeedbackPacket.FIR, RTCP.FeedbackPacket.PLI] do
+    event = wrap_with_rtcp_event(packet, packet.target_ssrc, metadata)
+    [event: {:output, event}]
   end
 
   defp process_rtcp(
@@ -83,27 +81,55 @@ defmodule Membrane.RTCP.Parser do
   end
 
   defp process_rtcp(%RTCP.SenderReportPacket{ssrc: ssrc} = packet, metadata) do
-    event = %RTCPEvent{
-      rtcp: packet,
-      ssrcs: [ssrc],
-      arrival_timestamp: Map.get(metadata, :arrival_ts, Membrane.Time.vm_time())
-    }
-
+    event = wrap_with_rtcp_event(packet, ssrc, metadata)
     [event: {:output, event}]
   end
 
   defp process_rtcp(%RTCP.ReceiverReportPacket{reports: reports}, metadata) do
     reports
     |> Enum.map(fn report ->
-      event = %RTCPEvent{
-        rtcp: report,
-        ssrcs: [report.ssrc],
-        arrival_timestamp: Map.get(metadata, :arrival_ts, Membrane.Time.vm_time())
-      }
-
+      event = wrap_with_rtcp_event(report, report.ssrc, metadata)
       {:event, {:output, event}}
     end)
   end
 
-  defp process_rtcp(_unknown_packet, _metadata), do: []
+  defp process_rtcp(
+         %RTCP.FeedbackPacket{
+           payload: %RTCP.FeedbackPacket.AFB{message: "REMB" <> _remb_data}
+         },
+         _metadata
+       ) do
+    # maybe TODO: handle REMB extension
+    # Even though we do not support REMB and do not advertise such support in SDP,
+    # browsers ignore that and send REMP packets for video ¯\_(ツ)_/¯
+    []
+  end
+
+  defp process_rtcp(%RTCP.ByePacket{ssrcs: ssrcs}, _metadata) do
+    Membrane.Logger.debug("SSRCs #{inspect(ssrcs)} are leaving (received RTCP Bye)")
+    []
+  end
+
+  defp process_rtcp(%RTCP.SdesPacket{}, _metadata) do
+    # We don't care about SdesPacket, usually included in compound packet with SenderReportPacket or ReceiverReportPacket
+    []
+  end
+
+  defp process_rtcp(unknown_packet, metadata) do
+    Membrane.Logger.warn("""
+    Unhandled RTCP packet
+    #{inspect(unknown_packet, pretty: true, limit: :infinity)}
+    #{inspect(metadata, pretty: true)}
+    """)
+
+    []
+  end
+
+  defp wrap_with_rtcp_event(rtcp_packet, ssrc, metadata) do
+    %RTCPEvent{
+      rtcp: rtcp_packet,
+      ssrcs: [ssrc],
+      arrival_timestamp: Map.get(metadata, :arrival_ts, Membrane.Time.vm_time())
+    }
+  end
 end
