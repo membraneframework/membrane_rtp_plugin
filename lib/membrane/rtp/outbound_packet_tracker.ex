@@ -8,8 +8,11 @@ defmodule Membrane.RTP.OutboundPacketTracker do
   """
   use Membrane.Filter
 
-  alias Membrane.{Buffer, RTP, Payload, Time}
+  alias Membrane.{Buffer, RTCPEvent, RTP, Payload, Time}
+  alias Membrane.RTCP.FeedbackPacket.{PLI, FIR}
   alias Membrane.RTP.Session.SenderReport
+
+  require Membrane.Logger
 
   def_input_pad :input, caps: :any, demand_mode: :auto
 
@@ -89,6 +92,21 @@ defmodule Membrane.RTP.OutboundPacketTracker do
   @impl true
   def handle_pad_added(Pad.ref(:rtcp_output, _id), _ctx, _state) do
     raise "rtcp_output pad can get linked just once"
+  end
+
+  @impl true
+  def handle_event(
+        Pad.ref(:rtcp_input, _id),
+        %RTCPEvent{rtcp: %{payload: %keyframe_request{}}},
+        _ctx,
+        state
+      )
+      when keyframe_request in [PLI, FIR] do
+    {{:ok, event: {:input, %Membrane.KeyframeRequestEvent{}}}, state}
+  end
+
+  def handle_event(pad, event, ctx, state) do
+    super(pad, event, ctx, state)
   end
 
   @impl true
