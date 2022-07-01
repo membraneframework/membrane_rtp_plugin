@@ -106,13 +106,12 @@ defmodule Membrane.RTCP.TransportFeedbackPacket.TWCC do
       <<base_seq_num::16, packet_status_count::16, reference_time::signed-integer-size(24),
         feedback_packet_count::8>>
 
-    encoded_packet_status_chunks =
-      Enum.map_join(packet_status_chunks, &encode_packet_status_chunk/1)
+    encoded_packet_status_chunks = Enum.map(packet_status_chunks, &encode_packet_status_chunk/1)
 
-    encoded_receive_deltas = Enum.map_join(scaled_receive_deltas, &encode_receive_delta/1)
+    encoded_receive_deltas = Enum.map(scaled_receive_deltas, &encode_receive_delta/1)
 
     [encoded_header, encoded_packet_status_chunks, encoded_receive_deltas]
-    |> Enum.join()
+    |> IO.iodata_to_binary()
     |> maybe_add_padding()
   end
 
