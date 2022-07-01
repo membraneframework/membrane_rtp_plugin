@@ -38,7 +38,7 @@ defmodule Membrane.RTP.SessionBin do
 
   ## RTCP
   RTCP packets for inbound stream can be provided either in-band or via a separate `rtp_input` pad instance. Corresponding
-  receiver report packets will be sent back through `rtcp_output` with the same id as `rtp_input` for the RTP stream.
+  receiver report packets will be sent back through `rtcp_receiver_output` with the same id as `rtp_input` for the RTP stream.
 
   RTCP for outbound stream is not yet supported. # But will be :)
   """
