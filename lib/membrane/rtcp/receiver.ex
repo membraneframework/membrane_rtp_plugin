@@ -19,7 +19,6 @@ defmodule Membrane.RTCP.Receiver do
   def_options local_ssrc: [spec: RTP.ssrc_t()],
               remote_ssrc: [spec: RTP.ssrc_t()],
               report_interval: [spec: Membrane.Time.t() | nil, default: nil],
-              fir_interval: [spec: Membrane.Time.t() | nil, default: nil],
               telemetry_label: [spec: Membrane.TelemetryMetrics.label(), default: []]
 
   @fir_trottle_duration Application.compile_env(
@@ -44,32 +43,23 @@ defmodule Membrane.RTCP.Receiver do
 
   @impl true
   def handle_prepared_to_playing(_ctx, state) do
-    fir_timer =
-      if state.fir_interval, do: [start_timer: {:fir_timer, state.fir_interval}], else: []
-
     report_timer =
       if state.report_interval,
         do: [start_timer: {:report_timer, state.report_interval}],
         else: []
 
-    {{:ok, fir_timer ++ report_timer}, state}
+    {{:ok, report_timer}, state}
   end
 
   @impl true
   def handle_playing_to_prepared(_ctx, state) do
-    fir_timer = if state.fir_interval, do: [stop_timer: :fir_timer], else: []
     report_timer = if state.report_interval, do: [stop_timer: :report_timer], else: []
-    {{:ok, fir_timer ++ report_timer}, state}
+    {{:ok, report_timer}, state}
   end
 
   @impl true
   def handle_tick(:report_timer, _ctx, state) do
     {{:ok, event: {:output, %ReceiverReport.StatsRequestEvent{}}}, state}
-  end
-
-  @impl true
-  def handle_tick(:fir_timer, _ctx, state) do
-    send_fir(state)
   end
 
   @impl true

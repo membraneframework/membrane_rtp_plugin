@@ -239,11 +239,6 @@ defmodule Membrane.RTP.SessionBin do
         An extension can be responsible e.g. for dropping silent audio packets when encountered VAD extension data in the
         packet header.
         """
-      ],
-      rtcp_fir_interval: [
-        spec: Membrane.Time.t() | nil,
-        default: Membrane.Time.second(),
-        description: "Interval between sending subseqent RTCP Full Intra Request packets."
       ]
     ]
 
@@ -391,7 +386,6 @@ defmodule Membrane.RTP.SessionBin do
       depayloader: depayloader,
       clock_rate: clock_rate,
       rtp_extensions: rtp_extensions,
-      rtcp_fir_interval: fir_interval,
       encoding: encoding,
       telemetry_label: telemetry_label,
       extensions: extensions
@@ -412,7 +406,6 @@ defmodule Membrane.RTP.SessionBin do
         local_ssrc: local_ssrc,
         remote_ssrc: ssrc,
         rtcp_report_interval: state.rtcp_receiver_report_interval,
-        rtcp_fir_interval: fir_interval,
         telemetry_label: telemetry_label,
         secure?: state.secure?,
         srtp_policies: state.srtp_policies
