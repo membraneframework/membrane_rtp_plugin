@@ -514,7 +514,7 @@ defmodule Membrane.RTP.SessionBin do
       # if RTCP is present create all set of input and output pads for RTCP flow
       rtcp_links =
         if rtcp? do
-          maybe_link_srtcp_encryptor =
+          link_srtcp_encryptor =
             &to(
               &1,
               {:srtcp_sender_encryptor, ssrc},
@@ -526,7 +526,7 @@ defmodule Membrane.RTP.SessionBin do
           [
             link({:stream_send_bin, ssrc})
             |> via_out(:rtcp_output)
-            |> then(if state.secure?, do: maybe_link_srtcp_encryptor, else: & &1)
+            |> then(if state.secure?, do: link_srtcp_encryptor, else: & &1)
             |> to_bin_output(rtcp_sender_output),
             link(:ssrc_router)
             |> via_out(Pad.ref(:output, ssrc))
