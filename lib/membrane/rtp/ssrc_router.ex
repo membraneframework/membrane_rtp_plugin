@@ -15,6 +15,7 @@ defmodule Membrane.RTP.SSRCRouter do
 
   alias Membrane.{RTCP, RTP, RTCPEvent, SRTP}
 
+  require Membrane.Logger
   require Membrane.TelemetryMetrics
 
   @packet_arrival_event [Membrane.RTP, :packet, :arrival]
@@ -138,8 +139,18 @@ defmodule Membrane.RTP.SSRCRouter do
   def handle_event(Pad.ref(:input, _id), %RTCPEvent{} = event, ctx, state) do
     actions =
       event.ssrcs
-      |> Enum.map(&{:event, {Pad.ref(:output, &1), event}})
-      |> Enum.filter(fn {:event, {pad, _event}} -> Map.has_key?(ctx.pads, pad) end)
+      |> Enum.flat_map(fn ssrc ->
+        target_pad = Pad.ref(:output, ssrc)
+
+        if Map.has_key?(ctx.pads, target_pad) do
+          [event: {target_pad, event}]
+        else
+          # TODO: This should most likely be a warning, however it appears on every join and leave,
+          # So until it's fixed, it is reported with debug log level
+          Membrane.Logger.debug("Received event (#{inspect(event)}) for unknown SSRC: #{ssrc}")
+          []
+        end
+      end)
 
     {{:ok, actions}, state}
   end
