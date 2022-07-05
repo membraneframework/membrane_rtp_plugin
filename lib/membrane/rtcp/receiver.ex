@@ -22,12 +22,24 @@ defmodule Membrane.RTCP.Receiver do
               fir_interval: [spec: Membrane.Time.t() | nil, default: nil],
               telemetry_label: [spec: Membrane.TelemetryMetrics.label(), default: []]
 
-  @event_name [Membrane.RTP, :rtcp, :fir, :sent]
+  @fir_trottle_duration Application.compile_env(
+                          :membrane_videoroom,
+                          :fir_throttle_duration,
+                          500 |> Time.milliseconds()
+                        )
+
+  @fir_telemetry_event [Membrane.RTP, :rtcp, :fir, :sent]
 
   @impl true
   def handle_init(opts) do
-    Membrane.TelemetryMetrics.register(@event_name, opts.telemetry_label)
-    {:ok, Map.from_struct(opts) |> Map.merge(%{fir_seq_num: 0, sr_info: %{}})}
+    Membrane.TelemetryMetrics.register(@fir_telemetry_event, opts.telemetry_label)
+
+    state =
+      opts
+      |> Map.from_struct()
+      |> Map.merge(%{fir_seq_num: 0, last_fir_timestamp: 0, sr_info: %{}})
+
+    {:ok, state}
   end
 
   @impl true
@@ -75,7 +87,8 @@ defmodule Membrane.RTCP.Receiver do
   end
 
   @impl true
-  def handle_event(:input, %RTCPEvent{}, _ctx, state) do
+  def handle_event(:input, %RTCPEvent{} = event, _ctx, state) do
+    Membrane.Logger.error("Unexpected RTCPEvent: #{inspect(event)}")
     {:ok, state}
   end
 
@@ -118,18 +131,26 @@ defmodule Membrane.RTCP.Receiver do
   end
 
   defp send_fir(state) do
-    rtcp = %FeedbackPacket{
-      origin_ssrc: state.local_ssrc,
-      payload: %FeedbackPacket.FIR{
-        target_ssrc: state.remote_ssrc,
-        seq_num: state.fir_seq_num
+    now = Time.vm_time()
+
+    if now - state.last_fir_timestamp > @fir_trottle_duration do
+      rtcp = %FeedbackPacket{
+        origin_ssrc: state.local_ssrc,
+        payload: %FeedbackPacket.FIR{
+          target_ssrc: state.remote_ssrc,
+          seq_num: state.fir_seq_num
+        }
       }
-    }
 
-    Membrane.TelemetryMetrics.execute(@event_name, %{}, %{}, state.telemetry_label)
+      Membrane.TelemetryMetrics.execute(@fir_telemetry_event, %{}, %{}, state.telemetry_label)
 
-    event = %RTCPEvent{rtcp: rtcp}
-    state = Map.update!(state, :fir_seq_num, &(&1 + 1))
-    {{:ok, event: {:input, event}}, state}
+      event = %RTCPEvent{rtcp: rtcp}
+      state = %{state | fir_seq_num: state.fir_seq_num + 1, last_fir_timestamp: now}
+      Membrane.Logger.info("Sending FIR to #{state.remote_ssrc}")
+      {{:ok, event: {:input, event}}, state}
+    else
+      Membrane.Logger.debug("Not sending FIR to #{state.remote_ssrc} due to throttling")
+      {:ok, state}
+    end
   end
 end
