@@ -101,7 +101,7 @@ defmodule Membrane.RTCP.Parser do
        ) do
     # maybe TODO: handle REMB extension
     # Even though we do not support REMB and do not advertise such support in SDP,
-    # browsers ignore that and send REMP packets for video ¯\_(ツ)_/¯
+    # browsers ignore that and send REMB packets for video as part of sender report ¯\_(ツ)_/¯
     []
   end
 
