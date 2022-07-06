@@ -21,11 +21,12 @@ defmodule Membrane.RTCP.Receiver do
               report_interval: [spec: Membrane.Time.t() | nil, default: nil],
               telemetry_label: [spec: Membrane.TelemetryMetrics.label(), default: []]
 
-  @fir_trottle_duration Application.compile_env(
-                          :membrane_videoroom,
-                          :fir_throttle_duration,
-                          500 |> Time.milliseconds()
-                        )
+  @fir_throttle_duration Application.compile_env(
+                           :membrane_rtp_plugin,
+                           :fir_throttle_duration_ms,
+                           500
+                         )
+                         |> Membrane.Time.milliseconds()
 
   @fir_telemetry_event [Membrane.RTP, :rtcp, :fir, :sent]
 
@@ -123,7 +124,7 @@ defmodule Membrane.RTCP.Receiver do
   defp send_fir(state) do
     now = Time.vm_time()
 
-    if now - state.last_fir_timestamp > @fir_trottle_duration do
+    if now - state.last_fir_timestamp > @fir_throttle_duration do
       rtcp = %FeedbackPacket{
         origin_ssrc: state.local_ssrc,
         payload: %FeedbackPacket.FIR{

@@ -3,6 +3,7 @@ defmodule Membrane.RTP.StreamReceiveBinTest do
 
   import Membrane.Testing.Assertions
 
+  alias Membrane.RTCP.FeedbackPacket
   alias Membrane.RTP
   alias Membrane.RTP.StreamReceiveBin
   alias Membrane.RTP.H264
@@ -12,6 +13,10 @@ defmodule Membrane.RTP.StreamReceiveBinTest do
   @frames_count 1038
   @ssrc 790_688_045
   @h264_clock_rate 90_000
+  @fir_throttle_duration_ms Application.compile_env!(
+                              :membrane_rtp_plugin,
+                              :fir_throttle_duration_ms
+                            )
 
   defmodule FrameCounter do
     use Membrane.Sink
@@ -98,6 +103,86 @@ defmodule Membrane.RTP.StreamReceiveBinTest do
     assert_start_of_stream(pipeline, :sink)
     assert_end_of_stream(pipeline, :rtp_parser, :input, 4000)
     assert_end_of_stream(pipeline, :sink)
+    Testing.Pipeline.terminate(pipeline, blocking?: true)
+  end
+
+  defmodule NoopSource do
+    use Membrane.Source
+
+    def_output_pad :output, mode: :push, caps: :any
+
+    @impl true
+    def handle_event(:output, event, _ctx, state) do
+      {{:ok, notify: event}, state}
+    end
+  end
+
+  defmodule KeyframeRequester do
+    use Membrane.Sink
+
+    def_input_pad :input, demand_unit: :buffers, caps: :any
+
+    def_options delay: [spec: integer()]
+
+    @impl true
+    def handle_init(%{delay: delay}) do
+      {:ok, delay}
+    end
+
+    @impl true
+    def handle_prepared_to_playing(_ctx, delay) do
+      keyframe_request = {:event, {:input, %Membrane.KeyframeRequestEvent{}}}
+      Process.send_after(self(), keyframe_request, delay)
+      {{:ok, [keyframe_request, keyframe_request]}, delay}
+    end
+
+    @impl true
+    def handle_other(keyframe_request, _ctx, delay) do
+      {{:ok, [keyframe_request, keyframe_request]}, delay}
+    end
+  end
+
+  test "FIR sending with throttle" do
+    remote_ssrc = 4_194_443_425
+    half_throttle_duration = div(@fir_throttle_duration_ms, 2)
+
+    opts = %Testing.Pipeline.Options{
+      elements: [
+        src: NoopSource,
+        rtp: %StreamReceiveBin{
+          clock_rate: @h264_clock_rate,
+          depayloader: H264.Depayloader,
+          local_ssrc: 0,
+          remote_ssrc: remote_ssrc,
+          rtcp_report_interval: nil
+        },
+        sink: %KeyframeRequester{delay: trunc(@fir_throttle_duration_ms * 1.1)}
+      ]
+    }
+
+    {:ok, pipeline} = Testing.Pipeline.start_link(opts)
+
+    assert_pipeline_playback_changed(pipeline, _, :playing)
+    assert_pipeline_notified(pipeline, :src, %Membrane.RTCPEvent{rtcp: rtcp})
+    assert %FeedbackPacket{payload: fir} = rtcp
+    assert fir == %FeedbackPacket.FIR{target_ssrc: remote_ssrc, seq_num: 0}
+
+    # Ensure we're not getting it twice before throttle duration passes
+    refute_pipeline_notified(pipeline, :src, %Membrane.RTCPEvent{}, half_throttle_duration)
+
+    # Then ensure we get the next one
+    assert_pipeline_notified(
+      pipeline,
+      :src,
+      %Membrane.RTCPEvent{rtcp: rtcp},
+      @fir_throttle_duration_ms
+    )
+
+    assert %FeedbackPacket{payload: fir} = rtcp
+    assert fir == %FeedbackPacket.FIR{target_ssrc: remote_ssrc, seq_num: 1}
+
+    # ... and only one
+    refute_pipeline_notified(pipeline, :src, %Membrane.RTCPEvent{}, half_throttle_duration)
     Testing.Pipeline.terminate(pipeline, blocking?: true)
   end
 end
