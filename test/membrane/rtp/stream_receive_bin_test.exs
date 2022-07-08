@@ -142,9 +142,10 @@ defmodule Membrane.RTP.StreamReceiveBinTest do
     end
   end
 
-  test "FIR sending with throttle" do
+  test "FIRs are sent and throttled" do
     remote_ssrc = 4_194_443_425
     half_throttle_duration = div(@fir_throttle_duration_ms, 2)
+    delta = div(@fir_throttle_duration_ms, 10)
 
     opts = %Testing.Pipeline.Options{
       elements: [
@@ -156,7 +157,7 @@ defmodule Membrane.RTP.StreamReceiveBinTest do
           remote_ssrc: remote_ssrc,
           rtcp_report_interval: nil
         },
-        sink: %KeyframeRequester{delay: trunc(@fir_throttle_duration_ms * 1.1)}
+        sink: %KeyframeRequester{delay: @fir_throttle_duration_ms + delta}
       ]
     }
 
@@ -175,7 +176,7 @@ defmodule Membrane.RTP.StreamReceiveBinTest do
       pipeline,
       :src,
       %Membrane.RTCPEvent{rtcp: rtcp},
-      @fir_throttle_duration_ms
+      half_throttle_duration + delta
     )
 
     assert %FeedbackPacket{payload: fir} = rtcp
