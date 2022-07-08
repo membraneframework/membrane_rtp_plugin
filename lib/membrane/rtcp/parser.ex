@@ -27,9 +27,8 @@ defmodule Membrane.RTCP.Parser do
 
   @impl true
   def handle_prepared_to_playing(_ctx, state) do
-    {{:ok,
-      caps: {:receiver_report_output, %RemoteStream{type: :packetized, content_format: RTCP}}},
-     state}
+    caps = %RemoteStream{type: :packetized, content_format: RTCP}
+    {{:ok, caps: {:receiver_report_output, caps}}, state}
   end
 
   @impl true
@@ -63,13 +62,16 @@ defmodule Membrane.RTCP.Parser do
     {{:ok, buffer: {:receiver_report_output, buffer}}, state}
   end
 
+  @impl true
+  def handle_event(pad, event, ctx, state), do: super(pad, event, ctx, state)
+
   defp process_packets(rtcp, metadata) do
     Enum.flat_map(rtcp, &process_rtcp(&1, metadata))
   end
 
   defp process_rtcp(%RTCP.FeedbackPacket{payload: %keyframe_request{}} = packet, metadata)
        when keyframe_request in [RTCP.FeedbackPacket.FIR, RTCP.FeedbackPacket.PLI] do
-    event = wrap_with_rtcp_event(packet, packet.target_ssrc, metadata)
+    event = to_rtcp_event(packet, packet.target_ssrc, metadata)
     [event: {:output, event}]
   end
 
@@ -81,14 +83,14 @@ defmodule Membrane.RTCP.Parser do
   end
 
   defp process_rtcp(%RTCP.SenderReportPacket{ssrc: ssrc} = packet, metadata) do
-    event = wrap_with_rtcp_event(packet, ssrc, metadata)
+    event = to_rtcp_event(packet, ssrc, metadata)
     [event: {:output, event}]
   end
 
   defp process_rtcp(%RTCP.ReceiverReportPacket{reports: reports}, metadata) do
     reports
     |> Enum.map(fn report ->
-      event = wrap_with_rtcp_event(report, report.ssrc, metadata)
+      event = to_rtcp_event(report, report.ssrc, metadata)
       {:event, {:output, event}}
     end)
   end
@@ -125,7 +127,7 @@ defmodule Membrane.RTCP.Parser do
     []
   end
 
-  defp wrap_with_rtcp_event(rtcp_packet, ssrc, metadata) do
+  defp to_rtcp_event(rtcp_packet, ssrc, metadata) do
     %RTCPEvent{
       rtcp: rtcp_packet,
       ssrcs: [ssrc],
