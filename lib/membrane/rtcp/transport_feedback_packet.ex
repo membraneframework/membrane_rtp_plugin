@@ -22,6 +22,7 @@ defmodule Membrane.RTCP.TransportFeedbackPacket do
   @callback encode(struct()) :: binary()
 
   @packet_type_payload BiMap.new(%{
+                         1 => __MODULE__.NACK,
                          15 => __MODULE__.TWCC
                        })
 
