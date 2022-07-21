@@ -75,6 +75,20 @@ defmodule Membrane.RTCP.Parser do
   end
 
   defp process_rtcp(
+         %RTCP.TransportFeedbackPacket{
+           media_ssrc: ssrc,
+           payload: %RTCP.TransportFeedbackPacket.NACK{lost_packet_ids: lost_packets}
+         },
+         _metadata
+       ) do
+    Membrane.Logger.debug(
+      "SSRC #{ssrc} reported loss of #{length(lost_packets)} packet(s): #{inspect(lost_packets)}"
+    )
+
+    []
+  end
+
+  defp process_rtcp(
          %RTCP.TransportFeedbackPacket{payload: %RTCP.TransportFeedbackPacket.TWCC{} = feedback},
          _metadata
        ) do
