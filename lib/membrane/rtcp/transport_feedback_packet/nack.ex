@@ -1,11 +1,14 @@
 defmodule Membrane.RTCP.TransportFeedbackPacket.NACK do
   @moduledoc """
-  Generic Negative Acknowledgment packet
+  Generic Negative Acknowledgment packet that informs about lost RTP packet(s)
 
-  Quoting rfc4585:
-  ```
+  Quoting [RFC4585](https://datatracker.ietf.org/doc/html/rfc4585#section-6.2.1):
+  The Generic NACK is used to indicate the loss of one or more RTP packets.
+  The lost packet(s) are identified by the means of a packet identifier and a bit mask.
+
   The Feedback Control Information (FCI) field has the following Syntax (Figure 4):
 
+  ```txt
     0                   1                   2                   3
     0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
@@ -35,8 +38,8 @@ defmodule Membrane.RTCP.TransportFeedbackPacket.NACK do
      have been received simply because bits 2 through 15 of the BLP are
      0; all the sender knows is that the receiver has not reported them
      as lost at this time.
-  ```
 
+  ```
   Implementation based on https://datatracker.ietf.org/doc/html/rfc4585#section-6.2.1
   and https://datatracker.ietf.org/doc/html/rfc2032#section-5.2.2
   """
