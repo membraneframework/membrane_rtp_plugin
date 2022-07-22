@@ -35,6 +35,30 @@ defmodule Membrane.RTCP.Fixtures do
     |> Enum.map(&hex_to_bin/1)
   end
 
+  @doc """
+  Returns a real, compound RTCP packet from browser containing SenderReport, Sdes & AFB with REMB
+  """
+  @spec compound_sr_sdes_remb() :: binary()
+  def compound_sr_sdes_remb() do
+    <<128, 200, 0, 6, 120, 61, 239, 185, 230, 110, 197, 157, 82, 42, 144, 205, 172, 85, 146, 216,
+      0, 0, 3, 121, 0, 14, 109, 134, 129, 202, 0, 6, 120, 61, 239, 185, 1, 16, 116, 79, 97, 68,
+      55, 57, 102, 72, 120, 105, 119, 102, 110, 56, 120, 85, 0, 0, 143, 206, 0, 5, 120, 61, 239,
+      185, 0, 0, 0, 0, 82, 69, 77, 66, 1, 15, 36, 147, 224, 97, 78, 29>>
+  end
+
+  @spec pli_packet() :: binary()
+  def pli_packet() do
+    <<0x81, 0xCE, 0x00, 0x02, 0x00, 0x00, 0x00, 0x01, 0x41, 0x6F, 0xB1, 0x0D>>
+  end
+
+  @spec pli_contents() :: binary()
+  def pli_contents() do
+    %{
+      origin_ssrc: 1,
+      target_ssrc: 0x416FB10D
+    }
+  end
+
   @spec twcc_feedbacks() :: [binary()]
   def twcc_feedbacks() do
     @twcc_feedbacks

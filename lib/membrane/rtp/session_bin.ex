@@ -38,7 +38,7 @@ defmodule Membrane.RTP.SessionBin do
 
   ## RTCP
   RTCP packets for inbound stream can be provided either in-band or via a separate `rtp_input` pad instance. Corresponding
-  receiver report packets will be sent back through `rtcp_output` with the same id as `rtp_input` for the RTP stream.
+  receiver report packets will be sent back through `rtcp_receiver_output` with the same id as `rtp_input` for the RTP stream.
 
   RTCP for outbound stream is not yet supported. # But will be :)
   """
@@ -239,11 +239,6 @@ defmodule Membrane.RTP.SessionBin do
         An extension can be responsible e.g. for dropping silent audio packets when encountered VAD extension data in the
         packet header.
         """
-      ],
-      rtcp_fir_interval: [
-        spec: Membrane.Time.t() | nil,
-        default: Membrane.Time.second(),
-        description: "Interval between sending subseqent RTCP Full Intra Request packets."
       ]
     ]
 
@@ -391,7 +386,6 @@ defmodule Membrane.RTP.SessionBin do
       depayloader: depayloader,
       clock_rate: clock_rate,
       rtp_extensions: rtp_extensions,
-      rtcp_fir_interval: fir_interval,
       encoding: encoding,
       telemetry_label: telemetry_label,
       extensions: extensions
@@ -412,7 +406,6 @@ defmodule Membrane.RTP.SessionBin do
         local_ssrc: local_ssrc,
         remote_ssrc: ssrc,
         rtcp_report_interval: state.rtcp_receiver_report_interval,
-        rtcp_fir_interval: fir_interval,
         telemetry_label: telemetry_label,
         secure?: state.secure?,
         srtp_policies: state.srtp_policies
@@ -514,7 +507,7 @@ defmodule Membrane.RTP.SessionBin do
       # if RTCP is present create all set of input and output pads for RTCP flow
       rtcp_links =
         if rtcp? do
-          maybe_link_srtcp_encryptor =
+          link_srtcp_encryptor =
             &to(
               &1,
               {:srtcp_sender_encryptor, ssrc},
@@ -526,7 +519,7 @@ defmodule Membrane.RTP.SessionBin do
           [
             link({:stream_send_bin, ssrc})
             |> via_out(:rtcp_output)
-            |> then(if state.secure?, do: maybe_link_srtcp_encryptor, else: & &1)
+            |> then(if state.secure?, do: link_srtcp_encryptor, else: & &1)
             |> to_bin_output(rtcp_sender_output),
             link(:ssrc_router)
             |> via_out(Pad.ref(:output, ssrc))

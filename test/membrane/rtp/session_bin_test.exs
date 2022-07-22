@@ -195,7 +195,7 @@ defmodule Membrane.RTP.Session.BinTest do
         links: [
           link(:rtp)
           |> via_out(Pad.ref(:output, ssrc),
-            options: [depayloader: depayloader, rtcp_fir_interval: nil]
+            options: [depayloader: depayloader]
           )
           |> to({:sink, ssrc})
         ]

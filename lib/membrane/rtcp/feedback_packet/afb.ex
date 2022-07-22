@@ -1,20 +1,23 @@
 defmodule Membrane.RTCP.FeedbackPacket.AFB do
   @moduledoc """
-  TODO: Mock module, for now ignores PSFB=206 & PT=15 packets.
-  Should encode and decode [Application Layer Feedback](https://datatracker.ietf.org/doc/html/rfc4585#section-6.4) packets.
+  [Application Layer Feedback](https://datatracker.ietf.org/doc/html/rfc4585#section-6.4) packets.
+
+  They use PT=PSFB (206) & FMT=15.
+  Since the message must be handled at the application layer, the struct simply wraps a binary content of message
   """
 
   @behaviour Membrane.RTCP.FeedbackPacket
 
-  defstruct []
+  @enforce_keys [:message]
+  defstruct @enforce_keys
 
   @impl true
-  def decode(_binary) do
-    {:ok, %__MODULE__{}}
+  def decode(binary) do
+    {:ok, %__MODULE__{message: binary}}
   end
 
   @impl true
-  def encode(_packet) do
-    <<>>
+  def encode(%__MODULE__{message: message}) when is_binary(message) do
+    message
   end
 end
