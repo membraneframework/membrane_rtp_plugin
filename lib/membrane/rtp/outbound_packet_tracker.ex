@@ -1,3 +1,9 @@
+defmodule Membrane.PacketRetransmissionRequest do
+  @derive Membrane.EventProtocol
+  @enforce_keys [:packet_ids]
+  defstruct @enforce_keys
+end
+
 defmodule Membrane.RTP.OutboundPacketTracker do
   @moduledoc """
   Tracks statistics of outbound packets.
@@ -10,6 +16,7 @@ defmodule Membrane.RTP.OutboundPacketTracker do
 
   alias Membrane.{Buffer, RTCPEvent, RTP, Payload, Time}
   alias Membrane.RTCP.FeedbackPacket.{PLI, FIR}
+  alias Membrane.RTCP.TransportFeedbackPacket.NACK
   alias Membrane.RTP.Session.SenderReport
 
   require Membrane.Logger
@@ -106,6 +113,19 @@ defmodule Membrane.RTP.OutboundPacketTracker do
     # We need to pass it to the sending peer's RTCP.Receiver (in StreamReceiveBin) to get translated again into FIR/PLI with proper SSRCs
     # and then sent to the sender. So the KeyframeRequestEvent, like salmon, starts an upstream journey here trying to reach that peer.
     {{:ok, event: {:input, %Membrane.KeyframeRequestEvent{}}}, state}
+  end
+
+  @impl true
+  def handle_event(
+        Pad.ref(:rtcp_input, _id),
+        %RTCPEvent{rtcp: %{payload: %NACK{} = nack}},
+        _ctx,
+        state
+      ) do
+    # {{:ok, event: {:input, %Membrane.KeyframeRequestEvent{}}}, state}
+
+    event = %Membrane.PacketRetransmissionRequest{packet_ids: nack.lost_packet_ids}
+    {{:ok, event: {:input, event}}, state}
   end
 
   @impl true
