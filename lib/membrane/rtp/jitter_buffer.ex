@@ -7,8 +7,10 @@ defmodule Membrane.RTP.JitterBuffer do
 
   require Bitwise
   require Membrane.Logger
-  alias __MODULE__.{BufferStore, Record}
+
+  alias __MODULE__.BufferStore
   alias Membrane.RTP.Utils
+  alias Membrane.RTP.PacketStore.Entry
   alias Membrane.{RTP, Time}
 
   @type packet_index :: non_neg_integer()
@@ -34,7 +36,7 @@ defmodule Membrane.RTP.JitterBuffer do
     @moduledoc false
     use Bunch.Access
 
-    defstruct store: %BufferStore{},
+    defstruct store: BufferStore.new(),
               clock_rate: nil,
               latency: nil,
               waiting?: true,
@@ -78,7 +80,7 @@ defmodule Membrane.RTP.JitterBuffer do
       |> BufferStore.dump()
       |> Enum.map_reduce(state, &record_to_action/2)
 
-    {{:ok, actions ++ [end_of_stream: :output]}, %State{state | store: %BufferStore{}}}
+    {{:ok, actions ++ [end_of_stream: :output]}, %State{state | store: BufferStore.new()}}
   end
 
   @impl true
@@ -140,7 +142,7 @@ defmodule Membrane.RTP.JitterBuffer do
   @spec set_timer(State.t()) :: State.t()
   defp set_timer(%State{max_latency_timer: nil, latency: latency} = state) do
     new_timer =
-      case BufferStore.first_record_timestamp(state.store) do
+      case BufferStore.first_timestamp(state.store) do
         nil ->
           nil
 
@@ -160,7 +162,7 @@ defmodule Membrane.RTP.JitterBuffer do
     {action, state}
   end
 
-  defp record_to_action(%Record{buffer: buffer}, state) do
+  defp record_to_action(%Entry{data: buffer}, state) do
     %{timestamp: rtp_timestamp} = buffer.metadata.rtp
     timestamp_base = state.timestamp_base || rtp_timestamp
     previous_timestamp = state.previous_timestamp || rtp_timestamp

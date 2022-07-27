@@ -9,13 +9,17 @@ defmodule Membrane.RTP.InboundPacketTracker do
   use Membrane.Filter
 
   require Bitwise
-  alias Membrane.RTCP.ReceiverReport
+  require Membrane.Logger
+
   alias Membrane.{Buffer, RTP, Time}
+  alias Membrane.RTCP.ReceiverReport
+  alias Membrane.RTP.{PacketStore, RetransmissionRequest}
 
   @max_dropout 3000
-  @max_unordered 3000
 
-  @max_seq_num Bitwise.bsl(1, 16) - 1
+  # Number of packets we wait before we decide packet was not reordered, but lost
+  @reorder_window 16
+
   @max_s24_val Bitwise.bsl(1, 23) - 1
   @min_s24_val -Bitwise.bsl(1, 23)
 
@@ -42,29 +46,22 @@ defmodule Membrane.RTP.InboundPacketTracker do
             transit: non_neg_integer() | nil,
             received: non_neg_integer(),
             discarded: non_neg_integer(),
-            cycles: non_neg_integer(),
-            base_seq: non_neg_integer(),
-            max_seq: non_neg_integer(),
+            sequence_num_store: PacketStore.t(),
             received_prior: non_neg_integer(),
-            expected_prior: non_neg_integer(),
-            lost: non_neg_integer(),
-            fraction_lost: float()
+            expected_prior: non_neg_integer()
           }
 
     @enforce_keys [:clock_rate, :repair_sequence_numbers?]
     defstruct @enforce_keys ++
                 [
+                  sequence_num_store: %PacketStore{},
+                  first_sequence_number: nil,
                   jitter: 0.0,
                   transit: nil,
                   received: 0,
                   discarded: 0,
-                  cycles: 0,
-                  base_seq: nil,
-                  max_seq: nil,
                   received_prior: 0,
-                  expected_prior: 0,
-                  lost: 0,
-                  fraction_lost: 0.0
+                  expected_prior: 0
                 ]
   end
 
@@ -75,36 +72,79 @@ defmodule Membrane.RTP.InboundPacketTracker do
   end
 
   @impl true
-  def handle_process(:input, buffer, _ctx, %State{cycles: cycles, max_seq: max_seq} = state) do
+  def handle_process(:input, buffer, _ctx, %State{first_sequence_number: nil} = state) do
     seq_num = buffer.metadata.rtp.sequence_number
-    max_seq = max_seq || seq_num - 1
+    process_buffer(buffer, seq_num, %State{state | first_sequence_number: seq_num})
+  end
 
-    delta = rem(seq_num - max_seq + @max_seq_num + 1, @max_seq_num + 1)
+  def handle_process(:input, buffer, _ctx, %State{} = state) do
+    seq_num = buffer.metadata.rtp.sequence_number
+    process_buffer(buffer, seq_num, state)
+  end
 
-    cond do
-      # greater sequence number but within dropout to ensure that it is not from previous cycle
-      delta < @max_dropout ->
-        state =
-          state
-          |> update_sequence_counters(seq_num, max_seq, cycles)
-          |> update_received()
-          |> update_jitter(buffer)
+  defp process_buffer(buffer, seq_num, %State{} = state) do
+    state = state |> update_received()
 
-        {{:ok, buffer: {:output, repair_sequence_number(buffer, state)}}, state}
+    {action, state} =
+      state.sequence_num_store
+      |> PacketStore.insert_data(seq_num, nil)
+      |> case do
+        {:ok, store} ->
+          {:pass, %State{state | sequence_num_store: store}}
 
-      # the packets is either too old or too new
-      delta <= @max_seq_num - @max_unordered ->
-        {:ok, update_received(state)}
+        {:error, :late_packet} ->
+          # Determine how late the packet is
+          max_seq_num =
+            state.sequence_num_store |> PacketStore.extended_highest_seq_num() |> mod_uint16()
 
-      # packet is old but within dropout threshold
-      true ->
-        state =
-          state
-          |> update_received()
-          |> update_jitter(buffer)
+          diff = mod_uint16(max_seq_num - seq_num)
 
-        {{:ok, buffer: {:output, repair_sequence_number(buffer, state)}}, update_received(state)}
-    end
+          if diff > @max_dropout do
+            {:drop, state}
+          else
+            Membrane.Logger.info("Seems like a succesful retransmission of #{seq_num}")
+            {:pass, state}
+          end
+      end
+
+    state =
+      case action do
+        :drop -> state
+        :pass -> update_jitter(state, buffer)
+      end
+
+    actions =
+      case action do
+        :drop -> []
+        :pass -> [buffer: {:output, repair_sequence_number(buffer, state)}]
+      end
+
+    {missing_seq_num, state} =
+      if PacketStore.seq_num_window_size(state.sequence_num_store) > @reorder_window do
+        {result, store} = PacketStore.flush_one(state.sequence_num_store)
+        state = %State{state | sequence_num_store: store}
+        # Check if we need to send NACK
+        case result do
+          nil -> {store.flush_index, state}
+          _entry -> {nil, state}
+        end
+      else
+        {nil, state}
+      end
+
+    actions =
+      case missing_seq_num do
+        nil ->
+          actions
+
+        _seq_num ->
+          [
+            {:event, {:input, %RetransmissionRequest{sequence_numbers: [missing_seq_num]}}}
+            | actions
+          ]
+      end
+
+    {{:ok, actions}, state}
   end
 
   @impl true
@@ -113,8 +153,7 @@ defmodule Membrane.RTP.InboundPacketTracker do
       received: received,
       received_prior: received_prior,
       expected_prior: expected_prior,
-      cycles: cycles,
-      max_seq: max_seq,
+      sequence_num_store: store,
       jitter: jitter
     } = state
 
@@ -144,15 +183,13 @@ defmodule Membrane.RTP.InboundPacketTracker do
     state = %State{
       state
       | expected_prior: expected,
-        received_prior: received,
-        lost: total_lost,
-        fraction_lost: fraction_lost
+        received_prior: received
     }
 
     stats = %ReceiverReport.Stats{
       fraction_lost: fraction_lost,
       total_lost: total_lost,
-      highest_seq_num: max_seq + cycles,
+      highest_seq_num: PacketStore.extended_highest_seq_num(store),
       interarrival_jitter: jitter
     }
 
@@ -166,29 +203,18 @@ defmodule Membrane.RTP.InboundPacketTracker do
         _ctx,
         %State{discarded: discarded} = state
       ) do
-    {:ok, %State{state | discarded: discarded + packets_discarded}}
+    {:ok, %State{state | discarded: mod_uint16(discarded + packets_discarded)}}
   end
 
   @impl true
   def handle_event(direction, event, ctx, state), do: super(direction, event, ctx, state)
 
-  defp update_sequence_counters(state, seq_num, max_seq, cycles) do
-    {max_seq_num, cycles} =
-      if seq_num < max_seq do
-        {seq_num, cycles + @max_seq_num}
-      else
-        {seq_num, cycles}
-      end
-
-    %State{state | max_seq: max_seq_num, cycles: cycles, base_seq: state.base_seq || seq_num}
-  end
-
   defp update_received(%State{received: received} = state) do
     %State{state | received: received + 1}
   end
 
-  defp expected_packets(%State{cycles: cycles, max_seq: max_seq, base_seq: base_seq}) do
-    cycles + max_seq - base_seq + 1
+  defp expected_packets(%State{sequence_num_store: store, first_sequence_number: base_seq}) do
+    PacketStore.extended_highest_seq_num(store) - base_seq + 1
   end
 
   defp update_jitter(state, %Buffer{metadata: metadata}) do
@@ -230,9 +256,15 @@ defmodule Membrane.RTP.InboundPacketTracker do
       put_in(
         metadata,
         [:rtp, :sequence_number],
-        rem(seq_num - discarded + @max_seq_num + 1, @max_seq_num + 1)
+        mod_uint16(seq_num - discarded)
       )
 
     %Buffer{buffer | metadata: metadata}
+  end
+
+  defp mod_uint16(input) when is_integer(input) do
+    # trim input to 16 bit and treat as unsigned
+    <<result::16>> = <<input::16-unsigned>>
+    result
   end
 end
