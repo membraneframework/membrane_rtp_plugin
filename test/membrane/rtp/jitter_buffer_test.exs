@@ -2,8 +2,9 @@ defmodule Membrane.RTP.JitterBufferTest do
   use ExUnit.Case, async: true
 
   alias Membrane.RTP.BufferFactory
-  alias Membrane.RTP.JitterBuffer
-  alias Membrane.RTP.JitterBuffer.{BufferStore, Record, State}
+  alias Membrane.RTP.{JitterBuffer, PacketStore}
+  alias Membrane.RTP.JitterBuffer.{BufferStore, State}
+  alias Membrane.RTP.PacketStore.Entry
 
   @base_seq_number BufferFactory.base_seq_number()
 
@@ -12,7 +13,7 @@ defmodule Membrane.RTP.JitterBufferTest do
 
     state = %State{
       clock_rate: BufferFactory.clock_rate(),
-      store: %BufferStore{},
+      store: BufferStore.new(),
       latency: 10 |> Membrane.Time.milliseconds()
     }
 
@@ -36,7 +37,7 @@ defmodule Membrane.RTP.JitterBufferTest do
       assert {:ok, state} = JitterBuffer.handle_process(:input, buffer, nil, state)
 
       assert %State{store: store} = state
-      assert {%Record{buffer: ^buffer}, new_store} = BufferStore.flush_one(store)
+      assert {%Entry{data: ^buffer}, new_store} = BufferStore.flush_one(store)
       assert BufferStore.dump(new_store) == []
     end
   end
@@ -69,7 +70,7 @@ defmodule Membrane.RTP.JitterBufferTest do
 
       flush_index = @base_seq_number - 1
 
-      store = %BufferStore{
+      store = %PacketStore{
         state.store
         | flush_index: flush_index,
           highest_incoming_index: flush_index
@@ -97,7 +98,7 @@ defmodule Membrane.RTP.JitterBufferTest do
     test "outputs discontinuity and late buffer", %{state: state, buffer: buffer} do
       flush_index = @base_seq_number - 2
 
-      store = %BufferStore{
+      store = %PacketStore{
         state.store
         | flush_index: flush_index,
           highest_incoming_index: flush_index
@@ -122,7 +123,7 @@ defmodule Membrane.RTP.JitterBufferTest do
     test "dumps store if event was end of stream", %{state: state, buffer: buffer} do
       flush_index = @base_seq_number - 2
 
-      store = %BufferStore{
+      store = %PacketStore{
         state.store
         | flush_index: flush_index,
           highest_incoming_index: flush_index
