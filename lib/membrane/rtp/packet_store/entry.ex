@@ -1,24 +1,34 @@
-defmodule Membrane.RTP.JitterBuffer.Record do
+defmodule Membrane.RTP.PacketStore.Entry do
   @moduledoc false
 
   # Describes a structure that is stored in the BufferStore.
 
-  alias Membrane.RTP.JitterBuffer
-  @enforce_keys [:index, :timestamp, :buffer]
-  defstruct @enforce_keys
+  alias Membrane.RTP.PacketStore
 
-  @type t :: %__MODULE__{
-          index: JitterBuffer.packet_index(),
+  @enforce_keys [:index, :timestamp]
+  defstruct @enforce_keys ++ [data: nil]
+
+  @type t() :: t(any())
+  @type t(data) :: %__MODULE__{
+          index: PacketStore.packet_index(),
           timestamp: Membrane.Time.t(),
-          buffer: Membrane.Buffer.t()
+          data: data
         }
 
-  @spec new(Membrane.Buffer.t(), JitterBuffer.packet_index()) :: t()
-  def new(buffer, index) do
+  @spec new(PacketStore.packet_index()) :: t(nil)
+  def new(index) do
+    %__MODULE__{
+      index: index,
+      timestamp: Membrane.Time.monotonic_time()
+    }
+  end
+
+  @spec new(data, PacketStore.packet_index()) :: t(data) when data: any()
+  def new(data, index) do
     %__MODULE__{
       index: index,
       timestamp: Membrane.Time.monotonic_time(),
-      buffer: buffer
+      data: data
     }
   end
 
