@@ -9,7 +9,9 @@ defmodule Membrane.RTP.OutboundPacketTracker do
   use Membrane.Filter
 
   require Membrane.Logger
+
   alias Membrane.RTCP.FeedbackPacket.{FIR, PLI}
+  alias Membrane.RTCP.TransportFeedbackPacket.NACK
   alias Membrane.RTP.Session.SenderReport
   alias Membrane.{Buffer, Payload, RTCPEvent, RTP, Time}
 
@@ -105,6 +107,12 @@ defmodule Membrane.RTP.OutboundPacketTracker do
     # We need to pass it to the sending peer's RTCP.Receiver (in StreamReceiveBin) to get translated again into FIR/PLI with proper SSRCs
     # and then sent to the sender. So the KeyframeRequestEvent, like salmon, starts an upstream journey here trying to reach that peer.
     {{:ok, event: {:input, %Membrane.KeyframeRequestEvent{}}}, state}
+  end
+
+  @impl true
+  def handle_event(Pad.ref(:rtcp_input, _id), %RTCPEvent{rtcp: %{payload: %NACK{}}}, _ctx, state) do
+    # TODO: Retransmit the NACKed packets
+    {:ok, state}
   end
 
   @impl true

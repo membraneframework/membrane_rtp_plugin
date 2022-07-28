@@ -78,14 +78,15 @@ defmodule Membrane.RTCP.Parser do
          %RTCP.TransportFeedbackPacket{
            media_ssrc: ssrc,
            payload: %RTCP.TransportFeedbackPacket.NACK{lost_packet_ids: lost_packets}
-         },
-         _metadata
+         } = packet,
+         metadata
        ) do
     Membrane.Logger.debug(
       "SSRC #{ssrc} reported loss of #{length(lost_packets)} packet(s): #{inspect(lost_packets)}"
     )
 
-    []
+    event = to_rtcp_event(packet, ssrc, metadata)
+    [event: {:output, event}]
   end
 
   defp process_rtcp(
