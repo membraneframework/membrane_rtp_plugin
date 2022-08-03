@@ -176,6 +176,13 @@ defmodule Membrane.RTP.SessionBin do
 
         If set to nil then the payloading process gets skipped.
         """
+      ],
+      twcc?: [
+        spec: boolean(),
+        default: false,
+        description: """
+        Whether to use TWCC Sender or not.
+        """
       ]
     ]
 
@@ -487,7 +494,8 @@ defmodule Membrane.RTP.SessionBin do
       maybe_link_encryptor =
         &to(&1, {:srtp_encryptor, ssrc}, struct(SRTP.Encryptor, %{policies: state.srtp_policies}))
 
-      maybe_link_twcc_sender = maybe_handle_twcc_sender(ssrc, ctx)
+      twcc? = Map.get(ctx.pads[input_pad].options, :twcc?)
+      maybe_link_twcc_sender = maybe_handle_twcc_sender(twcc?, ssrc, ctx)
 
       links = [
         link_bin_input(input_pad)
@@ -682,14 +690,12 @@ defmodule Membrane.RTP.SessionBin do
     {rtp_extensions, maybe_link_twcc, state}
   end
 
-  defp maybe_handle_twcc_sender(pad_ssrc, ctx) do
+  defp maybe_handle_twcc_sender(twcc?, pad_ssrc, ctx) do
     # Workaround: as TWCC is a transport-wide extension, there should exist only one TWCC sender
-    # child that handles packets for all outgoing streams. As there is no support for declaring
-    # outbound extensions, outbound TWCC will be enabled if inbound TWCC has been enabled.
-    should_link? = Map.has_key?(ctx.children, :twcc_receiver)
+    # child that handles packets for all outgoing streams.
     should_create_child? = not Map.has_key?(ctx.children, :twcc_sender)
 
-    if should_link? do
+    if twcc? do
       fn link_builder ->
         link_builder
         |> via_in(Pad.ref(:input, pad_ssrc))

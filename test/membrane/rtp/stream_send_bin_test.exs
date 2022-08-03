@@ -76,7 +76,7 @@ defmodule Membrane.RTP.StreamSendBinTest do
               children: [
                 hackney: %Membrane.Hackney.Source{
                   location:
-                    "https://membraneframework.github.io/static/samples/big-buck-bunny/bun33s_720x480.h264",
+                    "https://raw.githubusercontent.com/membraneframework/static/gh-pages/samples/big-buck-bunny/bun33s_720x480.h264",
                   hackney_opts: [follow_redirect: true]
                 },
                 video_parser: %Membrane.H264.FFmpeg.Parser{framerate: {30, 1}, alignment: :nal}
