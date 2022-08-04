@@ -19,6 +19,9 @@ defmodule Membrane.RTP.TWCCSender do
 
   @impl true
   def handle_init(_options) do
+    require Membrane.Logger
+    Membrane.Logger.warn("TWCC SENDER")
+
     {:ok,
      %{
        seq_num: 0,

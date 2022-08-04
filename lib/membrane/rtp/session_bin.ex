@@ -66,13 +66,15 @@ defmodule Membrane.RTP.SessionBin do
 
   An extension will be spawned inside the bin under `{extension_name, ssrc}` name.
 
-  ### Currently supported RTP extensions are:
+  ### RTP plugin ships with the following extensions:
   * `Membrane.RTP.VAD`
   * `Membrane.RTP.TWCCReceiver`
+  * `Membrane.RTP.TWCCSender`
 
   ### Example usage
   `{:vad, %Mebrane.RTP.VAD{vad_id: 1, time_window: 1_000_000}}`
   `{:twcc, %Mebrane.RTP.TWCCReceiver{twcc_id: 1, report_interval: Membrane.Time.milliseconds(250)}}`
+  `{:twcc, Mebrane.RTP.TWCCSender}`
 
   ### TWCC
   TWCC as a transport-wide extension is handled differently, and is linked from `RTP.SSRCRouter`
@@ -177,11 +179,13 @@ defmodule Membrane.RTP.SessionBin do
         If set to nil then the payloading process gets skipped.
         """
       ],
-      twcc?: [
-        spec: boolean(),
-        default: false,
+      rtp_extensions: [
+        spec: [rtp_extension_options_t()],
+        default: [],
         description: """
-        Whether to use TWCC Sender or not.
+        List of RTP extension options. Currently supported is `:twcc` (sender) only.
+        It will tag outgoing packets with transport-wide sequence numbers and estimate available bandwidth.
+        For more information refer to `Membrane.RTP.TWCCSender` module documentation.
         """
       ]
     ]
@@ -226,10 +230,10 @@ defmodule Membrane.RTP.SessionBin do
         spec: [rtp_extension_options_t()],
         default: [],
         description: """
-        List of RTP extension options. Currently `:vad` and `:twcc` are supported.
+        List of RTP extension options. Currently `:vad` and `:twcc` (receiver) are supported.
         * `:vad` will turn on Voice Activity Detection mechanism firing appropriate notifications when needed.
         Should be set only for audio tracks. For more information refer to `Membrane.RTP.VAD` module documentation.
-        * `:twcc` will gather transport-wide information about received packets and generate feedbacks for sender.
+        * `:twcc` (receiver) will gather transport-wide information about received packets and generate feedbacks for sender.
         For more information refer to `Membrane.RTP.TWCCReceiver` module documentation.
 
         RTP extensions (except `:twcc`) are applied in the same order as passed to the pad options.
@@ -494,8 +498,10 @@ defmodule Membrane.RTP.SessionBin do
       maybe_link_encryptor =
         &to(&1, {:srtp_encryptor, ssrc}, struct(SRTP.Encryptor, %{policies: state.srtp_policies}))
 
-      twcc? = Map.get(ctx.pads[input_pad].options, :twcc?)
-      maybe_link_twcc_sender = maybe_handle_twcc_sender(twcc?, ssrc, ctx)
+      %{rtp_extensions: rtp_extensions} = ctx.pads[input_pad].options
+
+      {_rtp_extensions, maybe_link_twcc_sender} =
+        maybe_handle_twcc_sender(rtp_extensions, ssrc, ctx)
 
       links = [
         link_bin_input(input_pad)
@@ -690,26 +696,33 @@ defmodule Membrane.RTP.SessionBin do
     {rtp_extensions, maybe_link_twcc, state}
   end
 
-  defp maybe_handle_twcc_sender(twcc?, pad_ssrc, ctx) do
+  defp maybe_handle_twcc_sender(rtp_extensions, pad_ssrc, ctx) do
     # Workaround: as TWCC is a transport-wide extension, there should exist only one TWCC sender
     # child that handles packets for all outgoing streams.
+    {maybe_twcc, rtp_extensions} = Keyword.pop(rtp_extensions, :twcc)
+
+    should_link? = maybe_twcc != nil
+
     should_create_child? = not Map.has_key?(ctx.children, :twcc_sender)
 
-    if twcc? do
-      fn link_builder ->
-        link_builder
-        |> via_in(Pad.ref(:input, pad_ssrc))
-        |> then(fn link ->
-          if should_create_child? do
-            to(link, :twcc_sender, RTP.TWCCSender)
-          else
-            to(link, :twcc_sender)
-          end
-        end)
-        |> via_out(Pad.ref(:output, pad_ssrc))
+    maybe_link_twcc =
+      if should_link? do
+        fn link_builder ->
+          link_builder
+          |> via_in(Pad.ref(:input, pad_ssrc))
+          |> then(fn link ->
+            if should_create_child? do
+              to(link, :twcc_sender, maybe_twcc)
+            else
+              to(link, :twcc_sender)
+            end
+          end)
+          |> via_out(Pad.ref(:output, pad_ssrc))
+        end
+      else
+        & &1
       end
-    else
-      & &1
-    end
+
+    {rtp_extensions, maybe_link_twcc}
   end
 end
