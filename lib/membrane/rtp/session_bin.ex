@@ -500,8 +500,7 @@ defmodule Membrane.RTP.SessionBin do
 
       %{rtp_extensions: rtp_extensions} = ctx.pads[input_pad].options
 
-      {_rtp_extensions, maybe_link_twcc_sender} =
-        maybe_handle_twcc_sender(rtp_extensions, ssrc, ctx)
+      maybe_link_twcc_sender = maybe_handle_twcc_sender(rtp_extensions, ssrc, ctx)
 
       links = [
         link_bin_input(input_pad)
@@ -675,23 +674,22 @@ defmodule Membrane.RTP.SessionBin do
         {nil, state}
       end
 
-    maybe_link_twcc =
-      if should_link? do
-        fn link_builder ->
-          link_builder
-          |> via_in(Pad.ref(:input, pad_ssrc))
-          |> then(fn link ->
-            if should_create_child? do
-              to(link, :twcc_receiver, %{maybe_twcc | feedback_sender_ssrc: maybe_twcc_ssrc})
-            else
-              to(link, :twcc_receiver)
-            end
-          end)
-          |> via_out(Pad.ref(:output, pad_ssrc))
-        end
+    to_twcc_receiver = fn link ->
+      if should_create_child? do
+        to(link, :twcc_receiver, %{maybe_twcc | feedback_sender_ssrc: maybe_twcc_ssrc})
       else
-        & &1
+        to(link, :twcc_receiver)
       end
+    end
+
+    link_twcc = fn link_builder ->
+      link_builder
+      |> via_in(Pad.ref(:input, pad_ssrc))
+      |> then(to_twcc_receiver)
+      |> via_out(Pad.ref(:output, pad_ssrc))
+    end
+
+    maybe_link_twcc = if should_link?, do: link_twcc, else: & &1
 
     {rtp_extensions, maybe_link_twcc, state}
   end
@@ -699,30 +697,31 @@ defmodule Membrane.RTP.SessionBin do
   defp maybe_handle_twcc_sender(rtp_extensions, pad_ssrc, ctx) do
     # Workaround: as TWCC is a transport-wide extension, there should exist only one TWCC sender
     # child that handles packets for all outgoing streams.
-    {maybe_twcc, rtp_extensions} = Keyword.pop(rtp_extensions, :twcc)
+    maybe_twcc = Keyword.get(rtp_extensions, :twcc)
 
     should_link? = maybe_twcc != nil
 
     should_create_child? = not Map.has_key?(ctx.children, :twcc_sender)
 
-    maybe_link_twcc =
-      if should_link? do
-        fn link_builder ->
-          link_builder
-          |> via_in(Pad.ref(:input, pad_ssrc))
-          |> then(fn link ->
-            if should_create_child? do
-              to(link, :twcc_sender, maybe_twcc)
-            else
-              to(link, :twcc_sender)
-            end
-          end)
-          |> via_out(Pad.ref(:output, pad_ssrc))
-        end
+    to_twcc_sender = fn link ->
+      if should_create_child? do
+        to(link, :twcc_sender, maybe_twcc)
       else
-        & &1
+        to(link, :twcc_sender)
       end
+    end
 
-    {rtp_extensions, maybe_link_twcc}
+    link_twcc = fn link_builder ->
+      link_builder
+      |> via_in(Pad.ref(:input, pad_ssrc))
+      |> then(to_twcc_sender)
+      |> via_out(Pad.ref(:output, pad_ssrc))
+    end
+
+    if should_link? do
+      link_twcc
+    else
+      & &1
+    end
   end
 end
