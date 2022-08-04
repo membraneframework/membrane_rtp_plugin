@@ -59,8 +59,8 @@ defmodule Membrane.RTP.SessionBin do
   @type rtp_extension_name_t :: atom()
 
   @typedoc """
-  A module representing an RTP extension that will be spawned and linked just before a newly created
-  `:output` pad representing a single RTP stream.
+  A module representing an RTP extension that will be spawned and linked just after a newly created
+  `:input` pad or before a newly created `:output` pad representing a single RTP stream.
 
   Given extension config must be a valid `Membrane.Filter`.
 
@@ -70,11 +70,6 @@ defmodule Membrane.RTP.SessionBin do
   * `Membrane.RTP.VAD`
   * `Membrane.RTP.TWCCReceiver`
   * `Membrane.RTP.TWCCSender`
-
-  ### Example usage
-  `{:vad, %Mebrane.RTP.VAD{vad_id: 1, time_window: 1_000_000}}`
-  `{:twcc, %Mebrane.RTP.TWCCReceiver{twcc_id: 1, report_interval: Membrane.Time.milliseconds(250)}}`
-  `{:twcc, Mebrane.RTP.TWCCSender}`
 
   ### TWCC
   TWCC as a transport-wide extension is handled differently, and is linked from `RTP.SSRCRouter`
@@ -183,9 +178,15 @@ defmodule Membrane.RTP.SessionBin do
         spec: [rtp_extension_options_t()],
         default: [],
         description: """
-        List of RTP extension options. Currently supported is `:twcc` (sender) only.
-        It will tag outgoing packets with transport-wide sequence numbers and estimate available bandwidth.
-        For more information refer to `Membrane.RTP.TWCCSender` module documentation.
+        List of RTP extension options. RTP plugin ships with the following extensions for input pad:
+        * `:twcc` (sender) - it will tag outgoing packets with transport-wide sequence numbers and estimate available bandwidth.
+        For input pad, TWCC sender can only be spawned. For more information refer to `Membrane.RTP.TWCCSender` module documentation.
+
+        There is no possibility to pass user-defined RTP extenions for input pad.
+
+        Examples:
+
+        * `{:twcc, Mebrane.RTP.TWCCSender}`
         """
       ]
     ]
@@ -230,13 +231,20 @@ defmodule Membrane.RTP.SessionBin do
         spec: [rtp_extension_options_t()],
         default: [],
         description: """
-        List of RTP extension options. Currently `:vad` and `:twcc` (receiver) are supported.
+        List of RTP extension options. RTP plugin ships with the following RTP extensions for output pad:
         * `:vad` will turn on Voice Activity Detection mechanism firing appropriate notifications when needed.
         Should be set only for audio tracks. For more information refer to `Membrane.RTP.VAD` module documentation.
         * `:twcc` (receiver) will gather transport-wide information about received packets and generate feedbacks for sender.
-        For more information refer to `Membrane.RTP.TWCCReceiver` module documentation.
+        For output pad, TWCC receiver can only be spawned. For more information refer to `Membrane.RTP.TWCCReceiver` module documentation.
+
+        User can also pass its own RTP extensions for output pad.
 
         RTP extensions (except `:twcc`) are applied in the same order as passed to the pad options.
+
+        Examples:
+
+        * `{:vad, %Mebrane.RTP.VAD{vad_id: 1, time_window: 1_000_000}}`
+        * `{:twcc, %Mebrane.RTP.TWCCReceiver{twcc_id: 1, report_interval: Membrane.Time.milliseconds(250)}}`
         """
       ],
       extensions: [
