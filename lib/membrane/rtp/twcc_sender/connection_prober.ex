@@ -97,6 +97,11 @@ defmodule Membrane.RTP.TWCCSender.ConnectionProber do
     {{:ok, forward: buffer}, state}
   end
 
+  @impl true
+  def handle_event(pad, event, ctx, state) do
+    super(pad, event, ctx, state)
+  end
+
   defp maintain_seq_num_mapping(state) do
     value = rem(state.last_seq_num - @history_size + @max_seq_num, @max_seq_num)
 
