@@ -22,7 +22,7 @@ defmodule Membrane.RTP.StreamSendBin do
               ],
               twcc_probing?: [
                 spec: boolean(),
-                default: false
+                default: true
               ]
 
   @impl true

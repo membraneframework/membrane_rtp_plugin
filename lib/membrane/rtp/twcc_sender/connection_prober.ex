@@ -6,11 +6,13 @@ defmodule Membrane.RTP.TWCCSender.ConnectionProber do
 
   use Membrane.Filter
 
-  alias Membrane.{Buffer, RemoteStream, RTP}
+  alias Membrane.{Buffer, Time, RemoteStream, RTP}
 
   @initial_burst_size 10
   @max_seq_num 2 ** 16
   @history_size div(@max_seq_num, 2)
+
+  @burst_interval Time.milliseconds(200)
 
   def_options ssrc: [
                 spec: any(),
@@ -46,7 +48,7 @@ defmodule Membrane.RTP.TWCCSender.ConnectionProber do
   @impl true
   def handle_prepared_to_playing(_ctx, state) do
     buffers =
-      for i <- 0..@initial_burst_size do
+      for i <- 0..(@initial_burst_size - 1) do
         seq_num = rem(i, @max_seq_num)
 
         %Buffer{
@@ -65,7 +67,7 @@ defmodule Membrane.RTP.TWCCSender.ConnectionProber do
         }
       end
 
-    {{:ok, caps: {:output, %RemoteStream{content_format: RTP}}, buffer: {:output, buffers}},
+    {{:ok, caps: {:output, %RemoteStream{content_format: RTP}}, buffer: {:output, buffers}, start_timer: {:probes, @burst_interval}},
      %{state | offset: @initial_burst_size}}
   end
 
@@ -95,6 +97,32 @@ defmodule Membrane.RTP.TWCCSender.ConnectionProber do
       |> maintain_seq_num_mapping()
 
     {{:ok, forward: buffer}, state}
+  end
+
+  @impl true
+  def handle_tick(:probes, _ctx, state) do
+    buffers =
+      for i <- 1..@initial_burst_size do
+        seq_num = rem(state.last_seq_num + i, @max_seq_num)
+
+        %Buffer{
+          metadata: %{
+            rtp: %{
+              marker: false,
+              csrcs: [],
+              payload_type: state.payload_type,
+              extensions: [],
+              ssrc: state.ssrc,
+              timestamp: state.last_timestamp,
+              sequence_number: seq_num
+            }
+          },
+          payload: <<>>
+        }
+      end
+
+    state = Map.update!(state, :offset, & &1 + @initial_burst_size)
+    {{:ok, buffer: {:output, buffers}}, state}
   end
 
   @impl true
