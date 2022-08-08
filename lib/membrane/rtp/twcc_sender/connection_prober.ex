@@ -68,8 +68,10 @@ defmodule Membrane.RTP.TWCCSender.ConnectionProber do
         }
       end
 
-    {{:ok, caps: {:output, %RemoteStream{content_format: RTP}}, buffer: {:output, buffers}, start_timer: {:probes, @burst_interval}},
-     %{state | offset: @initial_burst_size}}
+    {{:ok,
+      caps: {:output, %RemoteStream{content_format: RTP}},
+      buffer: {:output, buffers},
+      start_timer: {:probes, @burst_interval}}, %{state | offset: @initial_burst_size}}
   end
 
   @impl true
@@ -122,7 +124,7 @@ defmodule Membrane.RTP.TWCCSender.ConnectionProber do
         }
       end
 
-    state = Map.update!(state, :offset, & &1 + @initial_burst_size)
+    state = Map.update!(state, :offset, &(&1 + @initial_burst_size))
     {{:ok, buffer: {:output, buffers}}, state}
   end
 

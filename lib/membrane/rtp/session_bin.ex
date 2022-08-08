@@ -508,11 +508,17 @@ defmodule Membrane.RTP.SessionBin do
 
       %{rtp_extensions: rtp_extensions} = ctx.pads[input_pad].options
 
-      maybe_link_twcc_sender = maybe_handle_twcc_sender(rtp_extensions, ssrc, ctx)
+      maybe_link_twcc_sender =
+        rtp_extensions
+        |> maybe_handle_twcc_sender(ssrc, ctx)
 
       links = [
         link_bin_input(input_pad)
         |> then(maybe_link_twcc_sender)
+        |> to(:twcc_connection_prober, %Membrane.RTP.TWCCSender.ConnectionProber{
+          ssrc: ssrc,
+          payload_type: payload_type
+        })
         |> to({:stream_send_bin, ssrc}, %RTP.StreamSendBin{
           ssrc: ssrc,
           payload_type: payload_type,
