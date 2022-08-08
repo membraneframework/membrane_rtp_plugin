@@ -5,11 +5,12 @@ defmodule Membrane.RTP.TWCCSender.ConnectionProber do
   """
 
   use Membrane.Filter
+  use Bitwise
 
   alias Membrane.{Buffer, Time, RemoteStream, RTP}
 
   @initial_burst_size 10
-  @max_seq_num 2 ** 16
+  @max_seq_num 1 <<< 16
   @history_size div(@max_seq_num, 2)
 
   @burst_interval Time.milliseconds(200)
