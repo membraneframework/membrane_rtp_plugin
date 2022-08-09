@@ -12,6 +12,7 @@ defmodule Membrane.RTP.TWCCSender.ConnectionProber do
   @initial_burst_size 10
   @max_seq_num 1 <<< 16
   @history_size div(@max_seq_num, 2)
+  @probe_size_in_bytes 512
 
   @burst_interval Time.milliseconds(200)
 
@@ -64,7 +65,7 @@ defmodule Membrane.RTP.TWCCSender.ConnectionProber do
               sequence_number: seq_num
             }
           },
-          payload: <<>>
+          payload: create_probe_payload()
         }
       end
 
@@ -111,6 +112,7 @@ defmodule Membrane.RTP.TWCCSender.ConnectionProber do
         %Buffer{
           metadata: %{
             rtp: %{
+              padding_flag: true,
               marker: false,
               csrcs: [],
               payload_type: state.payload_type,
@@ -120,7 +122,7 @@ defmodule Membrane.RTP.TWCCSender.ConnectionProber do
               sequence_number: seq_num
             }
           },
-          payload: <<>>
+          payload: create_probe_payload()
         }
       end
 
@@ -157,5 +159,10 @@ defmodule Membrane.RTP.TWCCSender.ConnectionProber do
       )
 
     Map.update!(state, :seq_num_mapping, &Map.merge(&1, entries))
+  end
+
+  defp create_probe_payload() do
+    zeros_size = 8 * (@probe_size_in_bytes - 3)
+    <<0::size(zeros_size), @probe_size_in_bytes::24>>
   end
 end

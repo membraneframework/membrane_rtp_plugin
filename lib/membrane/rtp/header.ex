@@ -47,6 +47,7 @@ defmodule Membrane.RTP.Header do
 
   @type t :: %__MODULE__{
           version: version(),
+          padding_flag: boolean(),
           ssrc: RTP.ssrc_t(),
           marker: marker(),
           payload_type: RTP.payload_type_t(),
@@ -64,6 +65,7 @@ defmodule Membrane.RTP.Header do
   ]
   defstruct @enforce_keys ++
               [
+                padding_flag: false,
                 version: 2,
                 marker: false,
                 csrcs: [],

@@ -31,7 +31,7 @@ defmodule Membrane.RTP.Packet do
   def serialize(%__MODULE__{} = packet, [align_to: align_to] \\ [align_to: 1]) do
     %__MODULE__{header: header, payload: payload} = packet
     %Header{version: 2} = header
-    has_padding = 0
+    has_padding = if header.padding_flag, do: 1, else: 0
     has_extension = if header.extensions == [], do: 0, else: 1
     marker = if header.marker, do: 1, else: 0
     csrcs = Enum.map_join(header.csrcs, &<<&1::32>>)
@@ -41,13 +41,17 @@ defmodule Membrane.RTP.Packet do
         header.payload_type::7, header.sequence_number::16, header.timestamp::32, header.ssrc::32,
         csrcs::binary, serialize_header_extensions(header.extensions)::binary, payload::binary>>
 
-    case Utils.align(serialized, align_to) do
-      {serialized, 0} ->
-        serialized
+    if not header.padding_flag do
+      case Utils.align(serialized, align_to) do
+        {serialized, 0} ->
+          serialized
 
-      {serialized, _padding} ->
-        <<pre::2, _has_padding::1, post::bitstring>> = serialized
-        <<pre::2, 1::1, post::bitstring>>
+        {serialized, _padding} ->
+          <<pre::2, _has_padding::1, post::bitstring>> = serialized
+          <<pre::2, 1::1, post::bitstring>>
+      end
+    else
+      serialized
     end
   end
 
