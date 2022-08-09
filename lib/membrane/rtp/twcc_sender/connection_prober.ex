@@ -10,11 +10,11 @@ defmodule Membrane.RTP.TWCCSender.ConnectionProber do
   alias Membrane.{Buffer, Time, RemoteStream, RTP}
 
   @initial_burst_size 10
-  @max_seq_num 1 <<< 16
+  @max_seq_num 65_536
   @history_size div(@max_seq_num, 2)
   @probe_size_in_bytes 512
 
-  @burst_interval Time.milliseconds(200)
+  @burst_interval Time.days(200)
 
   def_options ssrc: [
                 spec: any(),
@@ -31,7 +31,7 @@ defmodule Membrane.RTP.TWCCSender.ConnectionProber do
 
   def_input_pad :input,
     availability: :always,
-    caps: :any,
+    caps: {RemoteStream, content_format: RTP},
     demand_mode: :auto
 
   def_output_pad :output,
@@ -45,43 +45,13 @@ defmodule Membrane.RTP.TWCCSender.ConnectionProber do
       {:ok,
        opts
        |> Map.from_struct()
-       |> Map.merge(%{seq_num_mapping: %{}, offset: 0, last_seq_num: 0, last_timestamp: 0})}
-
-  @impl true
-  def handle_prepared_to_playing(_ctx, state) do
-    buffers =
-      for i <- 0..(@initial_burst_size - 1) do
-        seq_num = rem(i, @max_seq_num)
-
-        %Buffer{
-          metadata: %{
-            rtp: %{
-              marker: false,
-              csrcs: [],
-              payload_type: state.payload_type,
-              extensions: [],
-              ssrc: state.ssrc,
-              timestamp: state.last_timestamp,
-              sequence_number: seq_num
-            }
-          },
-          payload: create_probe_payload()
-        }
-      end
-
-    {{:ok,
-      caps: {:output, %RemoteStream{content_format: RTP}},
-      buffer: {:output, buffers},
-      start_timer: {:probes, @burst_interval}}, %{state | offset: @initial_burst_size}}
-  end
-
-  @impl true
-  def handle_caps(:input, _caps, _ctx, state), do: {:ok, state}
+       |> Map.merge(%{seq_num_mapping: %{}, offset: 0, last_seq_num: nil, last_timestamp: 0})}
 
   @impl true
   def handle_process(:input, buffer, _ctx, state) do
     # we need to fix a sequence number only
     original_seqnum = buffer.metadata.rtp.sequence_number
+    is_first_buffer? = is_nil(state.last_seq_num)
 
     {seq_num, seq_num_mapping} =
       Map.pop(
@@ -100,39 +70,33 @@ defmodule Membrane.RTP.TWCCSender.ConnectionProber do
       |> Map.put(:last_timestamp, buffer.metadata.rtp.timestamp)
       |> maintain_seq_num_mapping()
 
-    {{:ok, forward: buffer}, state}
+    {probes_action, state} = if is_first_buffer?, do: generate_probes(state), else: {[], state}
+
+    {{:ok, [forward: buffer] ++ probes_action}, state}
   end
 
   @impl true
-  def handle_tick(:probes, _ctx, state) do
-    buffers =
-      for i <- 1..@initial_burst_size do
-        seq_num = rem(state.last_seq_num + i, @max_seq_num)
-
-        %Buffer{
-          metadata: %{
-            rtp: %{
-              padding_flag: true,
-              marker: false,
-              csrcs: [],
-              payload_type: state.payload_type,
-              extensions: [],
-              ssrc: state.ssrc,
-              timestamp: state.last_timestamp,
-              sequence_number: seq_num
-            }
-          },
-          payload: create_probe_payload()
-        }
-      end
-
-    state = Map.update!(state, :offset, &(&1 + @initial_burst_size))
-    {{:ok, buffer: {:output, buffers}}, state}
+  def handle_tick(:probes, ctx, state) when ctx.playback_state == :playing do
+    {actions, state} = generate_probes(state)
+    {{:ok, actions}, state}
   end
+
+  @impl true
+  def handle_tick(:probes, _ctx, state), do: {:ok, state}
 
   @impl true
   def handle_event(pad, event, ctx, state) do
     super(pad, event, ctx, state)
+  end
+
+  @impl true
+  def handle_start_of_stream(:input, _ctx, state) do
+    {{:ok, start_timer: {:probes, @burst_interval}}, state}
+  end
+
+  @impl true
+  def handle_end_of_stream(:input, _ctx, state) do
+    {{:ok, stop_timer: :probes, end_of_stream: :output}, state}
   end
 
   defp maintain_seq_num_mapping(state) do
@@ -147,7 +111,8 @@ defmodule Membrane.RTP.TWCCSender.ConnectionProber do
 
   # while generating entries, we do not take out of order transmissions into account
   defp generate_seq_num_mapping_entries(state, seq_num)
-       when rem(state.last_seq_num - seq_num + @max_seq_num, @max_seq_num) == 1,
+       when is_nil(state.last_seq_num) or
+              rem(state.last_seq_num - seq_num + @max_seq_num, @max_seq_num) == 1,
        do: state
 
   defp generate_seq_num_mapping_entries(state, seq_num) do
@@ -164,5 +129,33 @@ defmodule Membrane.RTP.TWCCSender.ConnectionProber do
   defp create_probe_payload() do
     zeros_size = 8 * (@probe_size_in_bytes - 3)
     <<0::size(zeros_size), @probe_size_in_bytes::24>>
+  end
+
+  defp generate_probes(state) do
+    buffers =
+      for i <- 1..@initial_burst_size do
+        seq_num = rem(state.last_seq_num + i + state.offset, @max_seq_num)
+
+        buf = %Buffer{
+          metadata: %{
+            rtp: %{
+              padding_flag: true,
+              marker: false,
+              csrcs: [],
+              payload_type: state.payload_type,
+              extensions: [],
+              ssrc: state.ssrc,
+              timestamp: state.last_timestamp,
+              sequence_number: seq_num
+            }
+          },
+          payload: create_probe_payload()
+        }
+
+        {:buffer, {:output, buf}}
+      end
+
+    state = Map.update!(state, :offset, &(&1 + @initial_burst_size))
+    {buffers, state}
   end
 end
