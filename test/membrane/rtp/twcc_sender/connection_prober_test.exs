@@ -88,7 +88,7 @@ defmodule Membrane.RTP.TWCCSender.ConnectionProberTest do
       children = [
         source: %Source{
           output: {65_500, generate_buffer},
-          caps: %Membrane.RemoteStream{content_format: Membrane.RTP}
+          caps: %Membrane.RTP{}
         },
         prober: %ConnectionProber{
           ssrc: 0,

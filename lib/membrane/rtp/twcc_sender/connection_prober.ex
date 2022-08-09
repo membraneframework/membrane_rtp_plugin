@@ -7,7 +7,7 @@ defmodule Membrane.RTP.TWCCSender.ConnectionProber do
   use Membrane.Filter
   use Bitwise
 
-  alias Membrane.{Buffer, Time, RemoteStream, RTP}
+  alias Membrane.{Buffer, Time, RTP}
 
   @initial_burst_size 10
   @max_seq_num 65_536
@@ -31,12 +31,12 @@ defmodule Membrane.RTP.TWCCSender.ConnectionProber do
 
   def_input_pad :input,
     availability: :always,
-    caps: {RemoteStream, content_format: RTP},
+    caps: RTP,
     demand_mode: :auto
 
   def_output_pad :output,
     availability: :always,
-    caps: {RemoteStream, content_format: RTP},
+    caps: RTP,
     demand_mode: :auto
 
   @impl true
