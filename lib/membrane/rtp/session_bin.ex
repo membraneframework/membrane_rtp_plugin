@@ -515,7 +515,7 @@ defmodule Membrane.RTP.SessionBin do
       links = [
         link_bin_input(input_pad)
         |> then(maybe_link_twcc_sender)
-        |> to(:twcc_connection_prober, %Membrane.RTP.TWCCSender.ConnectionProber{
+        |> to({:twcc_connection_prober, ssrc}, %Membrane.RTP.TWCCSender.ConnectionProber{
           ssrc: ssrc,
           payload_type: payload_type
         })
