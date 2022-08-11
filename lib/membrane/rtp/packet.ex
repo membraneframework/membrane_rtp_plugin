@@ -113,7 +113,8 @@ defmodule Membrane.RTP.Packet do
         payload_type: payload_type,
         timestamp: timestamp,
         csrcs: for(<<csrc::32 <- csrcs>>, do: csrc),
-        extensions: extensions
+        extensions: extensions,
+        padding_flag: has_padding == 1
       }
 
       {:ok,

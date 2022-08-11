@@ -9,12 +9,15 @@ defmodule Membrane.RTP.TWCCSender.ConnectionProber do
 
   alias Membrane.{Buffer, Time, RTP}
 
+  require Membrane.Logger
+
+
   @initial_burst_size 10
   @max_seq_num 65_536
   @history_size div(@max_seq_num, 2)
-  @probe_size_in_bytes 512
+  @probe_size_in_bytes 1024
 
-  @burst_interval Time.days(200)
+  @burst_interval Time.milliseconds(100)
 
   def_options ssrc: [
                 spec: any(),
@@ -70,14 +73,16 @@ defmodule Membrane.RTP.TWCCSender.ConnectionProber do
       |> Map.put(:last_timestamp, buffer.metadata.rtp.timestamp)
       |> maintain_seq_num_mapping()
 
-    {probes_action, state} = if is_first_buffer?, do: generate_probes(state), else: {[], state}
+    {probes_action, state} =
+      if is_first_buffer?, do: generate_probes(state, @initial_burst_size), else: {[], state}
 
     {{:ok, [forward: buffer] ++ probes_action}, state}
   end
 
   @impl true
   def handle_tick(:probes, ctx, state) when ctx.playback_state == :playing do
-    {actions, state} = generate_probes(state)
+    Membrane.Logger.warn("Sending 1 probe")
+    {actions, state} = generate_probes(state, 1)
     {{:ok, actions}, state}
   end
 
@@ -100,11 +105,11 @@ defmodule Membrane.RTP.TWCCSender.ConnectionProber do
   end
 
   defp maintain_seq_num_mapping(state) do
-    value = rem(state.last_seq_num - @history_size + @max_seq_num, @max_seq_num)
+    dist = fn seq_num -> rem(state.last_seq_num - seq_num + @max_seq_num, @max_seq_num) end
 
     Map.update!(state, :seq_num_mapping, fn mapping ->
       mapping
-      |> Enum.drop_while(&(&1 <= value))
+      |> Enum.drop_while(fn {seq_num, _mapped_seq_num} -> dist.(seq_num) <= @history_size end)
       |> Map.new()
     end)
   end
@@ -131,9 +136,9 @@ defmodule Membrane.RTP.TWCCSender.ConnectionProber do
     <<0::size(zeros_size), @probe_size_in_bytes::24>>
   end
 
-  defp generate_probes(state) do
+  defp generate_probes(state, amount) do
     buffers =
-      for i <- 1..@initial_burst_size do
+      for i <- 1..amount do
         seq_num = rem(state.last_seq_num + i + state.offset, @max_seq_num)
 
         buf = %Buffer{
@@ -155,7 +160,7 @@ defmodule Membrane.RTP.TWCCSender.ConnectionProber do
         {:buffer, {:output, buf}}
       end
 
-    state = Map.update!(state, :offset, &(&1 + @initial_burst_size))
+    state = Map.update!(state, :offset, &(&1 + amount))
     {buffers, state}
   end
 end

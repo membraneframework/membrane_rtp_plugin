@@ -37,16 +37,9 @@ defmodule Membrane.RTP.StreamSendBin do
         payload_type: opts.payload_type
       })
 
-    maybe_link_connection_prober =
-      &to(&1, :twcc_connection_prober, %RTP.TWCCSender.ConnectionProber{
-        ssrc: opts.ssrc,
-        payload_type: opts.payload_type
-      })
-
     links = [
       link_bin_input()
       |> then(if use_payloader, do: maybe_link_payloader_bin, else: & &1)
-      |> then(if opts.twcc_probing?, do: maybe_link_connection_prober, else: & &1)
       |> to(:packet_tracker, %RTP.OutboundPacketTracker{
         ssrc: opts.ssrc,
         payload_type: opts.payload_type,

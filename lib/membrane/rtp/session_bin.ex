@@ -323,7 +323,8 @@ defmodule Membrane.RTP.SessionBin do
               rtcp_sender_report_data: %Session.SenderReport.Data{},
               secure?: false,
               srtp_policies: nil,
-              receiver_srtp_policies: nil
+              receiver_srtp_policies: nil,
+              connection_prober_linked?: false
   end
 
   @impl true
@@ -512,13 +513,20 @@ defmodule Membrane.RTP.SessionBin do
         rtp_extensions
         |> maybe_handle_twcc_sender(ssrc, ctx)
 
+      maybe_link_twcc_connection_prober = fn link ->
+        if state.connection_prober_linked?,
+          do: link,
+          else:
+            to(link, {:twcc_connection_prober, ssrc}, %Membrane.RTP.TWCCSender.ConnectionProber{
+              ssrc: ssrc,
+              payload_type: payload_type
+            })
+      end
+
       links = [
         link_bin_input(input_pad)
+        |> then(maybe_link_twcc_connection_prober)
         |> then(maybe_link_twcc_sender)
-        |> to({:twcc_connection_prober, ssrc}, %Membrane.RTP.TWCCSender.ConnectionProber{
-          ssrc: ssrc,
-          payload_type: payload_type
-        })
         |> to({:stream_send_bin, ssrc}, %RTP.StreamSendBin{
           ssrc: ssrc,
           payload_type: payload_type,
@@ -558,7 +566,12 @@ defmodule Membrane.RTP.SessionBin do
         end
 
       spec = %ParentSpec{links: links ++ rtcp_links}
-      state = %{state | senders_ssrcs: MapSet.put(state.senders_ssrcs, ssrc)}
+
+      state = %{
+        state
+        | senders_ssrcs: MapSet.put(state.senders_ssrcs, ssrc),
+          connection_prober_linked?: true
+      }
 
       {{:ok, spec: spec}, state}
     end
