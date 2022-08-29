@@ -19,7 +19,7 @@ defmodule Membrane.RTP.OutboundPacketTracker do
   # milliseconds
   @min_rtx_interval 1
   # buffers
-  @rtx_history_size 50
+  @rtx_history_size 300
 
   def_input_pad :input, caps: :any, demand_mode: :auto
 
@@ -132,13 +132,14 @@ defmodule Membrane.RTP.OutboundPacketTracker do
       |> Enum.map(fn seq_num -> BufferStore.get_buffer(state.rtx_packet_store, seq_num) end)
       |> Enum.filter(&match?({:ok, _buffer}, &1))
       |> Enum.map(fn {:ok, buffer} -> buffer end)
+      |> IO.inspect(label: :dupa1)
       |> Enum.filter(fn buffer ->
         seq_num = buffer.metadata.rtp.sequence_number
 
         not Map.has_key?(state.last_rtx_times, seq_num) or
           Map.fetch!(state.last_rtx_times, seq_num) > @min_rtx_interval
       end)
-      |> IO.inspect(label: :dupa)
+      |> IO.inspect(label: :dupa2)
 
     {{:ok, buffer: {:output, packets_to_retransmit}}, state}
   end
@@ -223,13 +224,19 @@ defmodule Membrane.RTP.OutboundPacketTracker do
     state
     |> Map.put(:stats_acc, updated_stats)
     |> Map.update!(:rtx_packet_store, fn store ->
-      {:ok, store} = BufferStore.insert_buffer(store, buffer)
+      case BufferStore.insert_buffer(store, buffer) do
+        {:ok, new_store} ->
+          if Enum.count(store) > @rtx_history_size do
+            {_entry, new_store} = BufferStore.flush_one(new_store)
+            new_store
+          else
+            new_store
+          end
 
-      if Enum.count(store) > @rtx_history_size do
-        {_entry, store} = BufferStore.flush_one(store)
-        store
-      else
-        store
+        {:error, :late_packet} ->
+          Membrane.Logger.warn("LATE PACKET")
+          # {_entry, store} = BufferStore.flush_one(store)
+          store
       end
     end)
   end
