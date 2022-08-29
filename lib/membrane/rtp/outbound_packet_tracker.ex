@@ -17,9 +17,9 @@ defmodule Membrane.RTP.OutboundPacketTracker do
   require Membrane.Logger
 
   # milliseconds
-  @min_rtx_interval 10
+  @min_rtx_interval 1
   # buffers
-  @rtx_history_size 100
+  @rtx_history_size 50
 
   def_input_pad :input, caps: :any, demand_mode: :auto
 
