@@ -28,6 +28,14 @@ defmodule Membrane.RTP.JitterBuffer.BufferStore do
     PacketStore.insert_data(store, seq_num, buffer)
   end
 
+  @spec get_buffer(t(), non_neg_integer()) :: {:ok, Buffer.t()} | {:error, :not_found}
+  def get_buffer(store, seq_num) do
+    with {:ok, entry} <-
+           PacketStore.get_entry(store, &(&1.data.metadata.rtp.sequence_number == seq_num)) do
+      {:ok, entry.data}
+    end
+  end
+
   defdelegate dump(store), to: PacketStore
   defdelegate flush_one(store), to: PacketStore
   defdelegate flush_older_than(store, timestamp), to: PacketStore

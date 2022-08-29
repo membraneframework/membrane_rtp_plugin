@@ -12,8 +12,14 @@ defmodule Membrane.RTP.OutboundPacketTracker do
   alias Membrane.RTCP.FeedbackPacket.{PLI, FIR}
   alias Membrane.RTCP.TransportFeedbackPacket.NACK
   alias Membrane.RTP.Session.SenderReport
+  alias Membrane.RTP.JitterBuffer.BufferStore
 
   require Membrane.Logger
+
+  # milliseconds
+  @min_rtx_interval 10
+  # buffers
+  @rtx_history_size 100
 
   def_input_pad :input, caps: :any, demand_mode: :auto
 
@@ -52,7 +58,9 @@ defmodule Membrane.RTP.OutboundPacketTracker do
             alignment: pos_integer(),
             any_buffer_sent?: boolean(),
             rtcp_output_pad: Membrane.Pad.ref_t() | nil,
-            stats_acc: %{}
+            stats_acc: %{},
+            last_rtx_times: %{},
+            rtx_packet_store: BufferStore.t()
           }
 
     defstruct ssrc: 0,
@@ -61,13 +69,15 @@ defmodule Membrane.RTP.OutboundPacketTracker do
               alignment: 1,
               any_buffer_sent?: false,
               rtcp_output_pad: nil,
+              last_rtx_times: %{},
               stats_acc: %{
                 clock_rate: 0,
                 timestamp: 0,
                 rtp_timestamp: 0,
                 sender_packet_count: 0,
                 sender_octet_count: 0
-              }
+              },
+              rtx_packet_store: BufferStore.new()
   end
 
   @impl true
@@ -110,9 +120,27 @@ defmodule Membrane.RTP.OutboundPacketTracker do
   end
 
   @impl true
-  def handle_event(Pad.ref(:rtcp_input, _id), %RTCPEvent{rtcp: %{payload: %NACK{}}}, _ctx, state) do
+  def handle_event(
+        Pad.ref(:rtcp_input, _id),
+        %RTCPEvent{rtcp: %{payload: %NACK{} = nack}},
+        _ctx,
+        %State{} = state
+      ) do
     # TODO: Retransmit the NACKed packets
-    {:ok, state}
+    packets_to_retransmit =
+      nack.lost_packet_ids
+      |> Enum.map(fn seq_num -> BufferStore.get_buffer(state.rtx_packet_store, seq_num) end)
+      |> Enum.filter(&match?({:ok, _buffer}, &1))
+      |> Enum.map(fn {:ok, buffer} -> buffer end)
+      |> Enum.filter(fn buffer ->
+        seq_num = buffer.metadata.rtp.sequence_number
+
+        not Map.has_key?(state.last_rtx_times, seq_num) or
+          Map.fetch!(state.last_rtx_times, seq_num) > @min_rtx_interval
+      end)
+      |> IO.inspect(label: :dupa)
+
+    {{:ok, buffer: {:output, packets_to_retransmit}}, state}
   end
 
   @impl true
@@ -178,7 +206,7 @@ defmodule Membrane.RTP.OutboundPacketTracker do
   defp get_stats(%State{any_buffer_sent?: false}), do: :no_stats
   defp get_stats(%State{stats_acc: stats}), do: stats
 
-  defp update_stats(%Buffer{payload: payload, metadata: metadata}, state) do
+  defp update_stats(%Buffer{payload: payload, metadata: metadata} = buffer, state) do
     %{
       sender_octet_count: octet_count,
       sender_packet_count: packet_count
@@ -192,6 +220,17 @@ defmodule Membrane.RTP.OutboundPacketTracker do
       rtp_timestamp: metadata.rtp.timestamp
     }
 
-    Map.put(state, :stats_acc, updated_stats)
+    state
+    |> Map.put(:stats_acc, updated_stats)
+    |> Map.update!(:rtx_packet_store, fn store ->
+      {:ok, store} = BufferStore.insert_buffer(store, buffer)
+
+      if Enum.count(store) > @rtx_history_size do
+        {_entry, store} = BufferStore.flush_one(store)
+        store
+      else
+        store
+      end
+    end)
   end
 end

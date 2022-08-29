@@ -225,6 +225,16 @@ defmodule Membrane.RTP.PacketStore do
     end
   end
 
+  @spec get_entry(t(), (Entry.t() -> boolean())) :: {:ok, Entry.t()} | {:error, :not_found}
+  def get_entry(%__MODULE__{heap: heap} = _store, filter_fun) do
+    heap
+    |> Enum.find(filter_fun)
+    |> case do
+      nil -> {:error, :not_found}
+      entry -> {:ok, entry}
+    end
+  end
+
   defp update_highest_incoming_index(
          %__MODULE__{highest_incoming_index: last} = store,
          added_index
@@ -243,4 +253,13 @@ defmodule Membrane.RTP.PacketStore do
     do: %__MODULE__{store | rollover_count: roc + 1}
 
   defp update_roc(store, _entry_rollover), do: store
+end
+
+defimpl Enumerable, for: Membrane.RTP.PacketStore do
+  alias Membrane.RTP.PacketStore
+
+  def count(%PacketStore{set: set}), do: {:ok, MapSet.size(set)}
+  def reduce(%PacketStore{heap: heap}, acc, fun), do: Enum.reduce(heap, acc, fun)
+  def member?(%PacketStore{set: set}, element), do: {:ok, MapSet.member?(set, element)}
+  def slice(_store), do: raise("Not implemented")
 end
