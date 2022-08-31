@@ -1,7 +1,7 @@
 defmodule Membrane.RTP.PacketStore.Entry do
-  @moduledoc false
-
-  # Describes a structure that is stored in the BufferStore.
+  @moduledoc """
+  Describes a structure that is stored in the `Membrane.RTP.PacketStore`.
+  """
 
   alias Membrane.RTP.PacketStore
 
