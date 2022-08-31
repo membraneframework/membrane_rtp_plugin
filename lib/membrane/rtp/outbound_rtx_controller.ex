@@ -29,15 +29,9 @@ defmodule Membrane.RTP.OutboundRtxController do
     |> Map.update!(:store, fn store ->
       case BufferStore.insert_buffer(store, buffer) do
         {:ok, new_store} ->
-          if Enum.count(new_store) > @max_store_size do
-            {_entry, new_store} = BufferStore.flush_one(new_store)
-            new_store
-          else
-            new_store
-          end
+          maintain_store_size(new_store)
 
         {:error, :late_packet} ->
-          Membrane.Logger.warn("LATE PACKET")
           store
       end
     end)
@@ -51,7 +45,6 @@ defmodule Membrane.RTP.OutboundRtxController do
       |> Enum.map(fn seq_num -> BufferStore.get_buffer(state.store, seq_num) end)
       |> Enum.filter(&match?({:ok, _buffer}, &1))
       |> Enum.map(fn {:ok, buffer} -> buffer end)
-      |> IO.inspect(label: :dupa1)
       |> Enum.filter(fn buffer ->
         seq_num = buffer.metadata.rtp.sequence_number
 
@@ -77,4 +70,13 @@ defmodule Membrane.RTP.OutboundRtxController do
 
   @impl true
   def handle_event(pad, event, ctx, state), do: super(pad, event, ctx, state)
+
+  defp maintain_store_size(store) do
+    if Enum.count(store) > @max_store_size do
+      {_entry, store} = BufferStore.flush_one(store)
+      store
+    else
+      store
+    end
+  end
 end
