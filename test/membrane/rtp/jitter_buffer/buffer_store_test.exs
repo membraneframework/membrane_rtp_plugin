@@ -2,7 +2,9 @@ defmodule Membrane.RTP.JitterBuffer.BufferStoreTest do
   use ExUnit.Case, async: true
   use Bunch
 
-  alias Membrane.RTP.JitterBuffer.{BufferStore, Record}
+  alias Membrane.RTP.PacketStore
+  alias Membrane.RTP.PacketStore.Entry
+  alias Membrane.RTP.JitterBuffer.BufferStore
   alias Membrane.RTP.BufferFactory
 
   @seq_number_limit 65_536
@@ -17,7 +19,7 @@ defmodule Membrane.RTP.JitterBuffer.BufferStoreTest do
     test "accepts the first buffer" do
       buffer = BufferFactory.sample_buffer(@base_index)
 
-      assert {:ok, updated_store} = BufferStore.insert_buffer(%BufferStore{}, buffer)
+      assert {:ok, updated_store} = BufferStore.insert_buffer(%PacketStore{}, buffer)
       assert has_buffer(updated_store, buffer)
     end
 
@@ -41,33 +43,33 @@ defmodule Membrane.RTP.JitterBuffer.BufferStoreTest do
 
     test "extracts the RTP metadata correctly from buffer", %{base_store: store} do
       buffer = BufferFactory.sample_buffer(@next_index)
-      {:ok, %BufferStore{heap: heap}} = BufferStore.insert_buffer(store, buffer)
+      {:ok, %PacketStore{heap: heap}} = BufferStore.insert_buffer(store, buffer)
 
-      assert %Record{index: read_index} = Heap.root(heap)
+      assert %Entry{index: read_index} = Heap.root(heap)
 
       assert read_index == @next_index
     end
 
     test "handles first buffers starting with sequence_number 0" do
-      store = %BufferStore{}
+      store = %PacketStore{}
       buffer_a = BufferFactory.sample_buffer(0)
       assert {:ok, store} = BufferStore.insert_buffer(store, buffer_a)
 
       {record_a, store} = BufferStore.flush_one(store)
 
       assert record_a.index == @seq_number_limit
-      assert record_a.buffer.metadata.rtp.sequence_number == 0
+      assert record_a.data.metadata.rtp.sequence_number == 0
 
       buffer_b = BufferFactory.sample_buffer(1)
       assert {:ok, store} = BufferStore.insert_buffer(store, buffer_b)
 
       {record_b, _store} = BufferStore.flush_one(store)
       assert record_b.index == @seq_number_limit + 1
-      assert record_b.buffer.metadata.rtp.sequence_number == 1
+      assert record_b.data.metadata.rtp.sequence_number == 1
     end
 
     test "handles buffers with very big gaps" do
-      store = %BufferStore{}
+      store = %PacketStore{}
       first_buffer = BufferFactory.sample_buffer(20_072)
       assert {:ok, store} = BufferStore.insert_buffer(store, first_buffer)
 
@@ -79,7 +81,7 @@ defmodule Membrane.RTP.JitterBuffer.BufferStoreTest do
     end
 
     test "handles late buffers when starting with sequence_number 0" do
-      store = %BufferStore{}
+      store = %PacketStore{}
       buffer = BufferFactory.sample_buffer(0)
       assert {:ok, store} = BufferStore.insert_buffer(store, buffer)
 
@@ -91,7 +93,7 @@ defmodule Membrane.RTP.JitterBuffer.BufferStoreTest do
     end
 
     test "handles rollover before any buffer was sent" do
-      store = %BufferStore{}
+      store = %PacketStore{}
       buffer = BufferFactory.sample_buffer(@seq_number_limit - 1)
       assert {:ok, store} = BufferStore.insert_buffer(store, buffer)
 
@@ -104,7 +106,7 @@ defmodule Membrane.RTP.JitterBuffer.BufferStoreTest do
       seq_numbers =
         store
         |> BufferStore.dump()
-        |> Enum.map(& &1.buffer.metadata.rtp.sequence_number)
+        |> Enum.map(& &1.data.metadata.rtp.sequence_number)
 
       assert seq_numbers == [65_535, 0, 1]
 
@@ -117,7 +119,7 @@ defmodule Membrane.RTP.JitterBuffer.BufferStoreTest do
     end
 
     test "handles late buffer after rollover" do
-      store = %BufferStore{}
+      store = %PacketStore{}
       first_buffer = BufferFactory.sample_buffer(@seq_number_limit - 1)
       assert {:ok, store} = BufferStore.insert_buffer(store, first_buffer)
 
@@ -127,8 +129,8 @@ defmodule Membrane.RTP.JitterBuffer.BufferStoreTest do
       buffer = BufferFactory.sample_buffer(1)
       assert {:ok, store} = BufferStore.insert_buffer(store, buffer)
 
-      assert {%Record{buffer: ^first_buffer}, store} = BufferStore.flush_one(store)
-      assert {%Record{buffer: ^second_buffer}, store} = BufferStore.flush_one(store)
+      assert {%Entry{data: ^first_buffer}, store} = BufferStore.flush_one(store)
+      assert {%Entry{data: ^second_buffer}, store} = BufferStore.flush_one(store)
 
       buffer = BufferFactory.sample_buffer(@seq_number_limit - 2)
       assert {:error, :late_packet} = BufferStore.insert_buffer(store, buffer)
@@ -136,7 +138,7 @@ defmodule Membrane.RTP.JitterBuffer.BufferStoreTest do
       seq_numbers =
         store
         |> BufferStore.dump()
-        |> Enum.map(& &1.buffer.metadata.rtp.sequence_number)
+        |> Enum.map(& &1.data.metadata.rtp.sequence_number)
 
       assert seq_numbers == [1]
     end
@@ -149,13 +151,13 @@ defmodule Membrane.RTP.JitterBuffer.BufferStoreTest do
 
       [
         store: store,
-        buffer: buffer
+        data: buffer
       ]
     end
 
-    test "returns the root buffer and initializes it", %{store: store, buffer: buffer} do
-      assert {%Record{} = record, empty_store} = BufferStore.flush_one(store)
-      assert record.buffer == buffer
+    test "returns the root buffer and initializes it", %{store: store, data: buffer} do
+      assert {%Entry{} = record, empty_store} = BufferStore.flush_one(store)
+      assert record.data == buffer
       assert empty_store.heap.size == 0
       assert empty_store.flush_index == record.index
     end
@@ -168,7 +170,7 @@ defmodule Membrane.RTP.JitterBuffer.BufferStoreTest do
     test "returns nil when heap is not empty, but the next buffer is not present", %{
       store: store
     } do
-      broken_store = %BufferStore{store | flush_index: @base_index - 1}
+      broken_store = %PacketStore{store | flush_index: @base_index - 1}
       assert {nil, new_store} = BufferStore.flush_one(broken_store)
       assert new_store.flush_index == @base_index
     end
@@ -183,13 +185,13 @@ defmodule Membrane.RTP.JitterBuffer.BufferStoreTest do
       |> (fn store -> store.heap end).()
       |> Enum.zip(test_base)
       |> Enum.each(fn {record, base_element} ->
-        assert %Record{index: index} = record
+        assert %Entry{index: index} = record
         assert rem(index, 65_536) == base_element
       end)
     end
 
     test "handles rollover", %{base_store: base_store} do
-      store = %BufferStore{base_store | flush_index: 65_533}
+      store = %PacketStore{base_store | flush_index: 65_533}
       before_rollover_seq_nums = 65_534..65_535
       after_rollover_seq_nums = 0..10
 
@@ -199,7 +201,7 @@ defmodule Membrane.RTP.JitterBuffer.BufferStoreTest do
       store =
         Enum.reduce(combined, combined_store, fn elem, store ->
           {record, store} = BufferStore.flush_one(store)
-          assert %Record{buffer: buffer} = record
+          assert %Entry{data: buffer} = record
           assert %Membrane.Buffer{metadata: %{rtp: %{sequence_number: seq_number}}} = buffer
           assert seq_number == elem
           store
@@ -209,13 +211,13 @@ defmodule Membrane.RTP.JitterBuffer.BufferStoreTest do
     end
 
     test "handles empty rollover", %{base_store: base_store} do
-      store = %BufferStore{base_store | flush_index: 65_533}
+      store = %PacketStore{base_store | flush_index: 65_533}
       base_data = Enum.into(65_534..65_535, [])
       store = enum_into_store(base_data, store)
 
       Enum.reduce(base_data, store, fn elem, store ->
         {record, store} = BufferStore.flush_one(store)
-        assert %Record{index: ^elem} = record
+        assert %Entry{index: ^elem} = record
         store
       end)
     end
@@ -225,7 +227,7 @@ defmodule Membrane.RTP.JitterBuffer.BufferStoreTest do
 
       flush_index = 3 * m - 6
 
-      store = %BufferStore{
+      store = %PacketStore{
         flush_index: flush_index,
         highest_incoming_index: flush_index,
         rollover_count: 2
@@ -243,10 +245,10 @@ defmodule Membrane.RTP.JitterBuffer.BufferStoreTest do
       indexes = [65_535, 0, 65_534]
 
       store =
-        enum_into_store(indexes, %BufferStore{flush_index: 65_533, highest_incoming_index: 65_533})
+        enum_into_store(indexes, %PacketStore{flush_index: 65_533, highest_incoming_index: 65_533})
 
       Enum.each(indexes, fn _index ->
-        assert {%Record{}, _store} = BufferStore.flush_one(store)
+        assert {%Entry{}, _store} = BufferStore.flush_one(store)
       end)
     end
   end
@@ -260,19 +262,19 @@ defmodule Membrane.RTP.JitterBuffer.BufferStoreTest do
     end
 
     test "returns empty list if no records are inside" do
-      assert BufferStore.dump(%BufferStore{}) == []
+      assert BufferStore.dump(%PacketStore{}) == []
     end
   end
 
   defp new_testing_store(index) do
-    %BufferStore{
+    %PacketStore{
       flush_index: index,
       highest_incoming_index: index,
-      heap: Heap.new(&Record.rtp_comparator/2)
+      heap: Heap.new(&Entry.rtp_comparator/2)
     }
   end
 
-  defp enum_into_store(enumerable, store \\ %BufferStore{}) do
+  defp enum_into_store(enumerable, store \\ %PacketStore{}) do
     Enum.reduce(enumerable, store, fn elem, acc ->
       buffer = BufferFactory.sample_buffer(elem)
       {:ok, store} = BufferStore.insert_buffer(acc, buffer)
@@ -281,15 +283,15 @@ defmodule Membrane.RTP.JitterBuffer.BufferStoreTest do
   end
 
   defp has_buffer(
-         %BufferStore{} = store,
+         %PacketStore{} = store,
          %Membrane.Buffer{metadata: %{rtp: %{sequence_number: seq_num}}}
        ),
        do: has_buffer_with_seq_number(store, seq_num)
 
-  defp has_buffer_with_seq_number(%BufferStore{heap: heap}, index) when is_integer(index) do
+  defp has_buffer_with_seq_number(%PacketStore{heap: heap}, index) when is_integer(index) do
     heap
     |> Enum.to_list()
-    |> Enum.map(& &1.buffer.metadata.rtp.sequence_number)
+    |> Enum.map(& &1.data.metadata.rtp.sequence_number)
     |> Enum.member?(index)
   end
 end

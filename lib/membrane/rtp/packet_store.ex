@@ -104,9 +104,6 @@ defmodule Membrane.RTP.PacketStore do
     end
   end
 
-  # TODO: docs
-  @doc """
-  """
   @spec seq_num_window_size(t()) :: non_neg_integer()
   def seq_num_window_size(%__MODULE__{flush_index: lower, highest_incoming_index: upper})
       when is_integer(lower) and is_integer(upper) do
@@ -115,6 +112,7 @@ defmodule Membrane.RTP.PacketStore do
 
   def seq_num_window_size(%__MODULE__{}), do: 0
 
+  @spec extended_highest_seq_num(t()) :: JitterBuffer.packet_index() | nil
   def extended_highest_seq_num(%__MODULE__{highest_incoming_index: idx}), do: idx
 
   @doc """
@@ -258,8 +256,15 @@ end
 defimpl Enumerable, for: Membrane.RTP.PacketStore do
   alias Membrane.RTP.PacketStore
 
+  @impl true
   def count(%PacketStore{set: set}), do: {:ok, MapSet.size(set)}
+
+  @impl true
   def reduce(%PacketStore{heap: heap}, acc, fun), do: Enum.reduce(heap, acc, fun)
+
+  @impl true
   def member?(%PacketStore{set: set}, element), do: {:ok, MapSet.member?(set, element)}
+
+  @impl true
   def slice(_store), do: raise("Not implemented")
 end

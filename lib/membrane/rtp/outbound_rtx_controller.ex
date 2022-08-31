@@ -1,11 +1,11 @@
 defmodule Membrane.RTP.OutboundRtxController do
   use Membrane.Filter
 
-  require Membrane.Logger
-
   alias Membrane.RTCPEvent
   alias Membrane.RTCP.TransportFeedbackPacket.NACK
   alias Membrane.RTP.JitterBuffer.BufferStore
+
+  require Membrane.Logger
 
   def_input_pad :input,
     availability: :always,

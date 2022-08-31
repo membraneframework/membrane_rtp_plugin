@@ -82,6 +82,7 @@ defmodule Membrane.RTP.InboundPacketTracker do
     process_buffer(buffer, seq_num, state)
   end
 
+  # credo:disable-for-lines:65
   defp process_buffer(buffer, seq_num, %State{} = state) do
     state = state |> update_received()
 
