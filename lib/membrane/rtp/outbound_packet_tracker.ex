@@ -12,6 +12,7 @@ defmodule Membrane.RTP.OutboundPacketTracker do
   alias Membrane.RTCP.FeedbackPacket.{PLI, FIR}
   alias Membrane.RTCP.TransportFeedbackPacket.NACK
   alias Membrane.RTP.Session.SenderReport
+  alias Membrane.RTP.RetransmissionRequest
 
   require Membrane.Logger
 
@@ -112,11 +113,11 @@ defmodule Membrane.RTP.OutboundPacketTracker do
   @impl true
   def handle_event(
         Pad.ref(:rtcp_input, _id),
-        %RTCPEvent{rtcp: %{payload: %NACK{}}} = event,
+        %RTCPEvent{rtcp: %{payload: %NACK{lost_packet_ids: ids}}},
         _ctx,
         %State{} = state
       ) do
-    {{:ok, forward: event}, state}
+    {{:ok, event: {:output, %RetransmissionRequest{sequence_numbers: ids}}}, state}
   end
 
   @impl true

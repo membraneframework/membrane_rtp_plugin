@@ -1,8 +1,7 @@
 defmodule Membrane.RTP.OutboundRtxController do
   use Membrane.Filter
 
-  alias Membrane.RTCPEvent
-  alias Membrane.RTCP.TransportFeedbackPacket.NACK
+  alias Membrane.RTP.RetransmissionRequest
   alias Membrane.RTP.JitterBuffer.BufferStore
 
   require Membrane.Logger
@@ -39,33 +38,46 @@ defmodule Membrane.RTP.OutboundRtxController do
   end
 
   @impl true
-  def handle_event(:input, %RTCPEvent{rtcp: %{payload: %NACK{} = nack}}, _ctx, state) do
-    packets_to_retransmit =
-      nack.lost_packet_ids
-      |> Enum.map(fn seq_num -> BufferStore.get_buffer(state.store, seq_num) end)
-      |> Enum.filter(&match?({:ok, _buffer}, &1))
-      |> Enum.map(fn {:ok, buffer} -> buffer end)
-      |> Enum.filter(fn buffer ->
-        seq_num = buffer.metadata.rtp.sequence_number
+  def handle_event(
+        :input,
+        %RetransmissionRequest{sequence_numbers: sequence_numbers},
+        _ctx,
+        state
+      ) do
+    buffers_to_retransmit =
+      sequence_numbers
+      |> Stream.map(fn seq_num -> BufferStore.get_buffer(state.store, seq_num) end)
+      |> Stream.filter(fn
+        {:ok, buffer} ->
+          seq_num = buffer.metadata.rtp.sequence_number
 
-        not Map.has_key?(state.last_rtx_times, seq_num) or
-          Map.fetch!(state.last_rtx_times, seq_num) > @min_rtx_interval
+          not Map.has_key?(state.last_rtx_times, seq_num) or
+            Map.fetch!(state.last_rtx_times, seq_num) > @min_rtx_interval
+
+        {:error, :not_found} ->
+          false
       end)
+      |> Enum.map(fn {:ok, buffer} -> buffer end)
 
     time = System.monotonic_time(:millisecond)
 
-    times =
-      Map.new(packets_to_retransmit, fn packet -> {packet.metadata.rtp.sequence_number, time} end)
+    state =
+      Map.update!(state, :last_rtx_times, fn times ->
+        updates =
+          Map.new(buffers_to_retransmit, fn buffer ->
+            {buffer.metadata.rtp.sequence_number, time}
+          end)
 
-    state = Map.update!(state, :last_rtx_times, &Map.merge(&1, times))
+        Map.merge(times, updates)
+      end)
 
-    unless packets_to_retransmit == [],
+    unless buffers_to_retransmit == [],
       do:
         Membrane.Logger.info(
-          "Retransmitting packets with the following sequence numbers:\n#{inspect(Enum.map(packets_to_retransmit, & &1.metadata.rtp.sequence_number))}"
+          "Retransmitting buffers with the following sequence numbers:\n#{inspect(Enum.map(buffers_to_retransmit, & &1.metadata.rtp.sequence_number))}"
         )
 
-    {{:ok, buffer: {:output, packets_to_retransmit}}, state}
+    {{:ok, buffer: {:output, buffers_to_retransmit}}, state}
   end
 
   @impl true
