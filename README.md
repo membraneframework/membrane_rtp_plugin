@@ -20,6 +20,17 @@ def deps do
 end
 ```
 
+If SRTP/SRTCP support is needed, one has to install `libsrtp` to their system. 
+### MacOS 
+Run `brew install srtp`
+
+### Ubuntu
+Run `apt install libsrtp2-dev`
+
+### Other
+
+For more details and manual installation, see [ExLibSRTP HexDocs](https://hexdocs.pm/ex_libsrtp/readme.html).
+
 ## Usage
 
 For usage examples, check the [RTP demo](https://github.com/membraneframework/membrane_demo/tree/master/rtp).
