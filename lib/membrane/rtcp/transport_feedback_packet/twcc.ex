@@ -5,10 +5,9 @@ defmodule Membrane.RTCP.TransportFeedbackPacket.TWCC do
   """
   @behaviour Membrane.RTCP.TransportFeedbackPacket
 
-  alias Membrane.Time
-
   require Bitwise
   require Membrane.Logger
+  alias Membrane.Time
 
   defmodule RunLength do
     @moduledoc false

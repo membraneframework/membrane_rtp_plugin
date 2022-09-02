@@ -7,8 +7,8 @@ defmodule Membrane.RTP.PipelineTest do
   alias Membrane.RemoteStream
   alias Membrane.RemoteStream
   alias Membrane.RTP
-  alias Membrane.RTP.{Parser, Fixtures}
-  alias Membrane.Testing.{Source, Pipeline, Sink}
+  alias Membrane.RTP.{Fixtures, Parser}
+  alias Membrane.Testing.{Pipeline, Sink, Source}
 
   @buffer_receive_timeout 1000
 

@@ -5,10 +5,9 @@ defmodule Membrane.RTP.TWCCReceiver.PacketInfoStore do
   # number rollovers if necessary. Stored packet info can used for generating statistics used for
   # assembling a TWCC feedback packet.
 
+  require Bitwise
   alias Membrane.RTP.Utils
   alias Membrane.Time
-
-  require Bitwise
 
   defstruct base_seq_num: nil,
             max_seq_num: nil,

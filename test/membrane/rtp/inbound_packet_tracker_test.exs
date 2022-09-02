@@ -2,10 +2,9 @@ defmodule Membrane.RTP.InboundPacketTrackerTest do
   use ExUnit.Case, async: true
   use Bunch
 
+  require Bitwise
   alias Membrane.RTP.BufferFactory
   alias Membrane.RTP.InboundPacketTracker
-
-  require Bitwise
 
   @max_seq_number Bitwise.bsl(1, 16) - 1
   @base_seq_number BufferFactory.base_seq_number()

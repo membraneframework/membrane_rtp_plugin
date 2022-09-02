@@ -5,12 +5,11 @@ defmodule Membrane.RTP.JitterBuffer do
   use Membrane.Filter
   use Bunch
 
+  require Bitwise
+  require Membrane.Logger
   alias __MODULE__.{BufferStore, Record}
   alias Membrane.RTP.Utils
   alias Membrane.{RTP, Time}
-
-  require Bitwise
-  require Membrane.Logger
 
   @type packet_index :: non_neg_integer()
 

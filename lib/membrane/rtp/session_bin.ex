@@ -44,11 +44,10 @@ defmodule Membrane.RTP.SessionBin do
   """
   use Membrane.Bin
 
-  alias Membrane.RTP.{PayloadFormat, Session}
-  alias Membrane.{ParentSpec, RemoteStream, RTCP, RTP, SRTP}
-
   require Bitwise
   require Membrane.Logger
+  alias Membrane.RTP.{PayloadFormat, Session}
+  alias Membrane.{ParentSpec, RemoteStream, RTCP, RTP, SRTP}
 
   @type new_stream_notification_t :: Membrane.RTP.SSRCRouter.new_stream_notification_t()
 

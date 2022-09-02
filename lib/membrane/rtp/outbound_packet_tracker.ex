@@ -8,11 +8,10 @@ defmodule Membrane.RTP.OutboundPacketTracker do
   """
   use Membrane.Filter
 
-  alias Membrane.RTCP.FeedbackPacket.{PLI, FIR}
-  alias Membrane.RTP.Session.SenderReport
-  alias Membrane.{Buffer, RTCPEvent, RTP, Payload, Time}
-
   require Membrane.Logger
+  alias Membrane.RTCP.FeedbackPacket.{FIR, PLI}
+  alias Membrane.RTP.Session.SenderReport
+  alias Membrane.{Buffer, Payload, RTCPEvent, RTP, Time}
 
   def_input_pad :input, caps: :any, demand_mode: :auto
 

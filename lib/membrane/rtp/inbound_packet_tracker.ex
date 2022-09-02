@@ -8,10 +8,9 @@ defmodule Membrane.RTP.InboundPacketTracker do
   """
   use Membrane.Filter
 
+  require Bitwise
   alias Membrane.RTCP.ReceiverReport
   alias Membrane.{Buffer, RTP, Time}
-
-  require Bitwise
 
   @max_dropout 3000
   @max_unordered 3000
