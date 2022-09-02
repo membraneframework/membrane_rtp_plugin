@@ -8,9 +8,9 @@ defmodule Membrane.RTP.OutboundPacketTracker do
   """
   use Membrane.Filter
 
-  alias Membrane.{Buffer, RTCPEvent, RTP, Payload, Time}
   alias Membrane.RTCP.FeedbackPacket.{PLI, FIR}
   alias Membrane.RTP.Session.SenderReport
+  alias Membrane.{Buffer, RTCPEvent, RTP, Payload, Time}
 
   require Membrane.Logger
 

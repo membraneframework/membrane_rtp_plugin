@@ -5,9 +5,9 @@ defmodule Membrane.RTP.JitterBuffer do
   use Membrane.Filter
   use Bunch
 
-  alias Membrane.{RTP, Time}
-  alias Membrane.RTP.Utils
   alias __MODULE__.{BufferStore, Record}
+  alias Membrane.RTP.Utils
+  alias Membrane.{RTP, Time}
 
   require Bitwise
   require Membrane.Logger

@@ -6,8 +6,8 @@ defmodule Membrane.RTCP.SenderReportPacket do
 
   @behaviour Membrane.RTCP.Packet
 
-  alias Membrane.RTP
   alias Membrane.RTCP.ReportPacketBlock
+  alias Membrane.RTP
 
   defstruct [:ssrc, :reports, :sender_info]
 

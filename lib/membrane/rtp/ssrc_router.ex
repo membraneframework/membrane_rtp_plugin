@@ -13,7 +13,7 @@ defmodule Membrane.RTP.SSRCRouter do
 
   use Membrane.Filter
 
-  alias Membrane.{RTCP, RTP, RTCPEvent, SRTP}
+  alias Membrane.{RTCP, RTCPEvent, RTP, SRTP}
 
   require Membrane.Logger
   require Membrane.TelemetryMetrics

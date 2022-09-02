@@ -8,8 +8,8 @@ defmodule Membrane.RTP.InboundPacketTracker do
   """
   use Membrane.Filter
 
-  alias Membrane.{Buffer, RTP, Time}
   alias Membrane.RTCP.ReceiverReport
+  alias Membrane.{Buffer, RTP, Time}
 
   require Bitwise
 

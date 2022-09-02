@@ -15,11 +15,11 @@ if Code.ensure_loaded?(ExLibSRTP) do
     """
     use Membrane.Filter
 
+    require Membrane.Logger
+
     alias Membrane.Buffer
     alias Membrane.RTP.Utils
     alias Membrane.SRTP
-
-    require Membrane.Logger
 
     def_input_pad :input, caps: :any, demand_mode: :auto
     def_output_pad :output, caps: :any, demand_mode: :auto

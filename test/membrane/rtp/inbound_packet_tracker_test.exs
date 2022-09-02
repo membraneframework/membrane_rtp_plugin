@@ -2,8 +2,8 @@ defmodule Membrane.RTP.InboundPacketTrackerTest do
   use ExUnit.Case, async: true
   use Bunch
 
-  alias Membrane.RTP.InboundPacketTracker
   alias Membrane.RTP.BufferFactory
+  alias Membrane.RTP.InboundPacketTracker
 
   require Bitwise
 

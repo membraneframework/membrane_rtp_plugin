@@ -1,8 +1,8 @@
 defmodule Membrane.RTCP.ParserTest do
   use ExUnit.Case, async: true
 
-  alias Membrane.{Buffer, RTCPEvent}
   alias Membrane.RTCP.{FeedbackPacket, Fixtures, Parser, SenderReportPacket}
+  alias Membrane.{Buffer, RTCPEvent}
 
   test "Handles SR with REMB" do
     buffer = %Buffer{payload: Fixtures.compound_sr_sdes_remb(), metadata: %{arrival_ts: 2137}}

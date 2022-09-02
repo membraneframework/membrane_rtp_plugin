@@ -5,8 +5,8 @@ defmodule Membrane.RTP.StreamReceiveBinTest do
 
   alias Membrane.RTCP.FeedbackPacket
   alias Membrane.RTP
-  alias Membrane.RTP.StreamReceiveBin
   alias Membrane.RTP.H264
+  alias Membrane.RTP.StreamReceiveBin
   alias Membrane.Testing
 
   @pcap_file "test/fixtures/rtp/session/demo.pcap"

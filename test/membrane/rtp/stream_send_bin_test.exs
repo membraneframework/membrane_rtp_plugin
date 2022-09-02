@@ -3,8 +3,8 @@ defmodule Membrane.RTP.StreamSendBinTest do
 
   import Membrane.Testing.Assertions
 
-  alias Membrane.RTP.StreamSendBin
   alias Membrane.RTP.H264
+  alias Membrane.RTP.StreamSendBin
   alias Membrane.Testing
 
   @frames_count 1038

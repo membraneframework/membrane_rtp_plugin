@@ -7,9 +7,9 @@ if Code.ensure_loaded?(ExLibSRTP) do
     """
     use Membrane.Filter
 
-    alias Membrane.{Buffer, RTP, SRTP}
-
     require Membrane.Logger
+
+    alias Membrane.{Buffer, RTP, SRTP}
 
     def_input_pad :input, caps: :any, demand_mode: :auto
     def_output_pad :output, caps: :any, demand_mode: :auto

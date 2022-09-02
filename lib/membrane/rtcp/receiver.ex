@@ -4,11 +4,11 @@ defmodule Membrane.RTCP.Receiver do
   """
   use Membrane.Filter
 
-  alias Membrane.RTCPEvent
-  alias Membrane.RTCP.{FeedbackPacket, SenderReportPacket}
-  alias Membrane.{RTCP, RTP}
   alias Membrane.RTCP.ReceiverReport
+  alias Membrane.RTCP.{FeedbackPacket, SenderReportPacket}
+  alias Membrane.RTCPEvent
   alias Membrane.Time
+  alias Membrane.{RTCP, RTP}
 
   require Membrane.Logger
   require Membrane.TelemetryMetrics

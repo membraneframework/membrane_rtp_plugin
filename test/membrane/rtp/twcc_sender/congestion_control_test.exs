@@ -1,8 +1,8 @@
 defmodule Membrane.RTP.TWCCSender.CongestionControlTest do
   use ExUnit.Case, async: true
 
-  alias Membrane.Time
   alias Membrane.RTP.TWCCSender.CongestionControl
+  alias Membrane.Time
 
   defp simulate_updates(cc, [], [], [], [], []), do: cc
 

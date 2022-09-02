@@ -20,7 +20,10 @@ defmodule Membrane.RTP.Plugin.MixProject do
       name: "Membrane RTP plugin",
       source_url: @github_url,
       homepage_url: "https://membraneframework.org",
-      docs: docs()
+      docs: docs(),
+
+      # dev
+      aliases: aliases()
     ]
   end
 
@@ -87,7 +90,14 @@ defmodule Membrane.RTP.Plugin.MixProject do
       # Dev
       {:ex_doc, "~> 0.21", only: :dev, runtime: false},
       {:dialyxir, "~> 1.0", only: :dev, runtime: false},
-      {:credo, "~> 1.5", only: :dev, runtime: false}
+      {:credo, "~> 1.5", only: :dev, runtime: false},
+      {:eunomo, "~> 0.1.3", only: :dev, runtime: false}
+    ]
+  end
+
+  defp aliases do
+    [
+      format!: ["format", "eunomo"]
     ]
   end
 end
