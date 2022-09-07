@@ -8,6 +8,6 @@ defmodule Membrane.RTCP.ReceiverReport.StatsEvent do
   defstruct @enforce_keys
 
   @type t :: %__MODULE__{
-          stats: Membrane.RTCP.ReceierReport.Stats.t()
+          stats: Membrane.RTCP.ReceiverReport.Stats.t()
         }
 end

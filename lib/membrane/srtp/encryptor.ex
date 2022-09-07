@@ -111,23 +111,13 @@ if Code.ensure_loaded?(ExLibSRTP) do
       %Buffer{payload: payload} = buffer
       packet_type = RTP.Packet.identify(payload)
 
-      case packet_type do
-        :rtp -> ExLibSRTP.protect(srtp, payload)
-        :rtcp -> ExLibSRTP.protect_rtcp(srtp, payload)
-      end
-      |> case do
-        {:ok, payload} ->
-          [%Buffer{buffer | payload: payload}]
+      {:ok, payload} =
+        case packet_type do
+          :rtp -> ExLibSRTP.protect(srtp, payload)
+          :rtcp -> ExLibSRTP.protect_rtcp(srtp, payload)
+        end
 
-        {:error, reason} ->
-          Membrane.Logger.warn("""
-          Couldn't protect #{packet_type} payload:
-          #{inspect(payload, limit: :infinity)}
-          Reason: #{inspect(reason)}. Ignoring packet.
-          """)
-
-          []
-      end
+      [%Buffer{buffer | payload: payload}]
     end
   end
 end

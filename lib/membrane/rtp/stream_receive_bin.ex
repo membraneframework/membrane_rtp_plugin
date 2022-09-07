@@ -8,7 +8,7 @@ defmodule Membrane.RTP.StreamReceiveBin do
 
   use Membrane.Bin
 
-  alias Membrane.ParentSpec
+  alias Membrane.{ParentSpec, RTCP, RTP, SRTP}
 
   def_options srtp_policies: [
                 spec: [ExLibSRTP.Policy.t()],
@@ -19,7 +19,7 @@ defmodule Membrane.RTP.StreamReceiveBin do
                 default: false
               ],
               extensions: [
-                spec: [Membrane.RTP.SessionBin.extension_t()],
+                spec: [RTP.SessionBin.extension_t()],
                 default: []
               ],
               clock_rate: [
@@ -27,8 +27,8 @@ defmodule Membrane.RTP.StreamReceiveBin do
                 spec: RTP.clock_rate_t()
               ],
               depayloader: [spec: module() | nil],
-              local_ssrc: [spec: Membrane.RTP.ssrc_t()],
-              remote_ssrc: [spec: Membrane.RTP.ssrc_t()],
+              local_ssrc: [spec: RTP.ssrc_t()],
+              remote_ssrc: [spec: RTP.ssrc_t()],
               rtcp_report_interval: [spec: Membrane.Time.t() | nil],
               telemetry_label: [
                 spec: [{atom(), any()}],
@@ -44,10 +44,10 @@ defmodule Membrane.RTP.StreamReceiveBin do
       do: raise("Optional dependency :ex_libsrtp is required when using secure? option")
 
     maybe_link_decryptor =
-      &to(&1, :decryptor, struct(Membrane.SRTP.Decryptor, %{policies: opts.srtp_policies}))
+      &to(&1, :decryptor, struct(SRTP.Decryptor, %{policies: opts.srtp_policies}))
 
     maybe_link_depayloader_bin =
-      &to(&1, :depayloader, %Membrane.RTP.DepayloaderBin{
+      &to(&1, :depayloader, %RTP.DepayloaderBin{
         depayloader: opts.depayloader,
         clock_rate: opts.clock_rate
       })
@@ -55,13 +55,13 @@ defmodule Membrane.RTP.StreamReceiveBin do
     links = [
       link_bin_input()
       |> to_extensions(opts.extensions)
-      |> to(:rtcp_receiver, %Membrane.RTCP.Receiver{
+      |> to(:rtcp_receiver, %RTCP.Receiver{
         local_ssrc: opts.local_ssrc,
         remote_ssrc: opts.remote_ssrc,
         report_interval: opts.rtcp_report_interval,
         telemetry_label: opts.telemetry_label
       })
-      |> to(:packet_tracker, %Membrane.RTP.InboundPacketTracker{
+      |> to(:packet_tracker, %RTP.InboundPacketTracker{
         clock_rate: opts.clock_rate,
         repair_sequence_numbers?: true
       })
