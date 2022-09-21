@@ -22,8 +22,8 @@ defmodule Membrane.RTP.PacketTest do
   end
 
   test "parses and serializes csrcs correctly" do
-    <<header_1::4, _old_cc::4, header_2::88, payload::binary()>> = Fixtures.sample_packet_binary()
-    packet_binary = <<header_1::4, 2::4, header_2::88, 12::32, 21::32, payload::binary()>>
+    <<header_1::4, _old_cc::4, header_2::88, payload::binary>> = Fixtures.sample_packet_binary()
+    packet_binary = <<header_1::4, 2::4, header_2::88, 12::32, 21::32, payload::binary>>
 
     packet = %Packet{
       Fixtures.sample_packet()
@@ -45,7 +45,8 @@ defmodule Membrane.RTP.PacketTest do
 
     assert {:ok, %{packet: ^sample_packet}} = Packet.parse(test_packet, @encrypted?)
 
-    assert Packet.serialize(Fixtures.sample_packet(), align_to: 4) == test_packet
+    assert Packet.serialize(Fixtures.sample_packet(), align_to: 4, is_padding_packet?: false) ==
+             test_packet
   end
 
   test "reads and serializes extension header" do

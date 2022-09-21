@@ -27,19 +27,47 @@ defmodule Membrane.RTP.Packet do
 
   def identify(_packet), do: :rtp
 
+  # This is the max amount of padding that can be added. It is limited by the size of the padding size indication
+  # being 1 byte
+  @padding_packet_size 256
+
+  @doc """
+  Returns the constant size of the padding packet
+  """
+  @spec padding_packet_size() :: non_neg_integer()
+  def padding_packet_size(), do: @padding_packet_size
+
   @spec serialize(t, align_to: pos_integer()) :: binary
-  def serialize(%__MODULE__{} = packet, [align_to: align_to] \\ [align_to: 1]) do
+  def serialize(
+        %__MODULE__{} = packet,
+        [align_to: align_to, is_padding_packet?: is_padding?] \\ [
+          align_to: 1,
+          is_padding_packet?: false
+        ]
+      ) do
     %__MODULE__{header: header, payload: payload} = packet
     %Header{version: 2} = header
-    has_padding = 0
+    has_padding = if is_padding?, do: 1, else: 0
     has_extension = if header.extensions == [], do: 0, else: 1
     marker = if header.marker, do: 1, else: 0
     csrcs = Enum.map_join(header.csrcs, &<<&1::32>>)
 
-    serialized =
+    header =
       <<header.version::2, has_padding::1, has_extension::1, length(header.csrcs)::4, marker::1,
         header.payload_type::7, header.sequence_number::16, header.timestamp::32, header.ssrc::32,
-        csrcs::binary, serialize_header_extensions(header.extensions)::binary, payload::binary>>
+        csrcs::binary, serialize_header_extensions(header.extensions)::binary>>
+
+    payload =
+      if is_padding? do
+        # TODO: fix alignment
+        # -1 accounts for the last
+        padding_size = @padding_packet_size - byte_size(header)
+        <<padding_size::integer-size(padding_size)-unit(8)>>
+      else
+        payload
+      end
+
+    serialized = header <> payload
 
     case Utils.align(serialized, align_to) do
       {serialized, 0} ->

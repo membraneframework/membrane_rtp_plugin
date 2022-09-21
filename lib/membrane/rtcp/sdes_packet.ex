@@ -135,10 +135,10 @@ defmodule Membrane.RTCP.SdesPacket do
         {:priv, {prefix, value}} ->
           prefix_len = byte_size(prefix)
           total_len = 1 + prefix_len + byte_size(value)
-          <<8::8, total_len::8, prefix_len::8, prefix::binary(), value::binary()>>
+          <<8::8, total_len::8, prefix_len::8, prefix::binary, value::binary>>
 
         {key, value} ->
-          <<@sdes_type_from_atom[key]::8, byte_size(value)::8, value::binary()>>
+          <<@sdes_type_from_atom[key]::8, byte_size(value)::8, value::binary>>
       end)
 
     pad_bits = 32 - (body |> bit_size() |> rem(32))

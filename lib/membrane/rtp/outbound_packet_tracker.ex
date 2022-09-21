@@ -136,9 +136,12 @@ defmodule Membrane.RTP.OutboundPacketTracker do
           extensions: extensions
       })
 
+    is_padding_packet? = Map.get(buffer.metadata.rtp, :is_padding?, false)
+
     payload =
       RTP.Packet.serialize(%RTP.Packet{header: header, payload: buffer.payload},
-        align_to: state.alignment
+        align_to: state.alignment,
+        is_padding_packet?: is_padding_packet?
       )
 
     buffer = %Buffer{buffer | payload: payload, metadata: metadata}
