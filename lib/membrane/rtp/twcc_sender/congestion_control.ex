@@ -2,9 +2,10 @@ defmodule Membrane.RTP.TWCCSender.CongestionControl do
   @moduledoc """
   The module implements [Google congestion control algorithm](https://datatracker.ietf.org/doc/html/draft-ietf-rmcat-gcc-02).
   """
-  alias Membrane.Time
 
   require Membrane.Logger
+
+  alias Membrane.Time
 
   # disable Credo naming checks to use the RFC notation
   # credo:disable-for-this-file /(ModuleAttributeNames|VariableNames)/

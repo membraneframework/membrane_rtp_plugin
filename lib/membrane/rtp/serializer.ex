@@ -9,9 +9,8 @@ defmodule Membrane.RTP.Serializer do
   """
   use Membrane.Filter
 
-  alias Membrane.{RTP, RemoteStream}
-
   require Bitwise
+  alias Membrane.{RemoteStream, RTP}
 
   @max_seq_num Bitwise.bsl(1, 16) - 1
   @max_timestamp Bitwise.bsl(1, 32) - 1

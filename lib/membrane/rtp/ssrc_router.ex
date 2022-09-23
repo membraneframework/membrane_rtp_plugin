@@ -13,10 +13,9 @@ defmodule Membrane.RTP.SSRCRouter do
 
   use Membrane.Filter
 
-  alias Membrane.{RTCP, RTP, RTCPEvent, SRTP}
-
   require Membrane.Logger
   require Membrane.TelemetryMetrics
+  alias Membrane.{RTCP, RTCPEvent, RTP, SRTP}
 
   @packet_arrival_event [Membrane.RTP, :packet, :arrival]
   @new_inbound_track_event [Membrane.RTP, :inbound_track, :new]

@@ -1,7 +1,7 @@
 defmodule Membrane.RTP.PacketTest do
   use ExUnit.Case
 
-  alias Membrane.RTP.{Header, Packet, Fixtures}
+  alias Membrane.RTP.{Fixtures, Header, Packet}
 
   @encrypted? false
 

@@ -2,9 +2,8 @@ defmodule Membrane.RTP.TWCCReceiverTest do
   use ExUnit.Case, async: true
   use Bunch
 
-  alias Membrane.RTP.{BufferFactory, Header, TWCCReceiver}
-
   require Bitwise
+  alias Membrane.RTP.{BufferFactory, Header, TWCCReceiver}
 
   @default_twcc_id 1
   @sequence_number 12_345

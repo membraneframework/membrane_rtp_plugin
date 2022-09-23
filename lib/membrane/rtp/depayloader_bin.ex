@@ -6,6 +6,7 @@ defmodule Membrane.RTP.DepayloaderBin do
 
   use Membrane.Bin
 
+  alias Membrane.RTP
   alias Membrane.RTP.JitterBuffer
 
   def_options depayloader: [

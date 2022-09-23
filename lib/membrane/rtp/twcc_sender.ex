@@ -5,12 +5,13 @@ defmodule Membrane.RTP.TWCCSender do
   """
   use Membrane.Filter
 
-  alias Membrane.{RTP, Time}
-  alias Membrane.RTP.Header
-  alias Membrane.RTCP.TransportFeedbackPacket.TWCC
-  alias __MODULE__.CongestionControl
-
   require Bitwise
+
+  alias __MODULE__.CongestionControl
+  alias Membrane.RTCP.TransportFeedbackPacket.TWCC
+  alias Membrane.RTP
+  alias Membrane.RTP.Header
+  alias Membrane.Time
 
   @seq_number_limit Bitwise.bsl(1, 16)
 

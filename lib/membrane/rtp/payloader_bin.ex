@@ -5,7 +5,7 @@ defmodule Membrane.RTP.PayloaderBin do
 
   use Membrane.Bin
 
-  alias Membrane.ParentSpec
+  alias Membrane.{ParentSpec, RTP}
 
   def_input_pad :input, demand_unit: :buffers, caps: :any
 
@@ -32,7 +32,7 @@ defmodule Membrane.RTP.PayloaderBin do
     links = [
       link_bin_input()
       |> to(:payloader, opts.payloader)
-      |> to(:serializer, %Membrane.RTP.Serializer{
+      |> to(:serializer, %RTP.Serializer{
         ssrc: opts.ssrc,
         payload_type: opts.payload_type,
         clock_rate: opts.clock_rate,

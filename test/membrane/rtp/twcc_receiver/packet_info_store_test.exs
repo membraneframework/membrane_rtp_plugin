@@ -2,9 +2,8 @@ defmodule Membrane.RTP.TWCCReceiver.PacketInfoStoreTest do
   use ExUnit.Case, async: true
   use Bunch
 
-  alias Membrane.RTP.TWCCReceiver.PacketInfoStore
-
   require Bitwise
+  alias Membrane.RTP.TWCCReceiver.PacketInfoStore
 
   @max_seq_number Bitwise.bsl(1, 16) - 1
 

@@ -1,9 +1,8 @@
 defmodule Membrane.RTP.Session.SenderReport do
   @moduledoc false
-  alias Membrane.{RTP, RTCP, Time}
-
   require Bitwise
   require Membrane.Logger
+  alias Membrane.{RTCP, RTP, Time}
 
   @timestamp_limit Bitwise.bsl(1, 32)
 

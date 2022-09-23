@@ -18,10 +18,9 @@ defmodule Membrane.RTP.Parser do
 
   use Membrane.Filter
 
-  alias Membrane.Buffer
-  alias Membrane.{RTCPEvent, RTCP, RTP, RemoteStream}
-
   require Membrane.Logger
+  alias Membrane.Buffer
+  alias Membrane.{RemoteStream, RTCP, RTCPEvent, RTP}
 
   @metadata_fields [
     :timestamp,

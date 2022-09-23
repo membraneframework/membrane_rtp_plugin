@@ -2,8 +2,8 @@ defmodule Membrane.RTP.JitterBuffer.TimestampsCalculationTest do
   use ExUnit.Case, async: true
   use Bunch
 
-  alias Membrane.RTP.JitterBuffer
   alias Membrane.RTP.BufferFactory
+  alias Membrane.RTP.JitterBuffer
 
   @max_rtp_timestamp 0xFFFFFFFF
 
