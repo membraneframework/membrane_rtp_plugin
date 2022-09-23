@@ -122,10 +122,17 @@ defmodule Membrane.RTP.TWCCSender do
     buffer =
       Header.Extension.put(buffer, %Header.Extension{identifier: :twcc, data: <<seq_num::16>>})
 
+    size =
+      if Map.get(buffer.metadata.rtp, :is_padding?, false) do
+        Membrane.RTP.Packet.padding_packet_size() * 8
+      else
+        bit_size(buffer.payload)
+      end
+
     state =
       state
       |> put_in([:seq_to_timestamp, seq_num], Time.vm_time())
-      |> put_in([:seq_to_size, seq_num], bit_size(buffer.payload))
+      |> put_in([:seq_to_size, seq_num], size)
 
     out_pad = Pad.ref(:output, id)
     [buffer: {out_pad, buffer}] |> send_when_pad_connected(out_pad, ctx, state)
