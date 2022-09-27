@@ -70,21 +70,23 @@ defmodule Membrane.RTCP.TransportFeedbackPacket.NACK do
   def encode(%__MODULE__{lost_packet_ids: lost_packet_ids}) do
     ids_to_encode = Enum.sort(lost_packet_ids)
 
+    # code splitting ids into tuples with reference_id and a list of following ids
+    # greater by at most 16. They will fit into one FCI.
     chunk_fun = fn
-      # Initial step
+      # Initial step - initilaize reference_id
       id, nil ->
         {:cont, {id, []}}
 
-      # Ids to group in the same FCI
+      # Id to group in the same FCI - no chunk emitted
       id, {reference_id, rest} when id > reference_id and id - reference_id <= 16 ->
         {:cont, {reference_id, [id | rest]}}
 
-      # Id that should start a next FCI
+      # Id that should start a next FCI - emit a chunk and set a new reference_id
       id, {reference_id, rest} when id - reference_id > 16 ->
         {:cont, {reference_id, rest}, {id, []}}
     end
 
-    # Just return what has been gathered
+    # Emit a chunk with what has been gathered
     after_fun = fn acc -> {:cont, acc, nil} end
 
     ids_to_encode
