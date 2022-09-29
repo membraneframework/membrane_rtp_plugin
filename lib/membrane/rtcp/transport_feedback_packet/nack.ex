@@ -46,18 +46,18 @@ defmodule Membrane.RTCP.TransportFeedbackPacket.NACK do
 
   @behaviour Membrane.RTCP.TransportFeedbackPacket
 
+  import Bitwise
+
   defstruct lost_packet_ids: []
 
   @impl true
   def decode(nack_fci) do
-    import Bitwise
-
     for <<packet_id::unsigned-size(16), bit_mask::unsigned-size(16) <- nack_fci>> do
       next_lost_packets =
         0..15
         |> Enum.map(fn i ->
           if (bit_mask >>> i &&& 1) == 1 do
-            packet_id + i + 1
+            mod_16bit(packet_id + i + 1)
           else
             nil
           end
@@ -98,8 +98,6 @@ defmodule Membrane.RTCP.TransportFeedbackPacket.NACK do
   end
 
   defp encode_fci({reference_id, ids}) when is_integer(reference_id) do
-    import Bitwise
-
     bit_mask =
       ids
       |> Enum.reduce(0, fn id, acc ->
@@ -111,4 +109,6 @@ defmodule Membrane.RTCP.TransportFeedbackPacket.NACK do
 
     <<reference_id::unsigned-size(16), bit_mask::unsigned-size(16)>>
   end
+
+  defp mod_16bit(number), do: number &&& 0xFFFF
 end
