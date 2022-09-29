@@ -50,18 +50,21 @@ defmodule Membrane.RTCP.TransportFeedbackPacket.NACK do
 
   @impl true
   def decode(nack_fci) do
-    for <<packet_id::unsigned-size(16), bit_mask::16-bits <- nack_fci>> do
+    import Bitwise
+
+    for <<packet_id::unsigned-size(16), bit_mask::unsigned-size(16) <- nack_fci>> do
       next_lost_packets =
-        for(<<bit::1 <- bit_mask>>, do: bit)
-        |> Enum.reverse()
-        |> Enum.with_index(1)
-        |> Enum.map(fn
-          {1, position} -> position + packet_id
-          {0, _position} -> nil
+        0..15
+        |> Enum.map(fn i ->
+          if (bit_mask >>> i &&& 1) == 1 do
+            packet_id + i + 1
+          else
+            nil
+          end
         end)
+        |> Enum.reject(&is_nil/1)
 
       [packet_id | next_lost_packets]
-      |> Enum.reject(&(&1 === nil))
     end
     |> then(&{:ok, %__MODULE__{lost_packet_ids: List.flatten(&1)}})
   end
