@@ -71,6 +71,8 @@ defmodule Membrane.RTCP.TransportFeedbackPacket.NACK do
 
   @impl true
   def encode(%__MODULE__{lost_packet_ids: lost_packet_ids}) do
+    # TODO: This code does handle rollover, so 65_535 and 0 will be put in separate FCIs
+    #       That's not optimal, but rare and still correctly reports the lost packets
     ids_to_encode = Enum.sort(lost_packet_ids)
 
     # code splitting ids into tuples with reference_id and a list of following ids
