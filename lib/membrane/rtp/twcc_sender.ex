@@ -25,7 +25,7 @@ defmodule Membrane.RTP.TWCCSender do
        seq_to_timestamp: %{},
        seq_to_size: %{},
        cc: %CongestionControl{},
-       bandwidth_report_interval: Time.seconds(5),
+       bandwidth_report_interval: Time.seconds(1),
        buffered_actions: %{}
      }}
   end

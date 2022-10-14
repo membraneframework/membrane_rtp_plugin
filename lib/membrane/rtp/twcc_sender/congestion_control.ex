@@ -25,7 +25,7 @@ defmodule Membrane.RTP.TWCCSender.CongestionControl do
   @ema_smoothing_factor 0.95
 
   @last_receive_rates_probe_size 25
-  @last_receive_bandwidth_probe_size 25
+  @last_receive_bandwidth_probe_size 50
 
   defstruct [
     # inter-packet delay estimate (in ms)
