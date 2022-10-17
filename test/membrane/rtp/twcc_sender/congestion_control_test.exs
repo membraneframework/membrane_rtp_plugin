@@ -108,6 +108,7 @@ defmodule Membrane.RTP.TWCCSender.CongestionControlTest do
       assert cc.a_hat > initial_bwe
     end
 
+    @tag :debug
     test "decreases estimated receive bandwidth if interpacket delay increases", %{
       cc: %CongestionControl{a_hat: initial_bwe} = cc,
       n_reports: n_reports,
@@ -252,6 +253,7 @@ defmodule Membrane.RTP.TWCCSender.CongestionControlTest do
       assert_in_delta cc.as_hat, initial_bwe, 0.01 * initial_bwe
     end
 
+    @tag :debug
     test "increases estimated send-side bandwidth if fraction lost is small enough", %{
       cc: %CongestionControl{as_hat: initial_bwe} = cc,
       n_reports: n_reports,
