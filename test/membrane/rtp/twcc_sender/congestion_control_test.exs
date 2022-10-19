@@ -14,6 +14,9 @@ defmodule Membrane.RTP.TWCCSender.CongestionControlTest do
          [packet_sizes | remaining_packet_sizes],
          [rtt | remaining_rtts]
        ) do
+    IO.inspect({cc.state, cc.a_hat})
+    Process.sleep(200)
+
     simulate_updates(
       CongestionControl.update(
         cc,
@@ -61,10 +64,11 @@ defmodule Membrane.RTP.TWCCSender.CongestionControlTest do
     setup %{cc: %CongestionControl{a_hat: target_bandwidth} = cc} do
       # Setup:
       # 20 reports delivered in a regular 200ms interval -> simulating 4s of bandwidth estimation process
-      # 10 packets per report gives us 50 packets/s
-      n_reports = 20
-      packets_per_report = 10
-      report_interval_ms = 200
+      packet_size = 1200 * 8
+      n_reports = 132
+      report_interval_ms = 30
+
+      packets_per_report = round(target_bandwidth / packet_size * (report_interval_ms / 1000)) |> IO.inspect(label: :packets_per_report)
 
       {reference_times, send_deltas, packet_sizes, rtts} =
         make_fixtures(target_bandwidth, n_reports, packets_per_report, report_interval_ms)
@@ -253,7 +257,6 @@ defmodule Membrane.RTP.TWCCSender.CongestionControlTest do
       assert_in_delta cc.as_hat, initial_bwe, 0.01 * initial_bwe
     end
 
-    @tag :debug
     test "increases estimated send-side bandwidth if fraction lost is small enough", %{
       cc: %CongestionControl{as_hat: initial_bwe} = cc,
       n_reports: n_reports,
