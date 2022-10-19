@@ -54,7 +54,7 @@ defmodule Membrane.RTP.TWCCSender.CongestionControl do
     # latest receiver-side incoming bitrates when we were in the decrease state
     decrease_r_hats: [],
     # latest receiver-side incoming bitrate
-    last_r_hat: 0.0,
+    last_r_hat: nil,
     # time window for measuring the received bitrate, between [0.5, 1]s (reffered to as "T" in the RFC)
     target_receive_window: Time.milliseconds(750),
     # accumulator for packets and their timestamps that have been received through target_receive_interval
@@ -76,7 +76,7 @@ defmodule Membrane.RTP.TWCCSender.CongestionControl do
           a_hat: float(),
           as_hat: float(),
           decrease_r_hats: [float()],
-          last_r_hat: float(),
+          last_r_hat: float() | nil,
           packets_received: [{Membrane.Time.t(), non_neg_integer()}]
         }
 
@@ -251,17 +251,33 @@ defmodule Membrane.RTP.TWCCSender.CongestionControl do
 
   defp update_state(cc, _signal), do: cc
 
+  defp update_receiver_bitrate(
+         %__MODULE__{last_r_hat: nil} = cc,
+         reference_time,
+         receive_deltas,
+         packet_sizes
+       ) do
+    %__MODULE__{target_receive_window: receive_window} = cc
+
+    packets_received = resolve_receive_deltas(receive_deltas, reference_time, packet_sizes)
+
+    packets_received = cc.packets_received ++ packets_received
+
+    {first_packet_timestamp, _first_packet_size} = List.first(packets_received)
+    {last_packet_timestamp, _last_packet_size} = List.last(packets_received)
+
+    if last_packet_timestamp - first_packet_timestamp >= receive_window do
+      cc = %__MODULE__{cc | last_r_hat: 0.0, packets_received: packets_received}
+      update_receiver_bitrate(cc, reference_time, receive_deltas, packet_sizes)
+    else
+      %__MODULE__{cc | packets_received: packets_received}
+    end
+  end
+
   defp update_receiver_bitrate(cc, reference_time, receive_deltas, packet_sizes) do
     %__MODULE__{target_receive_window: receive_window} = cc
 
-    packets_received =
-      receive_deltas
-      |> Enum.zip(packet_sizes)
-      |> Enum.filter(fn {delta, _size} -> delta != :not_received end)
-      |> Enum.scan({reference_time, List.first(packet_sizes)}, fn {recv_delta, size},
-                                                                  {prev_timestamp, _prev_size} ->
-        {prev_timestamp + recv_delta, size}
-      end)
+    packets_received = resolve_receive_deltas(receive_deltas, reference_time, packet_sizes)
 
     {last_packet_timestamp, _last_packet_size} = List.last(packets_received)
 
@@ -279,6 +295,20 @@ defmodule Membrane.RTP.TWCCSender.CongestionControl do
 
     %__MODULE__{cc | last_r_hat: r_hat, packets_received: packets_received}
   end
+
+  defp resolve_receive_deltas(receive_deltas, reference_time, packet_sizes) do
+    receive_deltas
+    |> Enum.zip(packet_sizes)
+    |> Enum.filter(fn {delta, _size} -> delta != :not_received end)
+    |> Enum.scan({reference_time, List.first(packet_sizes)}, fn {recv_delta, size},
+                                                                {prev_timestamp, _prev_size} ->
+      {prev_timestamp + recv_delta, size}
+    end)
+  end
+
+  # wait until we calculate first r_hat as it is needed
+  # both for increasing and decreasing bwe
+  defp update_receiver_bandwidth(%__MODULE__{last_r_hat: nil} = cc, _packet_sizes, _rtt), do: cc
 
   defp update_receiver_bandwidth(%__MODULE__{state: state} = cc, packet_sizes, rtt) do
     case state do
