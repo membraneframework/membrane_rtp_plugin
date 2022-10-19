@@ -58,6 +58,16 @@ defmodule Membrane.RTP.TWCCSender do
   end
 
   @impl true
+  def handle_tick(
+        :bandwidth_report_timer,
+        _ctx,
+        %{cc: %CongestionControl{last_r_hat: nil}} = state
+      ) do
+    # wait until first r_hat is calculated
+    {:ok, state}
+  end
+
+  @impl true
   def handle_tick(:bandwidth_report_timer, _ctx, %{cc: cc} = state) do
     {{:ok, notify: {:bandwidth_estimation, min(cc.a_hat, cc.as_hat)}}, state}
   end
