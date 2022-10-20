@@ -267,7 +267,7 @@ defmodule Membrane.RTP.TWCCSender.CongestionControl do
     {last_packet_timestamp, _last_packet_size} = List.last(packets_received)
 
     if last_packet_timestamp - first_packet_timestamp >= receive_window do
-      cc = %__MODULE__{cc | last_r_hat: 0.0, packets_received: packets_received}
+      cc = %__MODULE__{cc | last_r_hat: 0.0}
       update_receiver_bitrate(cc, reference_time, receive_deltas, packet_sizes)
     else
       %__MODULE__{cc | packets_received: packets_received}
