@@ -14,18 +14,24 @@ defmodule Membrane.RTP.TWCCSender.CongestionControlTest do
          [packet_sizes | remaining_packet_sizes],
          [rtt | remaining_rtts]
        ) do
-    IO.inspect({cc.state, cc.a_hat})
-    Process.sleep(200)
+    IO.inspect({cc.state, cc.last_r_hat, cc.a_hat})
+    # Process.sleep(200)
+
+    cc = CongestionControl.update(
+      cc,
+      reference_time,
+      receive_deltas,
+      send_deltas,
+      packet_sizes,
+      rtt
+    )
+
+    # last_bandiwdth_increase_ts = cc.last_bandwidth_increase_ts - Membrane.Time.as_milliseconds()
+
+    # cc = %CongestionControl{last_bandwidth_increase_ts: last_bandwidth_increase_ts}
 
     simulate_updates(
-      CongestionControl.update(
-        cc,
-        reference_time,
-        receive_deltas,
-        send_deltas,
-        packet_sizes,
-        rtt
-      ),
+      cc,
       remaining_reference_times,
       remaining_receive_deltas,
       remaining_send_deltas,
@@ -34,25 +40,70 @@ defmodule Membrane.RTP.TWCCSender.CongestionControlTest do
     )
   end
 
-  defp make_fixtures(target_bandwidth, n_reports, packets_per_report, report_interval_ms) do
-    reference_times = Enum.map(0..(n_reports - 1), &(Time.milliseconds(report_interval_ms) * &1))
+  defp make_fixtures(bitrate, time, packet_size, packets_per_report) do
+    time = Membrane.Time.as_milliseconds(time) / 1000
+    n_packets = bitrate * time / packet_size
+    packet_interval = round(time / n_packets)
+    n_reports = ceil(n_packets / packets_per_report)
 
     send_deltas =
-      Time.millisecond()
+      packet_interval
       |> List.duplicate(n_reports * packets_per_report)
       |> Enum.chunk_every(packets_per_report)
 
-    avg_packet_size = target_bandwidth / (report_interval_ms / 1000) / packets_per_report
-
     packet_sizes =
-      avg_packet_size
-      |> round()
+      packet_size
       |> List.duplicate(n_reports * packets_per_report)
       |> Enum.chunk_every(packets_per_report)
 
     rtts = 30 |> Time.milliseconds() |> List.duplicate(n_reports)
 
-    {reference_times, send_deltas, packet_sizes, rtts}
+    {send_deltas, n_reports, packet_sizes, rtts}
+  end
+
+  defp setup_cc(cc) do
+    packet_size = 100 * 8
+
+    n_packets = cc.a_hat * (Time.as_milliseconds(cc.target_receive_window) / 1000) / packet_size
+    packet_interval = round(cc.target_receive_window / n_packets)
+    packets_per_report = 4
+    n_reports = ceil(n_packets / 4)
+
+    send_deltas =
+      packet_interval
+      |> List.duplicate(n_reports * packets_per_report)
+      |> Enum.chunk_every(packets_per_report)
+
+    receive_deltas = send_deltas
+
+    {reference_times, _acc} =
+      receive_deltas
+      |> Enum.map(&List.first(&1))
+      |> Enum.map_reduce(0, fn x, offset -> {packets_per_report * x + offset, packets_per_report * x + offset} end)
+
+    reference_times = [0 | reference_times]
+    reference_times = List.delete_at(reference_times, -1)
+
+    rtts = 30 |> Time.milliseconds() |> List.duplicate(n_reports)
+
+    packet_sizes =
+      packet_size
+      |> List.duplicate(n_reports * packets_per_report)
+      |> Enum.chunk_every(packets_per_report)
+
+    cc =
+      simulate_updates(
+        cc,
+        reference_times,
+        receive_deltas,
+        send_deltas,
+        packet_sizes,
+        rtts
+      )
+
+    IO.inspect(cc, label: :cc_setup)
+
+    cc
   end
 
   setup_all do
@@ -62,22 +113,19 @@ defmodule Membrane.RTP.TWCCSender.CongestionControlTest do
 
   describe "Delay-based controller" do
     setup %{cc: %CongestionControl{a_hat: target_bandwidth} = cc} do
-      # Setup:
-      # 20 reports delivered in a regular 200ms interval -> simulating 4s of bandwidth estimation process
-      packet_size = 1200 * 8
-      n_reports = 132
-      report_interval_ms = 30
+      cc = setup_cc(cc)
 
-      packets_per_report = round(target_bandwidth / packet_size * (report_interval_ms / 1000)) |> IO.inspect(label: :packets_per_report)
+      packet_size = 100 * 8
+      packets_per_report = 4
+      time = Membrane.Time.seconds(4)
 
-      {reference_times, send_deltas, packet_sizes, rtts} =
-        make_fixtures(target_bandwidth, n_reports, packets_per_report, report_interval_ms)
+      {send_deltas, n_reports, packet_sizes, rtts} = make_fixtures(target_bandwidth, time, packet_size, packets_per_report)
 
       [
         cc: cc,
         n_reports: n_reports,
         packets_per_report: packets_per_report,
-        reference_times: reference_times,
+        reference_times: [],
         send_deltas: send_deltas,
         packet_sizes: packet_sizes,
         rtts: rtts
@@ -127,6 +175,14 @@ defmodule Membrane.RTP.TWCCSender.CongestionControlTest do
         |> Enum.map(&Time.milliseconds/1)
         |> Enum.map(&List.duplicate(&1, packets_per_report))
 
+      {reference_times, _acc} =
+        receive_deltas
+        |> Enum.map(&List.first(&1))
+        |> Enum.map_reduce(0, fn x, offset -> {15 * x + offset, 15 * x + offset} end)
+
+      reference_times = [0 | reference_times]
+      reference_times = List.delete_at(reference_times, -1)
+
       cc =
         simulate_updates(
           cc,
@@ -175,18 +231,22 @@ defmodule Membrane.RTP.TWCCSender.CongestionControlTest do
       # Setup:
       # 10 reports delivered in a regular 200ms interval -> simulating 2s of bandwidth estimation process
       # 100 packets per report gives us 500 packets/s
-      n_reports = 10
-      packets_per_report = 100
-      report_interval_ms = 200
 
-      {reference_times, send_deltas, packet_sizes, rtts} =
-        make_fixtures(target_bandwidth, n_reports, packets_per_report, report_interval_ms)
+      # Setup:
+      # 10 reports delivered in a regular 200ms interval -> simulating 4s of bandwidth estimation process
+      cc = setup_cc(cc)
+
+      packet_size = 100 * 8
+      packets_per_report = 4
+      time = Membrane.Time.seconds(4)
+
+      {send_deltas, n_reports, packet_sizes, rtts} = make_fixtures(target_bandwidth, time, packet_size, packets_per_report)
 
       [
         cc: cc,
         n_reports: n_reports,
         packets_per_report: packets_per_report,
-        reference_times: reference_times,
+        reference_times: [],
         send_deltas: send_deltas,
         packet_sizes: packet_sizes,
         rtts: rtts
@@ -257,6 +317,7 @@ defmodule Membrane.RTP.TWCCSender.CongestionControlTest do
       assert_in_delta cc.as_hat, initial_bwe, 0.01 * initial_bwe
     end
 
+    @tag :debug2
     test "increases estimated send-side bandwidth if fraction lost is small enough", %{
       cc: %CongestionControl{as_hat: initial_bwe} = cc,
       n_reports: n_reports,

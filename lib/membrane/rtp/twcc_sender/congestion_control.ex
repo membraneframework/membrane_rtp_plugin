@@ -263,6 +263,13 @@ defmodule Membrane.RTP.TWCCSender.CongestionControl do
 
     packets_received = cc.packets_received ++ packets_received
 
+    # assume there is always at least one
+    # received packet in TWCC feedback
+    #
+    # it's unclear whether this is a correct
+    # assumption but at least chrome stops sending
+    # TWCC reports when it didn't receive any
+    # packet from last TWCC report
     {first_packet_timestamp, _first_packet_size} = List.first(packets_received)
     {last_packet_timestamp, _last_packet_size} = List.last(packets_received)
 
