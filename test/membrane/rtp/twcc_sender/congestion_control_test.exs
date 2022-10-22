@@ -203,16 +203,15 @@ defmodule Membrane.RTP.TWCCSender.CongestionControlTest do
       assert cc.a_hat < initial_bwe
     end
 
-    test "bumps a lot estimated receive bandwidth if congesting the channel with rate much higher than the estimation",
-         %{
-           cc: %CongestionControl{a_hat: initial_bwe} = cc,
-           n_reports: n_reports,
-           packets_per_report: packets_per_report,
-           report_interval: report_interval,
-           reference_times: reference_times,
-           send_deltas: send_deltas,
-           rtts: rtts
-         } do
+    test "bumps estimated receive bandwidth after aggressive channel overuse", %{
+      cc: %CongestionControl{a_hat: initial_bwe} = cc,
+      n_reports: n_reports,
+      packets_per_report: packets_per_report,
+      report_interval: report_interval,
+      reference_times: reference_times,
+      send_deltas: send_deltas,
+      rtts: rtts
+    } do
       # when sending with a rate much higher than the bwe
       # we should finally overuse the connection;
       # this should result in changing the sate to `:decrease`
@@ -221,7 +220,7 @@ defmodule Membrane.RTP.TWCCSender.CongestionControlTest do
       # be bumped by a lot
 
       rate = initial_bwe * 10
-      report_interval_ms = 200
+      report_interval_ms = Membrane.Time.to_milliseconds(report_interval)
       packet_size = rate * (report_interval_ms / 1000) / packets_per_report
 
       packet_sizes =

@@ -5,8 +5,8 @@ defmodule Membrane.RTP.TWCCSender.CongestionControl do
 
   require Membrane.Logger
 
-  alias Membrane.Time
   alias Membrane.RTP.TWCCSender.ReceiverRate
+  alias Membrane.Time
 
   # disable Credo naming checks to use the RFC notation
   # credo:disable-for-this-file /(ModuleAttributeNames|VariableNames)/
