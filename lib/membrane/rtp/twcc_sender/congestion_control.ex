@@ -280,7 +280,7 @@ defmodule Membrane.RTP.TWCCSender.CongestionControl do
     time_since_last_update_ms = Time.to_milliseconds(now - last_bandwidth_increase_ts)
 
     a_hat =
-      case bitrate_increase_mode(cc) do
+      case bandwidth_increase_mode(cc) do
         :multiplicative ->
           eta = :math.pow(1.08, min(time_since_last_update_ms / 1000, 1))
           eta * prev_a_hat
@@ -319,9 +319,9 @@ defmodule Membrane.RTP.TWCCSender.CongestionControl do
     %__MODULE__{cc | as_hat: min(as_hat, 1.5 * a_hat)}
   end
 
-  defp bitrate_increase_mode(%__MODULE__{decrease_r_hats: []}), do: :multiplicative
+  defp bandwidth_increase_mode(%__MODULE__{decrease_r_hats: []}), do: :multiplicative
 
-  defp bitrate_increase_mode(%__MODULE__{decrease_r_hats: decrease_r_hats, r_hat: r_hat}) do
+  defp bandwidth_increase_mode(%__MODULE__{decrease_r_hats: decrease_r_hats, r_hat: r_hat}) do
     exp_average = exponential_moving_average(@ema_smoothing_factor, decrease_r_hats)
     std_dev = std_dev(decrease_r_hats)
 
