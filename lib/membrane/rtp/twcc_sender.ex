@@ -8,6 +8,7 @@ defmodule Membrane.RTP.TWCCSender do
   require Bitwise
 
   alias __MODULE__.CongestionControl
+  alias __MODULE__.ReceiverRate
   alias Membrane.RTCP.TransportFeedbackPacket.TWCC
   alias Membrane.RTP
   alias Membrane.RTP.Header
@@ -62,7 +63,7 @@ defmodule Membrane.RTP.TWCCSender do
   def handle_tick(
         :bandwidth_report_timer,
         _ctx,
-        %{cc: %CongestionControl{last_r_hat: nil}} = state
+        %{cc: %CongestionControl{r_hat: %ReceiverRate{value: nil}}} = state
       ) do
     # wait until first r_hat is calculated
     {:ok, state}

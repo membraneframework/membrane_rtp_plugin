@@ -6,6 +6,7 @@ defmodule Membrane.RTP.TWCCSender.CongestionControl do
   require Membrane.Logger
 
   alias Membrane.Time
+  alias Membrane.RTP.TWCCSender.ReceiverRate
 
   # disable Credo naming checks to use the RFC notation
   # credo:disable-for-this-file /(ModuleAttributeNames|VariableNames)/
@@ -54,11 +55,7 @@ defmodule Membrane.RTP.TWCCSender.CongestionControl do
     # latest receiver-side incoming bitrates when we were in the decrease state
     decrease_r_hats: [],
     # latest receiver-side incoming bitrate
-    last_r_hat: nil,
-    # time window for measuring the received bitrate, between [0.5, 1]s (reffered to as "T" in the RFC)
-    target_receive_window: Time.milliseconds(750),
-    # accumulator for packets and their timestamps that have been received through target_receive_interval
-    packets_received: [],
+    r_hat: ReceiverRate.new(Time.milliseconds(750)),
     # time required to trigger a signal (reffered to as "overuse_time_th" in the RFC)
     signal_time_threshold: Time.milliseconds(10)
   ]
@@ -75,9 +72,8 @@ defmodule Membrane.RTP.TWCCSender.CongestionControl do
           last_bandwidth_increase_ts: Time.t(),
           a_hat: float(),
           as_hat: float(),
-          decrease_r_hats: [float()],
-          last_r_hat: float() | nil,
-          packets_received: [{Membrane.Time.t(), non_neg_integer()}]
+          decrease_r_hats: [ReceiverRate.t()],
+          r_hat: ReceiverRate.t()
         }
 
   @spec update(t(), Time.t(), [Time.t() | :not_received], [Time.t()], [pos_integer()], Time.t()) ::
@@ -251,64 +247,19 @@ defmodule Membrane.RTP.TWCCSender.CongestionControl do
 
   defp update_state(cc, _signal), do: cc
 
-  defp update_receiver_bitrate(
-         %__MODULE__{last_r_hat: nil} = cc,
-         reference_time,
-         receive_deltas,
-         packet_sizes
-       ) do
-    %__MODULE__{target_receive_window: receive_window} = cc
-
-    packets_received = resolve_receive_deltas(receive_deltas, reference_time, packet_sizes)
-
-    packets_received = cc.packets_received ++ packets_received
-
-    {first_packet_timestamp, _first_packet_size} = List.first(packets_received)
-    {last_packet_timestamp, _last_packet_size} = List.last(packets_received)
-
-    if last_packet_timestamp - first_packet_timestamp >= receive_window do
-      cc = %__MODULE__{cc | last_r_hat: 0.0}
-      update_receiver_bitrate(cc, reference_time, receive_deltas, packet_sizes)
-    else
-      %__MODULE__{cc | packets_received: packets_received}
-    end
-  end
-
-  defp update_receiver_bitrate(cc, reference_time, receive_deltas, packet_sizes) do
-    %__MODULE__{target_receive_window: receive_window} = cc
-
-    packets_received = resolve_receive_deltas(receive_deltas, reference_time, packet_sizes)
-
-    {last_packet_timestamp, _last_packet_size} = List.last(packets_received)
-
-    treshold = last_packet_timestamp - receive_window
-
-    packets_received =
-      (cc.packets_received ++ packets_received)
-      |> Enum.drop_while(fn {timestamp, _size} -> timestamp < treshold end)
-
-    packet_received_sizes = Enum.map(packets_received, fn {_timestamp, size} -> size end)
-
-    r_hat =
-      1 / (Time.as_milliseconds(cc.target_receive_window) / 1000) *
-        Enum.sum(packet_received_sizes)
-
-    %__MODULE__{cc | last_r_hat: r_hat, packets_received: packets_received}
-  end
-
-  defp resolve_receive_deltas(receive_deltas, reference_time, packet_sizes) do
-    receive_deltas
-    |> Enum.zip(packet_sizes)
-    |> Enum.filter(fn {delta, _size} -> delta != :not_received end)
-    |> Enum.scan({reference_time, List.first(packet_sizes)}, fn {recv_delta, size},
-                                                                {prev_timestamp, _prev_size} ->
-      {prev_timestamp + recv_delta, size}
-    end)
+  defp update_receiver_bitrate(%__MODULE__{} = cc, reference_time, receive_deltas, packet_sizes) do
+    r_hat = ReceiverRate.update(cc.r_hat, reference_time, receive_deltas, packet_sizes)
+    %__MODULE__{cc | r_hat: r_hat}
   end
 
   # wait until we calculate first r_hat as it is needed
   # both for increasing and decreasing bwe
-  defp update_receiver_bandwidth(%__MODULE__{last_r_hat: nil} = cc, _packet_sizes, _rtt), do: cc
+  defp update_receiver_bandwidth(
+         %__MODULE__{r_hat: %ReceiverRate{value: nil}} = cc,
+         _packet_sizes,
+         _rtt
+       ),
+       do: cc
 
   defp update_receiver_bandwidth(%__MODULE__{state: state} = cc, packet_sizes, rtt) do
     case state do
@@ -341,7 +292,7 @@ defmodule Membrane.RTP.TWCCSender.CongestionControl do
           prev_a_hat + max(1000, alpha * expected_packet_size_bits)
       end
 
-    a_hat = min(1.5 * cc.last_r_hat, a_hat)
+    a_hat = min(1.5 * cc.r_hat.value, a_hat)
 
     %__MODULE__{cc | a_hat: a_hat, last_bandwidth_increase_ts: now}
   end
@@ -349,8 +300,8 @@ defmodule Membrane.RTP.TWCCSender.CongestionControl do
   defp decrease_receiver_bandwidth(cc) do
     %__MODULE__{
       cc
-      | a_hat: @beta * cc.last_r_hat,
-        decrease_r_hats: Enum.take([cc.last_r_hat | cc.decrease_r_hats], @decrease_r_hats_size)
+      | a_hat: @beta * cc.r_hat.value,
+        decrease_r_hats: Enum.take([cc.r_hat | cc.decrease_r_hats], @decrease_r_hats_size)
     }
   end
 
@@ -370,11 +321,11 @@ defmodule Membrane.RTP.TWCCSender.CongestionControl do
 
   defp bitrate_increase_mode(%__MODULE__{decrease_r_hats: []}), do: :multiplicative
 
-  defp bitrate_increase_mode(%__MODULE__{decrease_r_hats: decrease_r_hats, last_r_hat: last_r_hat}) do
+  defp bitrate_increase_mode(%__MODULE__{decrease_r_hats: decrease_r_hats, r_hat: r_hat}) do
     exp_average = exponential_moving_average(@ema_smoothing_factor, decrease_r_hats)
     std_dev = std_dev(decrease_r_hats)
 
-    if abs(last_r_hat - exp_average) <= 3 * std_dev do
+    if abs(r_hat.value - exp_average) <= 3 * std_dev do
       :additive
     else
       :multiplicative

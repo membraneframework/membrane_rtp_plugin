@@ -82,7 +82,7 @@ defmodule Membrane.RTP.TWCCSender.CongestionControlTest do
     packets_per_report = 10
     report_interval_ms = 200
     # +1 because of small send deltas and the way r_hat is calculated
-    n_reports = ceil(cc.target_receive_window / Time.milliseconds(report_interval_ms)) + 1
+    n_reports = ceil(cc.r_hat.window / Time.milliseconds(report_interval_ms)) + 1
 
     {reference_times, send_deltas, packet_sizes, rtts} =
       make_fixtures(cc.a_hat, n_reports, packets_per_report, report_interval_ms, 0)
@@ -103,7 +103,7 @@ defmodule Membrane.RTP.TWCCSender.CongestionControlTest do
         rtts
       )
 
-    assert cc.last_r_hat != nil
+    assert cc.r_hat.value != nil
 
     initial_reference_time = List.last(reference_times) + Time.milliseconds(report_interval_ms)
 
