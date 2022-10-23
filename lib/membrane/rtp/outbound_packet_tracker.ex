@@ -11,18 +11,23 @@ defmodule Membrane.RTP.OutboundPacketTracker do
   require Membrane.Logger
   alias Membrane.RTCP.FeedbackPacket.{FIR, PLI}
   alias Membrane.RTP.Session.SenderReport
-  alias Membrane.{Buffer, Payload, RTCPEvent, RTP, Time}
+  alias Membrane.{Buffer, Payload, RemoteStream, RTCPEvent, RTP, Time}
 
-  def_input_pad :input, caps: :any, demand_mode: :auto
+  def_input_pad :input, caps: RTP, demand_mode: :auto
 
-  def_output_pad :output, caps: :any, demand_mode: :auto
+  def_output_pad :output,
+    caps: {RemoteStream, type: :packetized, content_format: RTP},
+    demand_mode: :auto
 
   def_input_pad :rtcp_input,
     availability: :on_request,
     caps: :any,
     demand_mode: :auto
 
-  def_output_pad :rtcp_output, availability: :on_request, caps: :any, demand_mode: :auto
+  def_output_pad :rtcp_output,
+    availability: :on_request,
+    caps: {RemoteStream, type: :packetized, content_format: RTCP},
+    demand_mode: :auto
 
   def_options ssrc: [spec: RTP.ssrc_t()],
               payload_type: [spec: RTP.payload_type_t()],
@@ -84,6 +89,16 @@ defmodule Membrane.RTP.OutboundPacketTracker do
   end
 
   @impl true
+  def handle_pad_added(
+        Pad.ref(:rtcp_output, _id) = pad,
+        %{playback: :playing},
+        %{rtcp_output_pad: nil} = state
+      ) do
+    caps = %RemoteStream{type: :packetized, content_format: RTCP}
+    {{:ok, caps: {pad, caps}}, %{state | rtcp_output_pad: pad}}
+  end
+
+  @impl true
   def handle_pad_added(Pad.ref(:rtcp_output, _id) = pad, _ctx, %{rtcp_output_pad: nil} = state) do
     {:ok, %{state | rtcp_output_pad: pad}}
   end
@@ -91,6 +106,17 @@ defmodule Membrane.RTP.OutboundPacketTracker do
   @impl true
   def handle_pad_added(Pad.ref(:rtcp_output, _id), _ctx, _state) do
     raise "rtcp_output pad can get linked just once"
+  end
+
+  @impl true
+  def handle_caps(:input, _caps, _ctx, state) do
+    caps = %RemoteStream{type: :packetized, content_format: RTP}
+    {{:ok, caps: {:output, caps}}, state}
+  end
+
+  @impl true
+  def handle_caps(_pad, _caps, _ctx, state) do
+    {:ok, state}
   end
 
   @impl true
@@ -110,6 +136,16 @@ defmodule Membrane.RTP.OutboundPacketTracker do
   @impl true
   def handle_event(pad, event, ctx, state) do
     super(pad, event, ctx, state)
+  end
+
+  @impl true
+  def handle_prepared_to_playing(_ctx, state) do
+    if state.rtcp_output_pad do
+      caps = %RemoteStream{type: :packetized, content_format: RTCP}
+      {{:ok, caps: {state.rtcp_output_pad, caps}}, state}
+    else
+      {:ok, state}
+    end
   end
 
   @impl true
