@@ -1,4 +1,4 @@
-defmodule Membrane.RTP.Serializer do
+defmodule Membrane.RTP.HeaderGenerator do
   @moduledoc """
   Given following RTP payloads and their minimal metadata, creates their proper header information,
   incrementing timestamps and sequence numbers for each packet. Header information then is put
