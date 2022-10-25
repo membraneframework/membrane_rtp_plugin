@@ -1,4 +1,4 @@
-defmodule Membrane.RTP.OutboundPacketTracker do
+defmodule Membrane.RTP.OutboundTrackingSerializer do
   @moduledoc """
   Tracks statistics of outbound packets.
 
@@ -127,7 +127,7 @@ defmodule Membrane.RTP.OutboundPacketTracker do
         state
       )
       when keyframe_request in [PLI, FIR] do
-    # PLI or FIR reaching OutboundPacketTracker means the receiving peer sent it
+    # PLI or FIR reaching OutboundTrackingSerializer means the receiving peer sent it
     # We need to pass it to the sending peer's RTCP.Receiver (in StreamReceiveBin) to get translated again into FIR/PLI with proper SSRCs
     # and then sent to the sender. So the KeyframeRequestEvent, like salmon, starts an upstream journey here trying to reach that peer.
     {{:ok, event: {:input, %Membrane.KeyframeRequestEvent{}}}, state}
