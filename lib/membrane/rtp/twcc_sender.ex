@@ -65,7 +65,7 @@ defmodule Membrane.RTP.TWCCSender do
         _ctx,
         %{cc: %CongestionControl{r_hat: %ReceiverRate{value: nil}}} = state
       ) do
-    # wait until first r_hat is calculated
+    # wait until the first r_hat is calculated
     {:ok, state}
   end
 

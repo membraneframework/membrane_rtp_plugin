@@ -214,9 +214,9 @@ defmodule Membrane.RTP.TWCCSender.CongestionControlTest do
     } do
       # when sending with a rate much higher than the bwe
       # we should finally overuse the connection;
-      # this should result in changing the sate to `:decrease`
-      # and setting the bwe to 0.85 * r_hat where r_hat is
-      # the last receiver bitrate i.e. our bwe should
+      # this should result in changing the state to `:decrease`
+      # and setting the bwe to 0.85 * r_hat, where r_hat is
+      # the last receiver bitrate. That means our bwe should
       # be bumped by a lot
 
       rate = initial_bwe * 10
