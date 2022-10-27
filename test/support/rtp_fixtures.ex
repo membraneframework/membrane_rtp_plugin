@@ -51,7 +51,7 @@ defmodule Membrane.RTP.Fixtures do
 
     Enum.map(range, fn packet_number ->
       <<2::2, 0::1, 0::1, 0::4, 0::1, 14::7, base_seqnumber + packet_number::16,
-        base_timestamp + 30_000 * packet_number::32, ssrc::32, sample_packet_payload()::binary()>>
+        base_timestamp + 30_000 * packet_number::32, ssrc::32, sample_packet_payload()::binary>>
     end)
   end
 end

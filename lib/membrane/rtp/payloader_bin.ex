@@ -32,7 +32,7 @@ defmodule Membrane.RTP.PayloaderBin do
     links = [
       link_bin_input()
       |> to(:payloader, opts.payloader)
-      |> to(:serializer, %RTP.Serializer{
+      |> to(:header_generator, %RTP.HeaderGenerator{
         ssrc: opts.ssrc,
         payload_type: opts.payload_type,
         clock_rate: opts.clock_rate,
