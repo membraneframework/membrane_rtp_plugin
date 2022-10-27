@@ -25,8 +25,8 @@ defmodule Membrane.RTP.TWCCSender.CongestionControl do
   # alpha factor for exponential moving average
   @ema_smoothing_factor 0.95
 
-  @last_receive_rates_size 25
-  @decrease_r_hats_size 25
+  @last_receive_rates_kept 25
+  @decrease_r_hats_kept 25
 
   defstruct [
     # inter-packet delay estimate (in ms)
@@ -51,9 +51,9 @@ defmodule Membrane.RTP.TWCCSender.CongestionControl do
     a_hat: 300_000.0,
     # sender-side bandwidth estimation in bps
     as_hat: 300_000.0,
-    # latest receiver-side incoming bitrates when we were in the decrease state
+    # latest receiver-side incoming bitrate estimations when we were in the decrease state
     decrease_r_hats: [],
-    # latest receiver-side incoming bitrate
+    # latest receiver-side incoming bitrate estimation
     r_hat: ReceiverRate.new(Time.milliseconds(750)),
     # time required to trigger a signal (reffered to as "overuse_time_th" in the RFC)
     signal_time_threshold: Time.milliseconds(10)
@@ -168,7 +168,7 @@ defmodule Membrane.RTP.TWCCSender.CongestionControl do
       | m_hat: m_hat,
         var_v_hat: var_v_hat,
         e: e,
-        last_receive_rates: Enum.take(last_receive_rates, @last_receive_rates_size),
+        last_receive_rates: Enum.take(last_receive_rates, @last_receive_rates_kept),
         del_var_th: del_var_th
     }
 
@@ -300,7 +300,7 @@ defmodule Membrane.RTP.TWCCSender.CongestionControl do
     %__MODULE__{
       cc
       | a_hat: @beta * cc.r_hat.value,
-        decrease_r_hats: Enum.take([cc.r_hat | cc.decrease_r_hats], @decrease_r_hats_size)
+        decrease_r_hats: Enum.take([cc.r_hat | cc.decrease_r_hats], @decrease_r_hats_kept)
     }
   end
 
