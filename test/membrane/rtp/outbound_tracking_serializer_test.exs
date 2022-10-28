@@ -2,7 +2,7 @@ defmodule Membrane.RTP.OutboundTrackingSerializerTest do
   use ExUnit.Case, async: true
 
   alias Membrane.Buffer
-  alias Membrane.RTP.OutboundTrackingSerializer
+  alias Membrane.RTP.{OutboundTrackingSerializer, Packet}
 
   test "generates padding packets" do
     serializer_state = %OutboundTrackingSerializer.State{}
@@ -27,5 +27,7 @@ defmodule Membrane.RTP.OutboundTrackingSerializerTest do
              OutboundTrackingSerializer.handle_process(:input, buffer, nil, serializer_state)
 
     assert byte_size(payload) == 256
+    assert {:ok, %{has_padding?: true, packet: %Packet{payload: <<>>}}} =
+             Packet.parse(payload, false)
   end
 end
