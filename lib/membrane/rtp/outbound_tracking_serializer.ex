@@ -13,6 +13,8 @@ defmodule Membrane.RTP.OutboundTrackingSerializer do
   alias Membrane.RTP.Session.SenderReport
   alias Membrane.{Buffer, Payload, RemoteStream, RTCPEvent, RTP, Time}
 
+  @padding_packet_size 256
+
   def_input_pad :input, caps: RTP, demand_mode: :auto
 
   def_output_pad :output,
@@ -163,6 +165,12 @@ defmodule Membrane.RTP.OutboundTrackingSerializer do
         %{extension | identifier: Map.fetch!(state.extension_mapping, extension.identifier)}
       end)
 
+    is_padding_packet? = Map.get(rtp_metadata, :is_padding?, false)
+
+    if is_padding_packet? and buffer.payload != <<>> do
+      raise "Incorrect padding packet. Padding packets must have empty payload"
+    end
+
     header =
       struct(RTP.Header, %{
         rtp_metadata
@@ -173,7 +181,7 @@ defmodule Membrane.RTP.OutboundTrackingSerializer do
 
     payload =
       RTP.Packet.serialize(%RTP.Packet{header: header, payload: buffer.payload},
-        align_to: state.alignment
+        align_to: if(is_padding_packet?, do: @padding_packet_size, else: state.alignment)
       )
 
     buffer = %Buffer{buffer | payload: payload, metadata: metadata}

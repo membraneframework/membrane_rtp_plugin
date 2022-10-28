@@ -24,7 +24,8 @@ defmodule Membrane.RTP.Utils do
       0 ->
         {payload, 0}
 
-      padding_size ->
+      remainder ->
+        padding_size = align_to - remainder
         zeros_no = padding_size - 1
         {<<payload::binary, 0::size(zeros_no)-unit(8), padding_size>>, padding_size}
     end
