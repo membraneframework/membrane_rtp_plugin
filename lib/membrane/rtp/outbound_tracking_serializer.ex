@@ -13,7 +13,7 @@ defmodule Membrane.RTP.OutboundTrackingSerializer do
   alias Membrane.RTP.Session.SenderReport
   alias Membrane.{Buffer, Payload, RemoteStream, RTCPEvent, RTP, Time}
 
-  @padding_packet_size 256
+  @padding_packet_size 255
 
   def_input_pad :input, caps: RTP, demand_mode: :auto
 
