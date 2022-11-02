@@ -11,11 +11,11 @@ defmodule Membrane.RTP.TWCCSender.ReceiverRate do
           # time window for measuring the received bitrate, between [0.5, 1]s (reffered to as "T" in the draft)
           window: Time.t(),
           # accumulator for packets and their timestamps that have been received in last `window` time
-          packets_received: :queue.queue({Time.t(), pos_integer()})
+          packets_received: Qex.t({Time.t(), pos_integer()})
         }
 
   @enforce_keys [:window]
-  defstruct @enforce_keys ++ [:value, packets_received: :queue.new()]
+  defstruct @enforce_keys ++ [:value, packets_received: Qex.new()]
 
   @spec new(Time.t()) :: t()
   def new(window), do: %__MODULE__{window: window}
@@ -24,10 +24,10 @@ defmodule Membrane.RTP.TWCCSender.ReceiverRate do
   def update(%__MODULE__{value: nil} = rr, reference_time, receive_deltas, packet_sizes) do
     packets_received = resolve_receive_deltas(receive_deltas, reference_time, packet_sizes)
 
-    packets_received = :queue.join(rr.packets_received, packets_received)
+    packets_received = Qex.join(rr.packets_received, packets_received)
 
-    {first_packet_timestamp, _first_packet_size} = :queue.get(packets_received)
-    {last_packet_timestamp, _last_packet_size} = :queue.get_r(packets_received)
+    {first_packet_timestamp, _first_packet_size} = Qex.first!(packets_received)
+    {last_packet_timestamp, _last_packet_size} = Qex.last!(packets_received)
 
     if last_packet_timestamp - first_packet_timestamp >= rr.window do
       rr = %__MODULE__{rr | value: 0.0}
@@ -40,18 +40,20 @@ defmodule Membrane.RTP.TWCCSender.ReceiverRate do
   def update(%__MODULE__{} = rr, reference_time, receive_deltas, packet_sizes) do
     packets_received = resolve_receive_deltas(receive_deltas, reference_time, packet_sizes)
 
-    {last_packet_timestamp, _last_packet_size} = :queue.get_r(packets_received)
+    {last_packet_timestamp, _last_packet_size} = Qex.last!(packets_received)
 
     treshold = last_packet_timestamp - rr.window
 
-    packets_received = :queue.join(rr.packets_received, packets_received)
-
     packets_received =
-      :queue.filter(fn {timestamp, _size} -> timestamp > treshold end, packets_received)
+      rr.packets_received
+      |> Qex.join(packets_received)
+      |> Enum.drop_while(fn {timestamp, _size} -> timestamp < treshold end)
+      |> Qex.new()
 
-    sum = :queue.fold(fn {_timestamp, size}, size_sum -> size + size_sum end, 0, packets_received)
+    received_sizes_sum =
+      Enum.reduce(packets_received, 0, fn {_timestamp, size}, acc -> acc + size end)
 
-    value = 1 / (Time.as_milliseconds(rr.window) / 1000) * sum
+    value = 1 / (Time.as_milliseconds(rr.window) / 1000) * received_sizes_sum
 
     %__MODULE__{rr | value: value, packets_received: packets_received}
   end
@@ -60,12 +62,12 @@ defmodule Membrane.RTP.TWCCSender.ReceiverRate do
     receive_deltas
     |> Enum.zip(packet_sizes)
     |> Enum.filter(fn {delta, _size} -> delta != :not_received end)
-    |> Enum.reduce({reference_time, :queue.new()}, fn {recv_delta, size},
-                                                      {prev_timestamp, packets_received} ->
+    |> Enum.map_reduce(reference_time, fn {recv_delta, size}, prev_timestamp ->
       receive_timestamp = prev_timestamp + recv_delta
-      {receive_timestamp, :queue.in({receive_timestamp, size}, packets_received)}
+      {{receive_timestamp, size}, receive_timestamp}
     end)
     # take the packets_received
-    |> elem(1)
+    |> elem(0)
+    |> Qex.new()
   end
 end
