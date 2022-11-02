@@ -245,7 +245,8 @@ defmodule Membrane.RTP.TWCCSender.CongestionControlTest do
         )
 
       assert cc.state == :decrease
-      assert_in_delta cc.a_hat / rate, 0.85, 0.95
+      assert cc.a_hat >= 0.80 * rate
+      assert cc.a_hat <= 0.95 * rate
     end
 
     test "starts to increase estimated receive bandwidth if interpacket delay decreases", %{
