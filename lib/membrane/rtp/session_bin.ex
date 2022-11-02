@@ -337,6 +337,7 @@ defmodule Membrane.RTP.SessionBin do
               rtcp_receiver_report_interval: nil,
               rtcp_sender_report_interval: nil,
               receiver_ssrc_generator: nil,
+              awaiting_rtx_links: %{},
               rtcp_sender_report_data: %Session.SenderReport.Data{},
               secure?: false,
               srtp_policies: nil,
@@ -432,20 +433,16 @@ defmodule Membrane.RTP.SessionBin do
 
     {local_ssrc, state} = add_ssrc(ssrc, state)
 
-    rtp_stream_name = {:stream_receive_bin, ssrc}
-
-    new_children = %{
-      rtp_stream_name => %RTP.StreamReceiveBin{
-        clock_rate: clock_rate,
-        depayloader: depayloader,
-        extensions: extensions,
-        local_ssrc: local_ssrc,
-        remote_ssrc: ssrc,
-        rtcp_report_interval: state.rtcp_receiver_report_interval,
-        telemetry_label: telemetry_label,
-        secure?: state.secure?,
-        srtp_policies: state.srtp_policies
-      }
+    stream_receive_bin_opts = %RTP.StreamReceiveBin{
+      clock_rate: clock_rate,
+      depayloader: depayloader,
+      extensions: extensions,
+      local_ssrc: local_ssrc,
+      remote_ssrc: ssrc,
+      rtcp_report_interval: state.rtcp_receiver_report_interval,
+      telemetry_label: telemetry_label,
+      secure?: state.secure?,
+      srtp_policies: state.srtp_policies
     }
 
     {rtp_extensions, maybe_link_twcc_receiver, state} =
@@ -460,24 +457,25 @@ defmodule Membrane.RTP.SessionBin do
       link(:ssrc_router)
       |> via_out(Pad.ref(:output, ssrc), options: ssrc_router_pad_options)
       |> then(maybe_link_twcc_receiver)
-      |> to(rtp_stream_name)
+      |> to({:stream_receive_bin, ssrc}, stream_receive_bin_opts)
 
-    acc = {new_children, router_link}
-
-    {new_children, router_link} =
+    router_link =
       rtp_extensions
-      |> Enum.reduce(acc, fn {extension_name, config}, {new_children, new_link} ->
-        extension_id = {extension_name, ssrc}
-
-        {
-          Map.merge(new_children, %{extension_id => config}),
-          new_link |> to(extension_id)
-        }
+      |> Enum.reduce(router_link, fn {extension_name, config}, new_link ->
+        new_link |> to({extension_name, ssrc}, config)
       end)
 
-    new_links = [router_link |> to_bin_output(pad)]
+    new_links = [
+      router_link
+      |> via_in(Pad.ref(:input, ssrc))
+      |> to({:rtx_funnel, ssrc}, Membrane.Funnel)
+      |> to_bin_output(pad)
+    ]
 
-    {{:ok, spec: %ParentSpec{children: new_children, links: new_links}}, state}
+    {rtx_links, awaiting_rtx_links} = Map.pop(state.awaiting_rtx_links, ssrc, [])
+    state = %State{state | awaiting_rtx_links: awaiting_rtx_links}
+
+    {{:ok, spec: %ParentSpec{links: new_links ++ rtx_links}}, state}
   end
 
   @impl true
@@ -647,6 +645,37 @@ defmodule Membrane.RTP.SessionBin do
   @impl true
   def handle_notification({:twcc_feedback, _feedback} = msg, _rtcp_parser, _ctx, state) do
     {{:ok, forward: {:twcc_sender, msg}}, state}
+  end
+
+  @impl true
+  def handle_other({:rtx, ssrc, original_ssrc, for: for}, ctx, state) do
+    links = build_rtx_links(ssrc, original_ssrc, for, state.srtp_policies)
+
+    if Map.has_key?(ctx.pads, Pad.ref(:output, original_ssrc)) do
+      {{:ok, spec: %ParentSpec{links: links}}, state}
+    else
+      awaiting_rtx_links = Map.put(state.awaiting_rtx_links, original_ssrc, links)
+      {:ok, %{state | awaiting_rtx_links: awaiting_rtx_links}}
+    end
+  end
+
+  defp build_rtx_links(ssrc, original_ssrc, for, srtp_policies) do
+    rtx_parser_opts = %RTP.RtxParser{
+      rtx_payload_type: for.rtx.payload_type,
+      payload_type: for.payload_type
+    }
+
+    [
+      link(:ssrc_router)
+      |> via_out(Pad.ref(:output, ssrc))
+      |> to(
+        {:decryptor, ssrc},
+        struct(Membrane.SRTP.Decryptor, %{policies: srtp_policies})
+      )
+      |> to({:rtx, ssrc}, rtx_parser_opts)
+      |> via_in(Pad.ref(:input, ssrc))
+      |> to({:rtx_funnel, original_ssrc})
+    ]
   end
 
   defp add_ssrc(remote_ssrc, state) do
