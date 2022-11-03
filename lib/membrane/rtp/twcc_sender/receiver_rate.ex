@@ -7,6 +7,7 @@ defmodule Membrane.RTP.TWCCSender.ReceiverRate do
   alias Membrane.Time
 
   @type t() :: %__MODULE__{
+          # estimated bitrate in bps
           value: float() | nil,
           # time window for measuring the received bitrate, between [0.5, 1]s (reffered to as "T" in the draft)
           window: Time.t(),
@@ -30,8 +31,7 @@ defmodule Membrane.RTP.TWCCSender.ReceiverRate do
     {last_packet_timestamp, _last_packet_size} = Qex.last!(packets_received)
 
     if last_packet_timestamp - first_packet_timestamp >= rr.window do
-      rr = %__MODULE__{rr | value: 0.0}
-      update(rr, reference_time, receive_deltas, packet_sizes)
+      do_update(rr, packets_received)
     else
       %__MODULE__{rr | packets_received: packets_received}
     end
@@ -39,15 +39,17 @@ defmodule Membrane.RTP.TWCCSender.ReceiverRate do
 
   def update(%__MODULE__{} = rr, reference_time, receive_deltas, packet_sizes) do
     packets_received = resolve_receive_deltas(receive_deltas, reference_time, packet_sizes)
+    do_update(rr, packets_received)
+  end
 
+  defp do_update(rr, packets_received) do
     {last_packet_timestamp, _last_packet_size} = Qex.last!(packets_received)
-
-    treshold = last_packet_timestamp - rr.window
+    threshold = last_packet_timestamp - rr.window
 
     packets_received =
       rr.packets_received
       |> Qex.join(packets_received)
-      |> Enum.drop_while(fn {timestamp, _size} -> timestamp < treshold end)
+      |> Enum.drop_while(fn {timestamp, _size} -> timestamp < threshold end)
       |> Qex.new()
 
     received_sizes_sum =
@@ -61,7 +63,7 @@ defmodule Membrane.RTP.TWCCSender.ReceiverRate do
   defp resolve_receive_deltas(receive_deltas, reference_time, packet_sizes) do
     receive_deltas
     |> Enum.zip(packet_sizes)
-    |> Enum.filter(fn {delta, _size} -> delta != :not_received end)
+    |> Enum.reject(fn {delta, _size} -> delta == :not_received end)
     |> Enum.map_reduce(reference_time, fn {recv_delta, size}, prev_timestamp ->
       receive_timestamp = prev_timestamp + recv_delta
       {{receive_timestamp, size}, receive_timestamp}

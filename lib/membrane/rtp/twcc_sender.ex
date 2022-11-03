@@ -7,8 +7,7 @@ defmodule Membrane.RTP.TWCCSender do
 
   require Bitwise
 
-  alias __MODULE__.CongestionControl
-  alias __MODULE__.ReceiverRate
+  alias __MODULE__.{CongestionControl, ReceiverRate}
   alias Membrane.RTCP.TransportFeedbackPacket.TWCC
   alias Membrane.RTP
   alias Membrane.RTP.Header
