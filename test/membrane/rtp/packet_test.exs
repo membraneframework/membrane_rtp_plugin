@@ -90,4 +90,41 @@ defmodule Membrane.RTP.PacketTest do
     assert ^packet = parsed
     assert Packet.serialize(parsed) == serialized
   end
+
+  test "builds correct padding packet" do
+    packet = %Packet{
+      payload: <<>>,
+      header: Fixtures.sample_header()
+    }
+
+    serialized = Packet.serialize(packet, is_padding_packet?: true)
+
+    assert {:ok, %{has_padding?: true, packet: %Packet{payload: <<>>}}} =
+             Packet.parse(serialized, false)
+
+    # expected size of the padding packet - the size of the header
+    expected_padding_size = 255
+    expected_zeros = expected_padding_size - 1
+
+    assert <<_header::binary-size(12), 0::integer-size(expected_zeros)-unit(8),
+             ^expected_padding_size::8>> = serialized
+  end
+
+  test "correctly aligns padding packet" do
+    packet = %Packet{
+      payload: <<>>,
+      header: Fixtures.sample_header()
+    }
+
+    serialized = Packet.serialize(packet, is_padding_packet?: true, align_to: 16)
+    assert byte_size(serialized) == 256
+  end
+
+  test "refuses to build a padding packet with non-empty payload" do
+    packet = Fixtures.sample_packet()
+
+    assert_raise RuntimeError, fn ->
+      Packet.serialize(packet, is_padding_packet?: true)
+    end
+  end
 end
