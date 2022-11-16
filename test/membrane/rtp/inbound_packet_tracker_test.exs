@@ -2,8 +2,12 @@ defmodule Membrane.RTP.InboundPacketTrackerTest do
   use ExUnit.Case, async: true
   use Bunch
 
+  import Membrane.Testing.Assertions
+
+  alias Membrane.{Buffer, ParentSpec}
   alias Membrane.RTP.InboundPacketTracker
   alias Membrane.RTP.BufferFactory
+  alias Membrane.Testing.{Source, Sink, Pipeline}
 
   require Bitwise
 
@@ -85,6 +89,62 @@ defmodule Membrane.RTP.InboundPacketTrackerTest do
                InboundPacketTracker.handle_process(:input, buffer, nil, state)
 
       assert buffer.metadata.rtp.sequence_number == 100
+    end
+  end
+
+  @max_seq_number 0xFFFF
+
+  test "sends RetransmissionRequest when there are missing packets" do
+    buffers =
+      [
+        -100..100,
+        110..130,
+        100..110
+      ]
+      |> Enum.flat_map(&Enum.to_list/1)
+      |> Enum.map(fn i ->
+        seq_num = rem(@max_seq_number + i, @max_seq_number)
+        timestamp = 10 * seq_num
+
+        %Buffer{
+          metadata: %{
+            rtp: %{
+              sequence_number: seq_num,
+              timestamp: timestamp,
+              ssrc: 0,
+              cssrc: [],
+              extensions: [],
+              marker: false
+            }
+          },
+          pts: timestamp,
+          dts: timestamp,
+          payload: <<"BUFFER", seq_num::16-unsigned>>
+        }
+      end)
+
+    generator_fun = fn state, size ->
+      {buffers, state} = Enum.split(state, size)
+
+      eos_actions = if state == [], do: [end_of_stream: :output], else: []
+
+      {[buffer: {:output, buffers}] ++ eos_actions, state}
+    end
+
+    children = [
+      source: %Source{output: {buffers, generator_fun}, caps: %Membrane.RTP{}},
+      tracker: %InboundPacketTracker{clock_rate: 90_000},
+      sink: Sink
+    ]
+
+    {:ok, pipeline} = Pipeline.start_link(links: ParentSpec.link_linear(children))
+    on_exit(fn -> Pipeline.terminate(pipeline, blocking?: true) end)
+    Pipeline.execute_actions(pipeline, playback: :playing)
+    assert_pipeline_playback_changed(pipeline, :prepared, :playing)
+    assert_end_of_stream(pipeline, :sink)
+
+    for buffer <- buffers do
+      assert_sink_buffer(pipeline, :sink, ^buffer)
     end
   end
 end
