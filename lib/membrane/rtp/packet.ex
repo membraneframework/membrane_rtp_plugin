@@ -2,14 +2,11 @@ defmodule Membrane.RTP.Packet do
   @moduledoc """
   Defines a struct describing an RTP packet and a way to parse and serialize it.
   Based on [RFC3550](https://tools.ietf.org/html/rfc3550#page-13)
-
   Supports only one-byte header from [RFC8285](https://datatracker.ietf.org/doc/html/rfc8285#section-4.2),
   as according to the document this form is preferred and it must be supported by all receivers.
   """
 
   alias Membrane.RTP.{Header, Utils}
-
-  @max_padding_size 255
 
   @type t :: %__MODULE__{
           header: Header.t(),
@@ -30,50 +27,27 @@ defmodule Membrane.RTP.Packet do
   def identify(_packet), do: :rtp
 
   @spec serialize(t, align_to: pos_integer()) :: binary
-  def serialize(%__MODULE__{} = packet, options \\ []) do
-    align_to = Keyword.get(options, :align_to, 1)
-    is_padding_packet? = Keyword.get(options, :is_padding_packet?, false)
-
-    serialized_header = serialize_header(packet.header, is_padding_packet?)
-
-    payload =
-      cond do
-        is_padding_packet? and packet.payload == <<>> ->
-          padding_size =
-            @max_padding_size - rem(@max_padding_size + byte_size(serialized_header), align_to)
-
-          zeros = padding_size - 1
-          <<0::integer-size(zeros)-unit(8), padding_size::8>>
-
-        is_padding_packet? ->
-          raise "Payload of padding packet must be empty binary"
-
-        true ->
-          packet.payload
-      end
-
-    case Utils.align(serialized_header <> payload, align_to) do
-      {serialized, 0} ->
-        serialized
-
-      {serialized, _padding} when not is_padding_packet? ->
-        <<pre::2, _has_padding::1, post::bitstring>> = serialized
-        <<pre::2, 1::1, post::bitstring>>
-
-      {_serialized, _padding} ->
-        raise "Padding packet should be always aligned. This clause indicates an error in the code."
-    end
-  end
-
-  defp serialize_header(%Header{version: 2} = header, has_padding?) do
-    has_padding_flag = if has_padding?, do: 1, else: 0
+  def serialize(%__MODULE__{} = packet, [align_to: align_to] \\ [align_to: 1]) do
+    %__MODULE__{header: header, payload: payload} = packet
+    %Header{version: 2} = header
+    has_padding = 0
     has_extension = if header.extensions == [], do: 0, else: 1
     marker = if header.marker, do: 1, else: 0
     csrcs = Enum.map_join(header.csrcs, &<<&1::32>>)
 
-    <<header.version::2, has_padding_flag::1, has_extension::1, length(header.csrcs)::4,
-      marker::1, header.payload_type::7, header.sequence_number::16, header.timestamp::32,
-      header.ssrc::32, csrcs::binary, serialize_header_extensions(header.extensions)::binary>>
+    serialized =
+      <<header.version::2, has_padding::1, has_extension::1, length(header.csrcs)::4, marker::1,
+        header.payload_type::7, header.sequence_number::16, header.timestamp::32, header.ssrc::32,
+        csrcs::binary, serialize_header_extensions(header.extensions)::binary, payload::binary>>
+
+    case Utils.align(serialized, align_to) do
+      {serialized, 0} ->
+        serialized
+
+      {serialized, _padding} ->
+        <<pre::2, _has_padding::1, post::bitstring>> = serialized
+        <<pre::2, 1::1, post::bitstring>>
+    end
   end
 
   defp serialize_header_extensions([]), do: <<>>
