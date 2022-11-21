@@ -13,8 +13,6 @@ defmodule Membrane.RTP.OutboundTrackingSerializer do
   alias Membrane.RTP.Session.SenderReport
   alias Membrane.{Buffer, Payload, RemoteStream, RTCPEvent, RTP, Time}
 
-  @padding_packet_size 255
-
   def_input_pad :input, caps: RTP, demand_mode: :auto
 
   def_output_pad :output,
@@ -136,6 +134,39 @@ defmodule Membrane.RTP.OutboundTrackingSerializer do
   end
 
   @impl true
+  def handle_event(:input, %RTP.GeneratePaddingPacketEvent{} = ev, _ctx, state) do
+    supported_extensions = Map.keys(state.extension_mapping)
+
+    extensions =
+      ev.extensions
+      |> Enum.filter(fn extension -> extension.identifier in supported_extensions end)
+      |> Enum.map(fn extension ->
+        %{extension | identifier: Map.fetch!(state.extension_mapping, extension.identifier)}
+      end)
+
+    header = %RTP.Header{
+      ssrc: state.ssrc,
+      marker: ev.marker,
+      payload_type: ev.payload_type,
+      timestamp: ev.timestamp,
+      sequence_number: ev.sequence_number,
+      csrcs: ev.csrcs,
+      extensions: extensions
+    }
+
+    zeros_no = ev.size - 1
+    payload = <<0::size(zeros_no)-unit(8), zeros_no>>
+
+    packet =
+      %RTP.Packet{header: header, payload: payload}
+      |> RTP.Packet.serialize(has_padding: true)
+
+    buffer = %Buffer{payload: packet, metadata: %{rtp: Map.from_struct(header)}}
+
+    {{:ok, buffer: {:output, buffer}}, update_stats(buffer, state)}
+  end
+
+  @impl true
   def handle_event(pad, event, ctx, state) do
     super(pad, event, ctx, state)
   end
@@ -165,12 +196,6 @@ defmodule Membrane.RTP.OutboundTrackingSerializer do
         %{extension | identifier: Map.fetch!(state.extension_mapping, extension.identifier)}
       end)
 
-    is_padding_packet? = Map.get(rtp_metadata, :is_padding?, false)
-
-    if is_padding_packet? and buffer.payload != <<>> do
-      raise "Incorrect padding packet. Padding packets must have empty payload"
-    end
-
     header =
       struct(RTP.Header, %{
         rtp_metadata
@@ -181,7 +206,7 @@ defmodule Membrane.RTP.OutboundTrackingSerializer do
 
     payload =
       RTP.Packet.serialize(%RTP.Packet{header: header, payload: buffer.payload},
-        align_to: if(is_padding_packet?, do: @padding_packet_size, else: state.alignment)
+        align_to: state.alignment
       )
 
     buffer = %Buffer{buffer | payload: payload, metadata: metadata}

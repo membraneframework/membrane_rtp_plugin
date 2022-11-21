@@ -2,6 +2,7 @@ defmodule Membrane.RTP.Packet do
   @moduledoc """
   Defines a struct describing an RTP packet and a way to parse and serialize it.
   Based on [RFC3550](https://tools.ietf.org/html/rfc3550#page-13)
+
   Supports only one-byte header from [RFC8285](https://datatracker.ietf.org/doc/html/rfc8285#section-4.2),
   as according to the document this form is preferred and it must be supported by all receivers.
   """
@@ -26,11 +27,11 @@ defmodule Membrane.RTP.Packet do
 
   def identify(_packet), do: :rtp
 
-  @spec serialize(t, align_to: pos_integer()) :: binary
-  def serialize(%__MODULE__{} = packet, [align_to: align_to] \\ [align_to: 1]) do
+  @spec serialize(t, align_to: pos_integer(), has_padding: boolean()) :: binary
+  def serialize(%__MODULE__{} = packet, opts \\ [align_to: 1, has_padding: false]) do
     %__MODULE__{header: header, payload: payload} = packet
     %Header{version: 2} = header
-    has_padding = 0
+    has_padding = if opts[:has_padding], do: 1, else: 0
     has_extension = if header.extensions == [], do: 0, else: 1
     marker = if header.marker, do: 1, else: 0
     csrcs = Enum.map_join(header.csrcs, &<<&1::32>>)
@@ -40,7 +41,7 @@ defmodule Membrane.RTP.Packet do
         header.payload_type::7, header.sequence_number::16, header.timestamp::32, header.ssrc::32,
         csrcs::binary, serialize_header_extensions(header.extensions)::binary, payload::binary>>
 
-    case Utils.align(serialized, align_to) do
+    case Utils.align(serialized, opts[:align_to] || 1) do
       {serialized, 0} ->
         serialized
 

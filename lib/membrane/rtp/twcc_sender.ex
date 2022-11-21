@@ -74,6 +74,22 @@ defmodule Membrane.RTP.TWCCSender do
   end
 
   @impl true
+  def handle_event(Pad.ref(:input, id), %RTP.GeneratePaddingPacketEvent{} = ev, ctx, state) do
+    {seq_num, state} = Map.get_and_update!(state, :seq_num, &{&1, rem(&1 + 1, @seq_number_limit)})
+
+    extension = %Header.Extension{identifier: :twcc, data: <<seq_num::16>>}
+    ev = %RTP.GeneratePaddingPacketEvent{ev | extensions: [extension | ev.extensions]}
+
+    state =
+      state
+      |> put_in([:seq_to_timestamp, seq_num], Time.vm_time())
+      |> put_in([:seq_to_size, seq_num], ev.size * 8)
+
+    out_pad = Pad.ref(:output, id)
+    [event: {out_pad, ev}] |> send_when_pad_connected(out_pad, ctx, state)
+  end
+
+  @impl true
   def handle_event(Pad.ref(direction, id), event, ctx, state) do
     opposite_direction = if direction == :input, do: :output, else: :input
     out_pad = Pad.ref(opposite_direction, id)
@@ -133,17 +149,10 @@ defmodule Membrane.RTP.TWCCSender do
     buffer =
       Header.Extension.put(buffer, %Header.Extension{identifier: :twcc, data: <<seq_num::16>>})
 
-    payload_size =
-      if Map.get(buffer.metadata.rtp, :is_padding?, false) do
-        8 * 255
-      else
-        bit_size(buffer.payload)
-      end
-
     state =
       state
       |> put_in([:seq_to_timestamp, seq_num], Time.vm_time())
-      |> put_in([:seq_to_size, seq_num], payload_size)
+      |> put_in([:seq_to_size, seq_num], bit_size(buffer.payload))
 
     out_pad = Pad.ref(:output, id)
     [buffer: {out_pad, buffer}] |> send_when_pad_connected(out_pad, ctx, state)
