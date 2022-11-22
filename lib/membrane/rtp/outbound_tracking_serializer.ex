@@ -145,7 +145,7 @@ defmodule Membrane.RTP.OutboundTrackingSerializer do
     }
 
     zeros_no = ev.size - 1
-    payload = <<0::size(zeros_no)-unit(8), zeros_no>>
+    payload = <<0::size(zeros_no)-unit(8), ev.size>>
 
     packet =
       %RTP.Packet{header: header, payload: payload}
