@@ -15,9 +15,6 @@ defmodule Membrane.RTP.GeneratePaddingPacketEvent do
   SSRC is meant to be assigned by an element processing
   this event.
 
-  Padding packets are not additionaly aligned by `align_to`
-  option in some of RTP plugin elements.
-
   * `size` - padding size including the last byte denoting
   number of zeros.
   """

@@ -44,8 +44,6 @@ defmodule Membrane.RTP.PacketTest do
     sample_packet = Fixtures.sample_packet()
 
     assert {:ok, %{packet: ^sample_packet}} = Packet.parse(test_packet, @encrypted?)
-
-    assert Packet.serialize(Fixtures.sample_packet(), align_to: 4) == test_packet
   end
 
   test "reads and serializes extension header" do

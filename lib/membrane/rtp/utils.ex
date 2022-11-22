@@ -17,20 +17,6 @@ defmodule Membrane.RTP.Utils do
     end
   end
 
-  @spec align(payload :: binary, align_to :: pos_integer()) ::
-          {binary, padding_size :: non_neg_integer()}
-  def align(payload, align_to) do
-    case rem(byte_size(payload), align_to) do
-      0 ->
-        {payload, 0}
-
-      remainder ->
-        padding_size = align_to - remainder
-        zeros_no = padding_size - 1
-        {<<payload::binary, 0::size(zeros_no)-unit(8), padding_size>>, padding_size}
-    end
-  end
-
   @spec from_which_rollover(number() | nil, number(), number()) :: :current | :previous | :next
   def from_which_rollover(previous_value, new_value, rollover_length)
 
