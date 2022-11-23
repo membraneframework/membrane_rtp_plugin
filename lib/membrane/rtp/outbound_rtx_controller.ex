@@ -23,7 +23,7 @@ defmodule Membrane.RTP.OutboundRtxController do
   def handle_init(_opts), do: {:ok, %{store: BufferStore.new(), last_rtx_times: %{}}}
 
   @impl true
-  def handle_process(:input, buffer, _ctx, state) do
+  def handle_process(:input, buffer, _ctx, state) when not buffer.metadata.is_padding? do
     state
     |> Map.update!(:store, fn store ->
       case BufferStore.insert_buffer(store, buffer) do
@@ -36,6 +36,9 @@ defmodule Membrane.RTP.OutboundRtxController do
     end)
     |> then(&{{:ok, forward: buffer}, &1})
   end
+
+  @impl true
+  def handle_process(:input, buffer, _ctx, state), do: {{:ok, forward: buffer}, state}
 
   @impl true
   def handle_event(

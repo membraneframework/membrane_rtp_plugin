@@ -14,7 +14,6 @@ defmodule Membrane.RTP.TWCCSender.CongestionControlTest do
          [packet_sizes | remaining_packet_sizes],
          [rtt | remaining_rtts]
        ) do
-    IO.inspect({cc.state, cc.a_hat})
     Process.sleep(200)
 
     simulate_updates(
@@ -68,7 +67,7 @@ defmodule Membrane.RTP.TWCCSender.CongestionControlTest do
       n_reports = 132
       report_interval_ms = 30
 
-      packets_per_report = round(target_bandwidth / packet_size * (report_interval_ms / 1000)) |> IO.inspect(label: :packets_per_report)
+      packets_per_report = round(target_bandwidth / packet_size * (report_interval_ms / 1000))
 
       {reference_times, send_deltas, packet_sizes, rtts} =
         make_fixtures(target_bandwidth, n_reports, packets_per_report, report_interval_ms)
