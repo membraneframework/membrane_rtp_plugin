@@ -46,11 +46,13 @@ defmodule Membrane.RTP.SSRCRouter do
     @type t() :: %__MODULE__{
             input_pads: %{RTP.ssrc_t() => [input_pad :: Pad.ref_t()]},
             buffered_actions: %{RTP.ssrc_t() => [Membrane.Element.Action.t()]},
+            required_extensions: %{RTP.payload_type_t() => [RTP.Header.Extension.identifier_t()]},
             srtp_keying_material_event: struct() | nil
           }
 
     defstruct input_pads: %{},
               buffered_actions: %{},
+              required_extensions: %{},
               srtp_keying_material_event: nil
   end
 
@@ -121,7 +123,9 @@ defmodule Membrane.RTP.SSRCRouter do
   @impl true
   def handle_process(Pad.ref(:input, _id) = pad, buffer, ctx, state) do
     %Membrane.Buffer{
-      metadata: %{rtp: %{ssrc: ssrc, payload_type: payload_type, extensions: extensions}}
+      metadata: %{
+        rtp: %{ssrc: ssrc, payload_type: payload_type, extensions: extensions}
+      }
     } = buffer
 
     {new_stream_actions, state} =
@@ -197,16 +201,34 @@ defmodule Membrane.RTP.SSRCRouter do
     super(pad, event, ctx, state)
   end
 
-  defp maybe_handle_new_stream(pad, ssrc, payload_type, extensions, state) do
-    if Map.has_key?(state.input_pads, ssrc) do
-      {[], state}
-    else
-      state =
-        state
-        |> put_in([:input_pads, ssrc], pad)
-        |> put_in([:buffered_actions, ssrc], [])
+  @impl true
+  def handle_other({:require_extensions, pt_to_extid}, _ctx, state) do
+    required_extensions =
+      Map.merge(state.required_extensions, pt_to_extid, fn _k, v1, v2 -> v1 ++ v2 end)
 
-      {[notify: {:new_rtp_stream, ssrc, payload_type, extensions}], state}
+    {:ok, %{state | required_extensions: required_extensions}}
+  end
+
+  defp maybe_handle_new_stream(pad, ssrc, payload_type, extensions, state) do
+    required_extensions = Map.get(state.required_extensions, payload_type, [])
+
+    cond do
+      Map.has_key?(state.input_pads, ssrc) ->
+        {[], state}
+
+      Map.has_key?(state.required_extensions, payload_type) and
+          Enum.all?(extensions, &(&1.identifier not in required_extensions)) ->
+        Membrane.Logger.info("Dropping packet without required extension")
+
+        {[], state}
+
+      true ->
+        state =
+          state
+          |> put_in([:input_pads, ssrc], pad)
+          |> put_in([:buffered_actions, ssrc], [])
+
+        {[notify: {:new_rtp_stream, ssrc, payload_type, extensions}], state}
     end
   end
 

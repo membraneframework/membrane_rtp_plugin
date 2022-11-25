@@ -3,7 +3,6 @@ defmodule Membrane.RTP.RtxParser do
   An element responsible for handling retransmission packets (`rtx`) defined in
   [RFC 4588](https://datatracker.ietf.org/doc/html/rfc4588#section-4).
 
-  FIXME: chack if this stays valid before merge
   It parses rtx packet and recreates the lost packet
   """
 
@@ -44,6 +43,10 @@ defmodule Membrane.RTP.RtxParser do
   def handle_process(:input, %Buffer{} = buffer, _ctx, state) do
     <<original_seq_num::16, original_payload::binary>> = buffer.payload
 
+    Membrane.Logger.debug(
+      "[RTX SSRC: #{buffer.metadata.rtp.ssrc}] got retransmitted packet with seq_num #{original_seq_num}"
+    )
+
     recreated_buffer = %Buffer{
       buffer
       | payload: original_payload,
@@ -55,8 +58,6 @@ defmodule Membrane.RTP.RtxParser do
           }
         }
     }
-
-    Membrane.Logger.debug("Got retransmitted #{original_seq_num}")
 
     {{:ok, buffer: {:output, recreated_buffer}}, state}
   end

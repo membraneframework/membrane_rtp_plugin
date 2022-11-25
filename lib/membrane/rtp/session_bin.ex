@@ -65,6 +65,7 @@ defmodule Membrane.RTP.SessionBin do
   require Bitwise
   require Membrane.Logger
   alias Membrane.RTP.{PayloadFormat, Session}
+  alias Membrane.RTP.SessionBin.RtxInfo
   alias Membrane.{ParentSpec, RemoteStream, RTCP, RTP, SRTP}
 
   @type new_stream_notification_t :: Membrane.RTP.SSRCRouter.new_stream_notification_t()
@@ -468,6 +469,8 @@ defmodule Membrane.RTP.SessionBin do
     new_links = [
       router_link
       |> via_in(Pad.ref(:input, ssrc))
+      # TODO: Replace funnel with something smarter that will handle possible repeats
+      # FIXME: FIR gets stuck here
       |> to({:rtx_funnel, ssrc}, Membrane.Funnel)
       |> to_bin_output(pad)
     ]
@@ -648,34 +651,38 @@ defmodule Membrane.RTP.SessionBin do
   end
 
   @impl true
-  def handle_other({:rtx, ssrc, original_ssrc, for: for}, ctx, state) do
-    links = build_rtx_links(ssrc, original_ssrc, for, state.srtp_policies)
-
-    if Map.has_key?(ctx.pads, Pad.ref(:output, original_ssrc)) do
-      {{:ok, spec: %ParentSpec{links: links}}, state}
-    else
-      awaiting_rtx_links = Map.put(state.awaiting_rtx_links, original_ssrc, links)
-      {:ok, %{state | awaiting_rtx_links: awaiting_rtx_links}}
-    end
+  def handle_other({:require_extensions, _pt_to_ext_id} = msg, _ctx, state) do
+    {{:ok, forward: {:ssrc_router, msg}}, state}
   end
 
-  defp build_rtx_links(ssrc, original_ssrc, for, srtp_policies) do
+  @impl true
+  def handle_other(%RtxInfo{ssrc: ssrc} = msg, ctx, state) do
     rtx_parser_opts = %RTP.RtxParser{
-      rtx_payload_type: for.rtx.payload_type,
-      payload_type: for.payload_type
+      rtx_payload_type: msg.rtx_payload_type,
+      payload_type: msg.original_payload_type
     }
 
-    [
+    links = [
       link(:ssrc_router)
       |> via_out(Pad.ref(:output, ssrc))
+      # FIXME: RTX should be included in TWCC conditionally
+      |> to(:twcc_receiver)
       |> to(
         {:decryptor, ssrc},
-        struct(Membrane.SRTP.Decryptor, %{policies: srtp_policies})
+        struct(Membrane.SRTP.Decryptor, %{policies: state.srtp_policies})
       )
       |> to({:rtx, ssrc}, rtx_parser_opts)
       |> via_in(Pad.ref(:input, ssrc))
-      |> to({:rtx_funnel, original_ssrc})
+      |> to({:rtx_funnel, msg.original_ssrc})
     ]
+
+    # Always link RTX after the original pad
+    if Map.has_key?(ctx.pads, Pad.ref(:output, msg.original_ssrc)) do
+      {{:ok, spec: %ParentSpec{links: links}}, state}
+    else
+      awaiting_rtx_links = Map.put(state.awaiting_rtx_links, msg.original_ssrc, links)
+      {:ok, %{state | awaiting_rtx_links: awaiting_rtx_links}}
+    end
   end
 
   defp add_ssrc(remote_ssrc, state) do
