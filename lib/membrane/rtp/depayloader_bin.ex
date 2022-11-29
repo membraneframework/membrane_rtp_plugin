@@ -23,7 +23,6 @@ defmodule Membrane.RTP.DepayloaderBin do
     demand_unit: :buffers
 
   def_output_pad :output,
-    # dupa: inspect this accepted_format
     accepted_format: RemoteStream,
     demand_unit: :buffers
 
