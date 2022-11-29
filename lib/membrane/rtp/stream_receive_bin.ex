@@ -8,14 +8,14 @@ defmodule Membrane.RTP.StreamReceiveBin do
 
   use Membrane.Bin
 
-  alias Membrane.{ParentSpec, RTCP, RTP, SRTP}
+  alias Membrane.{RTCP, RTP, SRTP}
 
   def_options srtp_policies: [
                 spec: [ExLibSRTP.Policy.t()],
                 default: []
               ],
               secure?: [
-                type: :boolean,
+                spec: boolean(),
                 default: false
               ],
               extensions: [
@@ -23,7 +23,6 @@ defmodule Membrane.RTP.StreamReceiveBin do
                 default: []
               ],
               clock_rate: [
-                type: :integer,
                 spec: RTP.clock_rate_t()
               ],
               depayloader: [spec: module() | nil],
@@ -35,51 +34,51 @@ defmodule Membrane.RTP.StreamReceiveBin do
                 default: []
               ]
 
-  def_input_pad :input, demand_unit: :buffers, caps: :any
-  def_output_pad :output, caps: :any, demand_unit: :buffers
+  def_input_pad :input, accepted_format: _any, demand_unit: :buffers
+  def_output_pad :output, accepted_format: _any, demand_unit: :buffers
 
   @impl true
-  def handle_init(opts) do
+  def handle_init(_ctx, opts) do
     if opts.secure? and not Code.ensure_loaded?(ExLibSRTP),
       do: raise("Optional dependency :ex_libsrtp is required when using secure? option")
 
-    maybe_link_decryptor =
-      &to(&1, :decryptor, struct(SRTP.Decryptor, %{policies: opts.srtp_policies}))
+    maybe_start_decryptor =
+      &child(&1, :decryptor, struct(SRTP.Decryptor, %{policies: opts.srtp_policies}))
 
-    maybe_link_depayloader_bin =
-      &to(&1, :depayloader, %RTP.DepayloaderBin{
+    maybe_start_depayloader_bin =
+      &child(&1, :depayloader, %RTP.DepayloaderBin{
         depayloader: opts.depayloader,
         clock_rate: opts.clock_rate
       })
 
-    links = [
-      link_bin_input()
-      |> to_extensions(opts.extensions)
-      |> to(:rtcp_receiver, %RTCP.Receiver{
+    structure = [
+      bin_input()
+      |> start_extensions(opts.extensions)
+      |> child(:rtcp_receiver, %RTCP.Receiver{
         local_ssrc: opts.local_ssrc,
         remote_ssrc: opts.remote_ssrc,
         report_interval: opts.rtcp_report_interval,
         telemetry_label: opts.telemetry_label
       })
-      |> to(:packet_tracker, %RTP.InboundPacketTracker{
+      |> child(:packet_tracker, %RTP.InboundPacketTracker{
         clock_rate: opts.clock_rate,
         repair_sequence_numbers?: true
       })
-      |> then(if opts.secure?, do: maybe_link_decryptor, else: & &1)
-      |> then(if opts.depayloader, do: maybe_link_depayloader_bin, else: & &1)
-      |> to_bin_output()
+      |> then(if opts.secure?, do: maybe_start_decryptor, else: & &1)
+      |> then(if opts.depayloader, do: maybe_start_depayloader_bin, else: & &1)
+      |> bin_output()
     ]
 
-    spec = %ParentSpec{
-      links: links
-    }
+    # spec = %ParentSpec{
+    #   links: links
+    # }
 
-    {{:ok, spec: spec}, %{}}
+    {[spec: structure], %{}}
   end
 
-  defp to_extensions(link_builder, extensions) do
+  defp start_extensions(link_builder, extensions) do
     Enum.reduce(extensions, link_builder, fn {extension_name, extension}, builder ->
-      builder |> to(extension_name, extension)
+      builder |> child(extension_name, extension)
     end)
   end
 end

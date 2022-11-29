@@ -27,9 +27,9 @@ defmodule Membrane.RTP.VAD do
 
   alias Membrane.RTP.{Header, Utils}
 
-  def_input_pad :input, availability: :always, caps: :any, demand_mode: :auto
+  def_input_pad :input, availability: :always, accepted_format: _any, demand_mode: :auto
 
-  def_output_pad :output, availability: :always, caps: :any, demand_mode: :auto
+  def_output_pad :output, availability: :always, accepted_format: _any, demand_mode: :auto
 
   def_options vad_id: [
                 spec: 1..14,
@@ -83,7 +83,7 @@ defmodule Membrane.RTP.VAD do
   @type silence_notification_t() :: {:vad, :silence}
 
   @impl true
-  def handle_init(opts) do
+  def handle_init(_ctx, opts) do
     state = %{
       vad_id: opts.vad_id,
       audio_levels: Qex.new(),
@@ -100,20 +100,20 @@ defmodule Membrane.RTP.VAD do
       audio_levels_count: 0
     }
 
-    {:ok, state}
+    {[], state}
   end
 
   @impl true
-  def handle_process(:input, %Membrane.Buffer{} = buffer, _ctx, state) do
+  def handle_process(:input, %Membrane.Buffer{} = buffer, ctx, state) do
     {extension, buffer} = Header.Extension.pop(buffer, state.vad_id)
-    handle_if_present(buffer, extension, state)
+    handle_if_present(buffer, extension, ctx, state)
   end
 
-  defp handle_if_present(buffer, nil, state), do: {{:ok, buffer: {:output, buffer}}, state}
+  defp handle_if_present(buffer, nil, _ctx, state), do: {[buffer: {:output, buffer}], state}
 
   @timestamp_limit Bitwise.bsl(1, 32)
 
-  defp handle_if_present(buffer, extension, state) do
+  defp handle_if_present(buffer, extension, ctx, state) do
     <<_v::1, level::7>> = extension.data
 
     new_extension = %Header.Extension{
@@ -132,11 +132,11 @@ defmodule Membrane.RTP.VAD do
         handle_vad(buffer, rtp_timestamp, level, state)
 
       rollover == :next ->
-        {:ok, state} = handle_init(state)
-        {{:ok, buffer: {:output, buffer}}, state}
+        {[], state} = handle_init(ctx, state)
+        {[buffer: {:output, buffer}], state}
 
       true ->
-        {{:ok, buffer: {:output, buffer}}, state}
+        {[buffer: {:output, buffer}], state}
     end
   end
 
@@ -191,7 +191,7 @@ defmodule Membrane.RTP.VAD do
 
   defp maybe_notify(audio_levels_vad, state) do
     if vad_silence?(audio_levels_vad, state) or vad_speech?(audio_levels_vad, state) do
-      [notify: {:vad, audio_levels_vad}]
+      [notify_parent: {:vad, audio_levels_vad}]
     else
       []
     end

@@ -15,9 +15,9 @@ defmodule Membrane.RTP.HeaderGenerator do
   @max_seq_num Bitwise.bsl(1, 16) - 1
   @max_timestamp Bitwise.bsl(1, 32) - 1
 
-  def_input_pad :input, caps: RTP, demand_mode: :auto
+  def_input_pad :input, accepted_format: RTP, demand_mode: :auto
 
-  def_output_pad :output, caps: RTP, demand_mode: :auto
+  def_output_pad :output, accepted_format: RTP, demand_mode: :auto
 
   def_options ssrc: [spec: RTP.ssrc_t()],
               payload_type: [spec: RTP.payload_type_t()],
@@ -55,7 +55,7 @@ defmodule Membrane.RTP.HeaderGenerator do
   end
 
   @impl true
-  def handle_init(options) do
+  def handle_init(_ctx, options) do
     state =
       options
       |> Map.from_struct()
@@ -64,12 +64,12 @@ defmodule Membrane.RTP.HeaderGenerator do
         init_timestamp: Enum.random(0..@max_timestamp)
       })
 
-    {:ok, struct!(State, state)}
+    {[], struct!(State, state)}
   end
 
   @impl true
-  def handle_caps(:input, _caps, _ctx, state) do
-    {{:ok, caps: {:output, %RTP{}}}, state}
+  def handle_stream_format(:input, _stream_format, _ctx, state) do
+    {[stream_format: {:output, %RTP{}}], state}
   end
 
   @impl true
@@ -79,7 +79,7 @@ defmodule Membrane.RTP.HeaderGenerator do
     rtp_offset =
       buffer.pts
       |> Ratio.mult(state.clock_rate)
-      |> Membrane.Time.to_seconds()
+      |> Membrane.Time.round_to_seconds()
 
     rtp_timestamp = rem(state.init_timestamp + rtp_offset, @max_timestamp + 1)
 
@@ -101,6 +101,6 @@ defmodule Membrane.RTP.HeaderGenerator do
         payload: buffer.payload
     }
 
-    {{:ok, buffer: {:output, buffer}}, state}
+    {[buffer: {:output, buffer}], state}
   end
 end

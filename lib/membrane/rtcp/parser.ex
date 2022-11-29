@@ -10,29 +10,29 @@ defmodule Membrane.RTCP.Parser do
   alias Membrane.{RemoteStream, RTCP, RTCPEvent}
 
   def_input_pad :input,
-    caps: {RemoteStream, type: :packetized, content_format: one_of([nil, RTCP])},
+    accepted_format: %RemoteStream{type: :packetized, content_format: cf} when cf in [nil, RTCP],
     demand_mode: :auto
 
-  def_output_pad :output, caps: RTCP, demand_mode: :auto
+  def_output_pad :output, accepted_format: RTCP, demand_mode: :auto
 
   def_output_pad :receiver_report_output,
     mode: :push,
-    caps: {RemoteStream, type: :packetized, content_format: RTCP}
+    accepted_format: %RemoteStream{type: :packetized, content_format: RTCP}
 
   @impl true
-  def handle_init(_opts) do
-    {:ok, %{}}
+  def handle_init(_ctx, _opts) do
+    {[], %{}}
   end
 
   @impl true
-  def handle_prepared_to_playing(_ctx, state) do
-    caps = %RemoteStream{type: :packetized, content_format: RTCP}
-    {{:ok, caps: {:receiver_report_output, caps}}, state}
+  def handle_playing(_ctx, state) do
+    stream_format = %RemoteStream{type: :packetized, content_format: RTCP}
+    {[stream_format: {:receiver_report_output, stream_format}], state}
   end
 
   @impl true
-  def handle_caps(:input, _caps, _ctx, state) do
-    {{:ok, caps: {:output, %RTCP{}}}, state}
+  def handle_stream_format(:input, _stream_format, _ctx, state) do
+    {[stream_format: {:output, %RTCP{}}], state}
   end
 
   @impl true
@@ -42,7 +42,7 @@ defmodule Membrane.RTCP.Parser do
     |> case do
       {:ok, packets} ->
         actions = process_packets(packets, metadata)
-        {{:ok, actions}, state}
+        {actions, state}
 
       {:error, reason} ->
         Membrane.Logger.warn("""
@@ -51,14 +51,14 @@ defmodule Membrane.RTCP.Parser do
         Reason: #{inspect(reason)}. Ignoring packet.
         """)
 
-        {:ok, state}
+        {[], state}
     end
   end
 
   @impl true
   def handle_event(:output, %RTCPEvent{} = event, _ctx, state) do
     buffer = %Buffer{payload: RTCP.Packet.serialize(event.rtcp)}
-    {{:ok, buffer: {:receiver_report_output, buffer}}, state}
+    {[buffer: {:receiver_report_output, buffer}], state}
   end
 
   @impl true
@@ -78,7 +78,7 @@ defmodule Membrane.RTCP.Parser do
          %RTCP.TransportFeedbackPacket{payload: %RTCP.TransportFeedbackPacket.TWCC{} = feedback},
          _metadata
        ) do
-    [notify: {:twcc_feedback, feedback}]
+    [notify_parent: {:twcc_feedback, feedback}]
   end
 
   defp process_rtcp(%RTCP.SenderReportPacket{ssrc: ssrc} = packet, metadata) do

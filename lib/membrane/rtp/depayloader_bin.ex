@@ -6,6 +6,7 @@ defmodule Membrane.RTP.DepayloaderBin do
 
   use Membrane.Bin
 
+  alias Membrane.RemoteStream
   alias Membrane.RTP
   alias Membrane.RTP.JitterBuffer
 
@@ -18,22 +19,23 @@ defmodule Membrane.RTP.DepayloaderBin do
               ]
 
   def_input_pad :input,
-    caps: RTP,
+    accepted_format: RTP,
     demand_unit: :buffers
 
   def_output_pad :output,
-    caps: RTP,
+    # dupa: inspect this accepted_format
+    accepted_format: RemoteStream,
     demand_unit: :buffers
 
   @impl true
-  def handle_init(opts) do
-    links = [
-      link_bin_input()
-      |> to(:jitter_buffer, %JitterBuffer{clock_rate: opts.clock_rate})
-      |> to(:depayloader, opts.depayloader)
-      |> to_bin_output()
+  def handle_init(_ctx, opts) do
+    structure = [
+      bin_input()
+      |> child(:jitter_buffer, %JitterBuffer{clock_rate: opts.clock_rate})
+      |> child(:depayloader, opts.depayloader)
+      |> bin_output()
     ]
 
-    {{:ok, spec: %ParentSpec{links: links}}, %{}}
+    {[spec: structure], %{}}
   end
 end

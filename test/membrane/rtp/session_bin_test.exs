@@ -51,8 +51,8 @@ defmodule Membrane.RTP.Session.BinTest do
     Continues forwarding upon receiving `:continue` message.
     """
     use Membrane.Filter
-    def_input_pad :input, demand_unit: :buffers, caps: :any
-    def_output_pad :output, caps: :any
+    def_input_pad :input, demand_unit: :buffers, accepted_format: _any
+    def_output_pad :output, accepted_format: _any
 
     def_options pause_after: [
                   spec: [integer],
@@ -61,33 +61,33 @@ defmodule Membrane.RTP.Session.BinTest do
                 ]
 
     @impl true
-    def handle_init(opts) do
-      {:ok, Map.from_struct(opts) |> Map.merge(%{cnt: 0})}
+    def handle_init(_ctx, opts) do
+      {[], Map.from_struct(opts) |> Map.merge(%{cnt: 0})}
     end
 
     @impl true
-    def handle_prepared_to_playing(_ctx, state) do
-      {{:ok, caps: {:output, %Membrane.RemoteStream{type: :packetized}}}, state}
+    def handle_playing(_ctx, state) do
+      {[stream_format: {:output, %Membrane.RemoteStream{type: :packetized}}], state}
     end
 
     @impl true
     def handle_demand(:output, size, :buffers, _ctx, %{pause_after: [pause | _]} = state) do
-      {{:ok, demand: {:input, min(size, pause - state.cnt)}}, state}
+      {[demand: {:input, min(size, pause - state.cnt)}], state}
     end
 
     @impl true
     def handle_demand(:output, size, :buffers, _ctx, state) do
-      {{:ok, demand: {:input, size}}, state}
+      {[demand: {:input, size}], state}
     end
 
     @impl true
     def handle_process(:input, buffer, _ctx, state) do
-      {{:ok, buffer: {:output, buffer}}, Map.update!(state, :cnt, &(&1 + 1))}
+      {[buffer: {:output, buffer}], Map.update!(state, :cnt, &(&1 + 1))}
     end
 
     @impl true
-    def handle_other(:continue, _ctx, state) do
-      {{:ok, redemand: :output}, Map.update!(state, :pause_after, &tl/1)}
+    def handle_parent_notification(:continue, _ctx, state) do
+      {[redemand: :output], Map.update!(state, :pause_after, &tl/1)}
     end
   end
 
@@ -95,88 +95,155 @@ defmodule Membrane.RTP.Session.BinTest do
     use Membrane.Pipeline
 
     @impl true
-    def handle_init(options) do
+    def handle_init(_ctx, options) do
       rtp_input_ref = make_ref()
 
       {:ok, h264_payloader} = Membrane.RTP.PayloadFormatResolver.payloader(:H264)
 
-      spec = %ParentSpec{
-        children: [
-          pcap: %Membrane.Pcap.Source{path: options.input.pcap},
-          pauser: %Pauser{pause_after: [15]},
-          rtp: %RTP.SessionBin{
-            fmt_mapping: options.fmt_mapping,
-            rtcp_receiver_report_interval: options.rtcp_receiver_report_interval,
-            secure?: Map.has_key?(options.input, :srtp_policies),
-            srtp_policies: Map.get(options.input, :srtp_policies, []),
-            receiver_ssrc_generator: fn [sender_ssrc | _local_ssrcs], _remote_ssrcs ->
-              sender_ssrc
-            end
-          },
-          hackney: %Membrane.Hackney.Source{
-            location:
-              "https://raw.githubusercontent.com/membraneframework/static/gh-pages/samples/ffmpeg-testsrc.h264"
-          },
-          parser: %Membrane.H264.FFmpeg.Parser{framerate: {30, 1}, alignment: :nal},
-          rtp_sink: Testing.Sink,
-          rtcp_source: %Testing.Source{
-            output: options.rtcp_input,
-            caps: %RemoteStream{type: :packetized, content_format: RTCP}
-          },
-          rtcp_sink: Testing.Sink
-        ],
-        links: [
-          link(:rtcp_source)
-          |> via_in(:rtp_input)
-          |> to(:rtp)
-          |> via_out(Pad.ref(:rtcp_receiver_output, rtp_input_ref))
-          |> to(:rtcp_sink),
-          link(:pcap)
-          |> to(:pauser)
-          |> via_in(Pad.ref(:rtp_input, rtp_input_ref))
-          |> to(:rtp),
-          # in case of payload_and_depayload option being true,
-          # session bin is responsible for payloading the stream
-          #
-          # to test the case where stream is already payloaded (payload_and_depayload being false)
-          # we need to manually add payloader bin and then link it with the session bin
-          if options.payload_and_depayload do
-            link(:hackney)
-            |> to(:parser)
-            |> via_in(Pad.ref(:input, options.output.video.ssrc),
-              options: [payloader: h264_payloader]
-            )
-            |> to(:rtp)
-            |> via_out(Pad.ref(:rtp_output, options.output.video.ssrc),
-              options: [encoding: :H264]
-            )
-            |> to(:rtp_sink)
-          else
-            # assume that incoming stream is already payloaded when entering session bin
-            link(:hackney)
-            |> to(:parser)
-            |> to(:payloader, %RTP.PayloaderBin{
-              payloader: h264_payloader,
-              payload_type: PayloadFormat.get(:H264).payload_type,
-              ssrc: options.output.video.ssrc,
-              clock_rate: 90_000
-            })
-            |> via_in(Pad.ref(:input, options.output.video.ssrc))
-            |> to(:rtp)
-            |> via_out(Pad.ref(:rtp_output, options.output.video.ssrc),
-              options: [encoding: :H264]
-            )
-            |> to(:rtp_sink)
-          end
-        ]
-      }
+      # spec = %ParentSpec{
+      #   children: [
+      #     pcap: %Membrane.Pcap.Source{path: options.input.pcap},
+      #     pauser: %Pauser{pause_after: [15]},
+      #     rtp: %RTP.SessionBin{
+      #       fmt_mapping: options.fmt_mapping,
+      #       rtcp_receiver_report_interval: options.rtcp_receiver_report_interval,
+      #       secure?: Map.has_key?(options.input, :srtp_policies),
+      #       srtp_policies: Map.get(options.input, :srtp_policies, []),
+      #       receiver_ssrc_generator: fn [sender_ssrc | _local_ssrcs], _remote_ssrcs ->
+      #         sender_ssrc
+      #       end
+      #     },
+      #     hackney: %Membrane.Hackney.Source{
+      #       location:
+      #         "https://raw.githubusercontent.com/membraneframework/static/gh-pages/samples/ffmpeg-testsrc.h264"
+      #     },
+      #     parser: %Membrane.H264.FFmpeg.Parser{framerate: {30, 1}, alignment: :nal},
+      #     rtp_sink: Testing.Sink,
+      #     rtcp_source: %Testing.Source{
+      #       output: options.rtcp_input,
+      #       stream_format: %RemoteStream{type: :packetized, content_format: RTCP}
+      #     },
+      #     rtcp_sink: Testing.Sink
+      #   ],
+      #   links: [
+      #     link(:rtcp_source)
+      #     |> via_in(:rtp_input)
+      #     |> to(:rtp)
+      #     |> via_out(Pad.ref(:rtcp_receiver_output, rtp_input_ref))
+      #     |> to(:rtcp_sink),
+      #     link(:pcap)
+      #     |> to(:pauser)
+      #     |> via_in(Pad.ref(:rtp_input, rtp_input_ref))
+      #     |> to(:rtp),
+      #     # in case of payload_and_depayload option being true,
+      #     # session bin is responsible for payloading the stream
+      #     #
+      #     # to test the case where stream is already payloaded (payload_and_depayload being false)
+      #     # we need to manually add payloader bin and then link it with the session bin
+      #     if options.payload_and_depayload do
+      #       link(:hackney)
+      #       |> to(:parser)
+      #       |> via_in(Pad.ref(:input, options.output.video.ssrc),
+      #         options: [payloader: h264_payloader]
+      #       )
+      #       |> to(:rtp)
+      #       |> via_out(Pad.ref(:rtp_output, options.output.video.ssrc),
+      #         options: [encoding: :H264]
+      #       )
+      #       |> to(:rtp_sink)
+      #     else
+      #       # assume that incoming stream is already payloaded when entering session bin
+      #       link(:hackney)
+      #       |> to(:parser)
+      #       |> to(:payloader, %RTP.PayloaderBin{
+      #         payloader: h264_payloader,
+      #         payload_type: PayloadFormat.get(:H264).payload_type,
+      #         ssrc: options.output.video.ssrc,
+      #         clock_rate: 90_000
+      #       })
+      #       |> via_in(Pad.ref(:input, options.output.video.ssrc))
+      #       |> to(:rtp)
+      #       |> via_out(Pad.ref(:rtp_output, options.output.video.ssrc),
+      #         options: [encoding: :H264]
+      #       )
+      #       |> to(:rtp_sink)
+      #     end
+      #   ]
+      # }
 
-      {{:ok, spec: spec, playback: :playing},
+      structure = [
+        child(:pcap, %Membrane.Pcap.Source{path: options.input.pcap}),
+        child(:pauser, %Pauser{pause_after: [15]}),
+        child(:rtp, %RTP.SessionBin{
+          fmt_mapping: options.fmt_mapping,
+          rtcp_receiver_report_interval: options.rtcp_receiver_report_interval,
+          secure?: Map.has_key?(options.input, :srtp_policies),
+          srtp_policies: Map.get(options.input, :srtp_policies, []),
+          receiver_ssrc_generator: fn [sender_ssrc | _local_ssrcs], _remote_ssrcs ->
+            sender_ssrc
+          end
+        }),
+        child(:hackney, %Membrane.Hackney.Source{
+          location:
+            "https://raw.githubusercontent.com/membraneframework/static/gh-pages/samples/ffmpeg-testsrc.h264"
+        }),
+        child(:parser, %Membrane.H264.FFmpeg.Parser{framerate: {30, 1}, alignment: :nal}),
+        child(:rtp_sink, Testing.Sink),
+        child(:rtcp_source, %Testing.Source{
+          output: options.rtcp_input,
+          stream_format: %RemoteStream{type: :packetized, content_format: RTCP}
+        }),
+        child(:rtcp_sink, Testing.Sink),
+        get_child(:rtcp_source)
+        |> via_in(:rtp_input)
+        |> get_child(:rtp)
+        |> via_out(Pad.ref(:rtcp_receiver_output, rtp_input_ref))
+        |> get_child(:rtcp_sink),
+        get_child(:pcap)
+        |> get_child(:pauser)
+        |> via_in(Pad.ref(:rtp_input, rtp_input_ref))
+        |> get_child(:rtp),
+        # in case of payload_and_depayload option being true,
+        # session bin is responsible for payloading the stream
+        #
+        # to test the case where stream is already payloaded (payload_and_depayload being false)
+        # we need to manually add payloader bin and then link it with the session bin
+        if options.payload_and_depayload do
+          get_child(:hackney)
+          |> get_child(:parser)
+          |> via_in(Pad.ref(:input, options.output.video.ssrc),
+            options: [payloader: h264_payloader]
+          )
+          |> get_child(:rtp)
+          |> via_out(Pad.ref(:rtp_output, options.output.video.ssrc),
+            options: [encoding: :H264]
+          )
+          |> get_child(:rtp_sink)
+        else
+          # assume that incoming stream is already payloaded when entering session bin
+          get_child(:hackney)
+          |> get_child(:parser)
+          |> child(:payloader, %RTP.PayloaderBin{
+            payloader: h264_payloader,
+            payload_type: PayloadFormat.get(:H264).payload_type,
+            ssrc: options.output.video.ssrc,
+            clock_rate: 90_000
+          })
+          |> via_in(Pad.ref(:input, options.output.video.ssrc))
+          |> get_child(:rtp)
+          |> via_out(Pad.ref(:rtp_output, options.output.video.ssrc),
+            options: [encoding: :H264]
+          )
+          |> get_child(:rtp_sink)
+        end
+      ]
+
+      {[spec: structure, playback: :playing],
        %{fmt_mapping: options.fmt_mapping, payload_and_depayload: options.payload_and_depayload}}
     end
 
     @impl true
-    def handle_notification({:new_rtp_stream, ssrc, pt, _extensions}, :rtp, _ctx, state) do
+    def handle_child_notification({:new_rtp_stream, ssrc, pt, _extensions}, :rtp, _ctx, state) do
       {encoding, _clock_rate} = Map.fetch!(state.fmt_mapping, pt)
 
       depayloader =
@@ -188,25 +255,33 @@ defmodule Membrane.RTP.Session.BinTest do
           nil
         end
 
-      spec = %ParentSpec{
-        children: [
-          {{:sink, ssrc}, Testing.Sink}
-        ],
-        links: [
-          link(:rtp)
-          |> via_out(Pad.ref(:output, ssrc),
-            options: [depayloader: depayloader]
-          )
-          |> to({:sink, ssrc})
-        ]
-      }
+      # spec = %ParentSpec{
+      #   children: [
+      #     {{:sink, ssrc}, Testing.Sink}
+      #   ],
+      #   links: [
+      #     link(:rtp)
+      #     |> via_out(Pad.ref(:output, ssrc),
+      #       options: [depayloader: depayloader]
+      #     )
+      #     |> to({:sink, ssrc})
+      #   ]
+      # }
 
-      {{:ok, spec: spec}, state}
+      structure = [
+        get_child(:rtp)
+        |> via_out(Pad.ref(:output, ssrc),
+          options: [depayloader: depayloader]
+        )
+        |> child({:sink, ssrc}, Testing.Sink)
+      ]
+
+      {[spec: structure], state}
     end
 
     @impl true
-    def handle_notification(_notification, _child, _ctx, state) do
-      {:ok, state}
+    def handle_child_notification(_notification, _child, _ctx, state) do
+      {[], state}
     end
   end
 
@@ -261,8 +336,8 @@ defmodule Membrane.RTP.Session.BinTest do
          _sr_senders_ssrcs,
          payload_and_depayload
        ) do
-    {:ok, pipeline} =
-      %Testing.Pipeline.Options{
+    {:ok, _supervisor, pipeline} =
+      Testing.Pipeline.start_link_supervised(
         module: DynamicPipeline,
         custom_args: %{
           input: input,
@@ -272,10 +347,9 @@ defmodule Membrane.RTP.Session.BinTest do
           rtcp_receiver_report_interval: Membrane.Time.second(),
           payload_and_depayload: payload_and_depayload
         }
-      }
-      |> Testing.Pipeline.start_link()
+      )
 
-    assert_pipeline_playback_changed(pipeline, _, :playing)
+    assert_pipeline_play(pipeline)
 
     %{audio: %{ssrc: audio_ssrc}, video: %{ssrc: video_ssrc}} = input
 
@@ -318,7 +392,7 @@ defmodule Membrane.RTP.Session.BinTest do
     end)
 
     assert_end_of_stream(pipeline, {:sink, ^video_ssrc})
-    Testing.Pipeline.terminate(pipeline, blocking?: true)
-    assert_pipeline_playback_changed(pipeline, _, :stopped)
+    # Testing.Pipeline.terminate(pipeline, blocking?: true)
+    # assert_pipeline_(pipeline)
   end
 end

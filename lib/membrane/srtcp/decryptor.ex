@@ -12,8 +12,8 @@ if Code.ensure_loaded?(ExLibSRTP) do
     alias Membrane.Buffer
     alias Membrane.SRTP
 
-    def_input_pad :input, caps: :any, demand_mode: :auto
-    def_output_pad :output, caps: :any, demand_mode: :auto
+    def_input_pad :input, accepted_format: _any, demand_mode: :auto
+    def_output_pad :output, accepted_format: _any, demand_mode: :auto
 
     def_options policies: [
                   spec: [ExLibSRTP.Policy.t()],
@@ -24,30 +24,25 @@ if Code.ensure_loaded?(ExLibSRTP) do
                 ]
 
     @impl true
-    def handle_init(options) do
-      {:ok, Map.from_struct(options) |> Map.merge(%{srtp: nil})}
+    def handle_init(_ctx, options) do
+      {[], Map.from_struct(options) |> Map.merge(%{srtp: nil})}
     end
 
     @impl true
-    def handle_stopped_to_prepared(_ctx, state) do
+    def handle_setup(_ctx, state) do
       srtp = ExLibSRTP.new()
 
       state.policies
       |> Bunch.listify()
       |> Enum.each(&ExLibSRTP.add_stream(srtp, &1))
 
-      {:ok, %{state | srtp: srtp}}
-    end
-
-    @impl true
-    def handle_prepared_to_stopped(_ctx, state) do
-      {:ok, %{state | srtp: nil}}
+      {[], %{state | srtp: srtp}}
     end
 
     @impl true
     def handle_process(:input, buffer, _ctx, state) do
       {:ok, payload} = ExLibSRTP.unprotect_rtcp(state.srtp, buffer.payload)
-      {{:ok, buffer: {:output, %Buffer{buffer | payload: payload}}}, state}
+      {[buffer: {:output, %Buffer{buffer | payload: payload}}], state}
     end
 
     @impl true
@@ -65,13 +60,13 @@ if Code.ensure_loaded?(ExLibSRTP) do
       }
 
       :ok = ExLibSRTP.add_stream(state.srtp, policy)
-      {:ok, %{state | policies: [policy]}}
+      {[], %{state | policies: [policy]}}
     end
 
     @impl true
     def handle_event(_pad, %SRTP.KeyingMaterialEvent{}, _ctx, state) do
       Membrane.Logger.warn("Got unexpected SRTP.KeyingMaterialEvent. Ignoring.")
-      {:ok, state}
+      {[], state}
     end
 
     @impl true
