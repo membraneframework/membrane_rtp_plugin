@@ -124,39 +124,6 @@ defmodule Membrane.RTP.OutboundTrackingSerializer do
   end
 
   @impl true
-  def handle_event(:input, %RTP.GeneratePaddingPacketEvent{} = ev, _ctx, state) do
-    supported_extensions = Map.keys(state.extension_mapping)
-
-    extensions =
-      ev.extensions
-      |> Enum.filter(fn extension -> extension.identifier in supported_extensions end)
-      |> Enum.map(fn extension ->
-        %{extension | identifier: Map.fetch!(state.extension_mapping, extension.identifier)}
-      end)
-
-    header = %RTP.Header{
-      ssrc: state.ssrc,
-      marker: ev.marker,
-      payload_type: ev.payload_type,
-      timestamp: ev.timestamp,
-      sequence_number: ev.sequence_number,
-      csrcs: ev.csrcs,
-      extensions: extensions
-    }
-
-    zeros_no = ev.size - 1
-    payload = <<0::size(zeros_no)-unit(8), ev.size>>
-
-    packet =
-      %RTP.Packet{header: header, payload: payload}
-      |> RTP.Packet.serialize(has_padding: true)
-
-    buffer = %Buffer{payload: packet, metadata: %{rtp: Map.from_struct(header)}}
-
-    {{:ok, buffer: {:output, buffer}}, update_stats(buffer, state)}
-  end
-
-  @impl true
   def handle_event(pad, event, ctx, state) do
     super(pad, event, ctx, state)
   end
@@ -194,7 +161,12 @@ defmodule Membrane.RTP.OutboundTrackingSerializer do
           extensions: extensions
       })
 
-    payload = RTP.Packet.serialize(%RTP.Packet{header: header, payload: buffer.payload})
+    padding_size = Map.get(rtp_metadata, :padding_size, 0)
+
+    payload =
+      RTP.Packet.serialize(%RTP.Packet{header: header, payload: buffer.payload},
+        padding_size: padding_size
+      )
 
     buffer = %Buffer{buffer | payload: payload, metadata: metadata}
 

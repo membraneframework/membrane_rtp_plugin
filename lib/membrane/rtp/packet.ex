@@ -27,18 +27,20 @@ defmodule Membrane.RTP.Packet do
 
   def identify(_packet), do: :rtp
 
-  @spec serialize(t, has_padding: boolean()) :: binary
-  def serialize(%__MODULE__{} = packet, opts \\ [has_padding: false]) do
+  @spec serialize(t, padding_size: non_neg_integer()) :: binary
+  def serialize(%__MODULE__{} = packet, opts \\ [padding_size: 0]) do
     %__MODULE__{header: header, payload: payload} = packet
     %Header{version: 2} = header
-    has_padding = if opts[:has_padding], do: 1, else: 0
+    has_padding = if opts[:padding_size] > 0, do: 1, else: 0
     has_extension = if header.extensions == [], do: 0, else: 1
     marker = if header.marker, do: 1, else: 0
     csrcs = Enum.map_join(header.csrcs, &<<&1::32>>)
+    padding = Utils.generate_padding(opts[:padding_size])
 
     <<header.version::2, has_padding::1, has_extension::1, length(header.csrcs)::4, marker::1,
       header.payload_type::7, header.sequence_number::16, header.timestamp::32, header.ssrc::32,
-      csrcs::binary, serialize_header_extensions(header.extensions)::binary, payload::binary>>
+      csrcs::binary, serialize_header_extensions(header.extensions)::binary, payload::binary,
+      padding::binary>>
   end
 
   defp serialize_header_extensions([]), do: <<>>
@@ -74,7 +76,8 @@ defmodule Membrane.RTP.Packet do
   end
 
   @spec parse(binary(), boolean()) ::
-          {:ok, %{packet: t(), has_padding?: boolean(), total_header_size: non_neg_integer()}}
+          {:ok,
+           %{packet: t(), padding_size: non_neg_integer(), total_header_size: non_neg_integer()}}
           | {:error, :wrong_version | :malformed_packet}
   def parse(packet, encrypted?)
 
@@ -108,7 +111,7 @@ defmodule Membrane.RTP.Packet do
            header: header,
            payload: if(encrypted?, do: original_packet, else: payload)
          },
-         has_padding?: has_padding == 1,
+         padding_size: padding,
          total_header_size: byte_size(original_packet) - byte_size(payload) - padding
        }}
     else

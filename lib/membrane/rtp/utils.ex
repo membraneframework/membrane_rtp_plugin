@@ -17,6 +17,21 @@ defmodule Membrane.RTP.Utils do
     end
   end
 
+  @doc """
+  Generates padding binary.
+
+  `padding_size` is the final padding size including
+  the last byte denoting padding size. `padding_size`
+  cannot be greater than 255.
+  """
+  @spec generate_padding(non_neg_integer()) :: binary()
+  def generate_padding(0), do: <<>>
+
+  def generate_padding(padding_size) when padding_size in 1..255 do
+    zeros_no = padding_size - 1
+    <<0::size(zeros_no)-unit(8), padding_size>>
+  end
+
   @spec from_which_rollover(number() | nil, number(), number()) :: :current | :previous | :next
   def from_which_rollover(previous_value, new_value, rollover_length)
 

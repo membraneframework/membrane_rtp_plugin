@@ -1,22 +1,11 @@
 defmodule Membrane.RTCP.Fixtures do
   @moduledoc false
 
-  @external_resource "test/fixtures/rtcp/single_packet.hex"
-  @sample_rtcp_packet File.read!(@external_resource)
-
-  @external_resource "test/fixtures/rtcp/packets.hex"
+  @sample_rtcp_packet File.read!("test/fixtures/rtcp/single_packet.hex")
   @sample_rtcp_communication File.read!("test/fixtures/rtcp/packets.hex")
-
-  @external_resource "test/fixtures/rtcp/with_unknown_pt.hex"
   @with_unknown_pt File.read!("test/fixtures/rtcp/with_unknown_pt.hex")
-
-  @external_resource "test/fixtures/rtcp/malformed.hex"
   @malformed_packet File.read!("test/fixtures/rtcp/malformed.hex")
-
-  @external_resource "test/fixtures/rtcp/twcc_feedbacks.hex"
   @twcc_feedbacks File.read!("test/fixtures/rtcp/twcc_feedbacks.hex")
-
-  @external_resource "test/fixtures/rtcp/twcc_malformed_feedbacks.hex"
   @twcc_malformed_feedbacks File.read!("test/fixtures/rtcp/twcc_malformed_feedbacks.hex")
 
   @spec sample_packet_binary() :: binary()
