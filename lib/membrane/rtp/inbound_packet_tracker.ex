@@ -196,7 +196,7 @@ defmodule Membrane.RTP.InboundPacketTracker do
     # Algorithm from https://tools.ietf.org/html/rfc3550#appendix-A.8
     arrival_ts = Map.get(metadata, :arrival_ts, Time.vm_time())
     buffer_ts = metadata.rtp.timestamp
-    arrival = arrival_ts |> Time.round_to_seconds() |> Ratio.mult(clock_rate) |> Ratio.trunc()
+    arrival = arrival_ts |> Time.as_seconds() |> Ratio.mult(clock_rate) |> Ratio.trunc()
     transit = arrival - buffer_ts
 
     {jitter, transit} =

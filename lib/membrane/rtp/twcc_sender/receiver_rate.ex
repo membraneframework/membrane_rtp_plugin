@@ -55,7 +55,7 @@ defmodule Membrane.RTP.TWCCSender.ReceiverRate do
     received_sizes_sum =
       Enum.reduce(packets_received, 0, fn {_timestamp, size}, acc -> acc + size end)
 
-    value = 1 / (Time.round_to_milliseconds(rr.window) / 1000) * received_sizes_sum
+    value = 1 / (Time.as_milliseconds(rr.window) / 1000) * received_sizes_sum
 
     %__MODULE__{rr | value: value, packets_received: packets_received}
   end
