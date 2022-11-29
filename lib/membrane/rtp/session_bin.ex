@@ -369,31 +369,6 @@ defmodule Membrane.RTP.SessionBin do
         struct(Membrane.SRTP.Encryptor, %{policies: state.receiver_srtp_policies})
       )
 
-    # links =
-    #   [
-    #     link_bin_input(pad)
-    #     |> via_in(:input, @rtp_input_params)
-    #     |> to({:rtp_parser, ref}, %RTP.Parser{secure?: secure?})
-    #     |> via_in(Pad.ref(:input, ref))
-    #     |> to(:ssrc_router)
-    #   ] ++
-    #     if rtcp? do
-    #       [
-    #         link({:rtp_parser, ref})
-    #         |> via_out(:rtcp_output)
-    #         |> then(if secure?, do: maybe_link_srtcp_decryptor, else: & &1)
-    #         |> to({:rtcp_parser, ref}, RTCP.Parser)
-    #         |> via_out(:receiver_report_output)
-    #         |> then(if secure?, do: maybe_link_srtcp_encryptor, else: & &1)
-    #         |> to_bin_output(rtcp_receiver_output),
-    #         link({:rtcp_parser, ref})
-    #         |> via_in(Pad.ref(:input, {:rtcp, ref}))
-    #         |> to(:ssrc_router)
-    #       ]
-    #     else
-    #       []
-    #     end
-
     structure = [
       [
         bin_input(pad)
@@ -582,7 +557,6 @@ defmodule Membrane.RTP.SessionBin do
           []
         end
 
-      # spec = %ParentSpec{links: links ++ rtcp_links}
       spec = structure ++ rtcp_structure
       state = %{state | senders_ssrcs: MapSet.put(state.senders_ssrcs, ssrc)}
 

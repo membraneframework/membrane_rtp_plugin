@@ -100,77 +100,6 @@ defmodule Membrane.RTP.Session.BinTest do
 
       {:ok, h264_payloader} = Membrane.RTP.PayloadFormatResolver.payloader(:H264)
 
-      # spec = %ParentSpec{
-      #   children: [
-      #     pcap: %Membrane.Pcap.Source{path: options.input.pcap},
-      #     pauser: %Pauser{pause_after: [15]},
-      #     rtp: %RTP.SessionBin{
-      #       fmt_mapping: options.fmt_mapping,
-      #       rtcp_receiver_report_interval: options.rtcp_receiver_report_interval,
-      #       secure?: Map.has_key?(options.input, :srtp_policies),
-      #       srtp_policies: Map.get(options.input, :srtp_policies, []),
-      #       receiver_ssrc_generator: fn [sender_ssrc | _local_ssrcs], _remote_ssrcs ->
-      #         sender_ssrc
-      #       end
-      #     },
-      #     hackney: %Membrane.Hackney.Source{
-      #       location:
-      #         "https://raw.githubusercontent.com/membraneframework/static/gh-pages/samples/ffmpeg-testsrc.h264"
-      #     },
-      #     parser: %Membrane.H264.FFmpeg.Parser{framerate: {30, 1}, alignment: :nal},
-      #     rtp_sink: Testing.Sink,
-      #     rtcp_source: %Testing.Source{
-      #       output: options.rtcp_input,
-      #       stream_format: %RemoteStream{type: :packetized, content_format: RTCP}
-      #     },
-      #     rtcp_sink: Testing.Sink
-      #   ],
-      #   links: [
-      #     link(:rtcp_source)
-      #     |> via_in(:rtp_input)
-      #     |> to(:rtp)
-      #     |> via_out(Pad.ref(:rtcp_receiver_output, rtp_input_ref))
-      #     |> to(:rtcp_sink),
-      #     link(:pcap)
-      #     |> to(:pauser)
-      #     |> via_in(Pad.ref(:rtp_input, rtp_input_ref))
-      #     |> to(:rtp),
-      #     # in case of payload_and_depayload option being true,
-      #     # session bin is responsible for payloading the stream
-      #     #
-      #     # to test the case where stream is already payloaded (payload_and_depayload being false)
-      #     # we need to manually add payloader bin and then link it with the session bin
-      #     if options.payload_and_depayload do
-      #       link(:hackney)
-      #       |> to(:parser)
-      #       |> via_in(Pad.ref(:input, options.output.video.ssrc),
-      #         options: [payloader: h264_payloader]
-      #       )
-      #       |> to(:rtp)
-      #       |> via_out(Pad.ref(:rtp_output, options.output.video.ssrc),
-      #         options: [encoding: :H264]
-      #       )
-      #       |> to(:rtp_sink)
-      #     else
-      #       # assume that incoming stream is already payloaded when entering session bin
-      #       link(:hackney)
-      #       |> to(:parser)
-      #       |> to(:payloader, %RTP.PayloaderBin{
-      #         payloader: h264_payloader,
-      #         payload_type: PayloadFormat.get(:H264).payload_type,
-      #         ssrc: options.output.video.ssrc,
-      #         clock_rate: 90_000
-      #       })
-      #       |> via_in(Pad.ref(:input, options.output.video.ssrc))
-      #       |> to(:rtp)
-      #       |> via_out(Pad.ref(:rtp_output, options.output.video.ssrc),
-      #         options: [encoding: :H264]
-      #       )
-      #       |> to(:rtp_sink)
-      #     end
-      #   ]
-      # }
-
       structure = [
         child(:pcap, %Membrane.Pcap.Source{path: options.input.pcap}),
         child(:pauser, %Pauser{pause_after: [15]}),
@@ -254,19 +183,6 @@ defmodule Membrane.RTP.Session.BinTest do
         else
           nil
         end
-
-      # spec = %ParentSpec{
-      #   children: [
-      #     {{:sink, ssrc}, Testing.Sink}
-      #   ],
-      #   links: [
-      #     link(:rtp)
-      #     |> via_out(Pad.ref(:output, ssrc),
-      #       options: [depayloader: depayloader]
-      #     )
-      #     |> to({:sink, ssrc})
-      #   ]
-      # }
 
       structure = [
         get_child(:rtp)

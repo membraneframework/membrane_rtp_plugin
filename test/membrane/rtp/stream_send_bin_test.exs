@@ -87,31 +87,6 @@ defmodule Membrane.RTP.StreamSendBinTest do
             |> child(:parser, Membrane.RTP.Parser)
         end
 
-      # spec = %ParentSpec{
-      #   children:
-      #     [
-      #       limiter: %Limiter{limit: opts.limit},
-      # rtp: %StreamSendBin{
-      #   clock_rate: @h264_clock_rate,
-      #   payloader: Map.get(opts, :payloader, H264.Payloader),
-      #   payload_type: Membrane.RTP.PayloadFormat.get(:H264).payload_type,
-      #   ssrc: @ssrc,
-      #   rtcp_report_interval: Map.get(opts, :rtcp_interval, Membrane.Time.seconds(1))
-      # },
-      #       rtcp_sink: Testing.Sink,
-      #       rtp_sink: Testing.Sink
-      #     ] ++ source_options.children,
-      #   links: [
-      #     source_options.link_builder
-      #     |> to(:limiter)
-      #     |> to(:rtp)
-      #     |> to(:rtp_sink),
-      #     link(:rtp)
-      #     |> via_out(Pad.ref(:rtcp_output, @ssrc))
-      #     |> to(:rtcp_sink)
-      #   ]
-      # }
-
       structure = [
         child(:limiter, %Limiter{limit: opts.limit}),
         child(:rtp, %StreamSendBin{

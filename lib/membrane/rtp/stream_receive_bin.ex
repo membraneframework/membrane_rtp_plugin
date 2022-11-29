@@ -69,10 +69,6 @@ defmodule Membrane.RTP.StreamReceiveBin do
       |> bin_output()
     ]
 
-    # spec = %ParentSpec{
-    #   links: links
-    # }
-
     {[spec: structure], %{}}
   end
 

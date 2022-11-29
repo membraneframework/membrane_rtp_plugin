@@ -68,14 +68,6 @@ defmodule Membrane.RTP.StreamSendBin do
 
   @impl true
   def handle_pad_added(Pad.ref(:rtcp_output, _id) = pad, _ctx, state) do
-    # links = [
-    #   link(:packet_tracker)
-    #   |> via_out(:rtcp_output)
-    #   |> to_bin_output(pad)
-    # ]
-
-    # spec = %ParentSpec{links: links}
-
     structure = [
       get_child(:packet_tracker)
       |> via_out(:rtcp_output)
@@ -87,14 +79,6 @@ defmodule Membrane.RTP.StreamSendBin do
 
   @impl true
   def handle_pad_added(Pad.ref(:rtcp_input, _id) = pad, _ctx, state) do
-    # links = [
-    #   link_bin_input(pad)
-    #   |> via_in(:rtcp_input)
-    #   |> to(:packet_tracker)
-    # ]
-
-    # spec = %ParentSpec{links: links}
-
     structure = [
       bin_input(pad)
       |> via_in(:rtcp_input)

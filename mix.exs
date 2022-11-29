@@ -36,14 +36,12 @@ defmodule Membrane.RTP.Plugin.MixProject do
 
   defp deps do
     [
-      # {:membrane_core, "~> 0.11.0"},
-      {:membrane_core, path: "../membrane_core", override: true},
-      # {:membrane_rtp_format, "~> 0.6.0"},
+      {:membrane_core, "~> 0.11.0"},
+      # {:membrane_core, path: "../membrane_core", override: true},
       {:membrane_telemetry_metrics, "~> 0.1.0"},
       {:ex_libsrtp, "~> 0.5.1", optional: true},
       {:qex, "~> 0.5.1"},
       {:bunch, "~> 1.5"},
-      # {:bunch, git: "https://github.com/membraneframework/bunch.git", override: true},
       {:heap, "~> 2.0.2"},
       {:bimap, "~> 1.2"},
 

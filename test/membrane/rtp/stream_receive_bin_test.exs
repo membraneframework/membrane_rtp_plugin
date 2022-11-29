@@ -41,22 +41,6 @@ defmodule Membrane.RTP.StreamReceiveBinTest do
   end
 
   test "RTP stream passes through bin properly" do
-    # opts = %Testing.Pipeline.Options{
-    #   elements: [
-    #     pcap: %Membrane.Pcap.Source{path: @pcap_file},
-    #     rtp_parser: RTP.Parser,
-    #     rtp: %StreamReceiveBin{
-    #       clock_rate: @h264_clock_rate,
-    #       depayloader: H264.Depayloader,
-    #       remote_ssrc: @ssrc,
-    #       local_ssrc: 0,
-    #       rtcp_report_interval: Membrane.Time.seconds(5)
-    #     },
-    #     video_parser: %Membrane.H264.FFmpeg.Parser{framerate: {30, 1}},
-    #     frame_counter: FrameCounter
-    #   ]
-    # }
-
     structure = [
       child(:pcap, %Membrane.Pcap.Source{path: @pcap_file})
       |> child(:rtp_parser, RTP.Parser)
@@ -86,30 +70,6 @@ defmodule Membrane.RTP.StreamReceiveBinTest do
 
   test "RTCP reports are generated properly" do
     pcap_file = "test/fixtures/rtp/session/h264_before_sr.pcap"
-
-    # opts = %Testing.Pipeline.Options{
-    #   elements: [
-    #     pcap: %Membrane.Pcap.Source{
-    #       path: pcap_file,
-    #       packet_transformer: fn %ExPcap.Packet{
-    #                                packet_header: %{ts_sec: sec, ts_usec: usec},
-    #                                parsed_packet_data: {_, payload}
-    #                              } ->
-    #         arrival_ts = Membrane.Time.seconds(sec) + Membrane.Time.microseconds(usec)
-    #         %Membrane.Buffer{payload: payload, metadata: %{arrival_ts: arrival_ts}}
-    #       end
-    #     },
-    #     rtp_parser: RTP.Parser,
-    #     rtp: %StreamReceiveBin{
-    #       clock_rate: @h264_clock_rate,
-    #       depayloader: H264.Depayloader,
-    #       local_ssrc: 0,
-    #       remote_ssrc: 4_194_443_425,
-    #       rtcp_report_interval: Membrane.Time.seconds(5)
-    #     },
-    #     sink: Testing.Sink
-    #   ]
-    # }
 
     structure = [
       child(:pcap, %Membrane.Pcap.Source{
@@ -183,20 +143,6 @@ defmodule Membrane.RTP.StreamReceiveBinTest do
     remote_ssrc = 4_194_443_425
     half_throttle_duration = div(@fir_throttle_duration_ms, 2)
     delta = div(@fir_throttle_duration_ms, 10)
-
-    # opts = %Testing.Pipeline.Options{
-    #   elements: [
-    #     src: NoopSource,
-    #     rtp: %StreamReceiveBin{
-    #       clock_rate: @h264_clock_rate,
-    #       depayloader: H264.Depayloader,
-    #       local_ssrc: 0,
-    #       remote_ssrc: remote_ssrc,
-    #       rtcp_report_interval: nil
-    #     },
-    #     sink: %KeyframeRequester{delay: @fir_throttle_duration_ms + delta}
-    #   ]
-    # }
 
     structure = [
       child(:src, NoopSource)
