@@ -1,4 +1,4 @@
-defmodule Membrane.RTP.Serializer do
+defmodule Membrane.RTP.HeaderGenerator do
   @moduledoc """
   Given following RTP payloads and their minimal metadata, creates their proper header information,
   incrementing timestamps and sequence numbers for each packet. Header information then is put
@@ -10,16 +10,14 @@ defmodule Membrane.RTP.Serializer do
   use Membrane.Filter
 
   require Bitwise
-  alias Membrane.{RemoteStream, RTP}
+  alias Membrane.RTP
 
   @max_seq_num Bitwise.bsl(1, 16) - 1
   @max_timestamp Bitwise.bsl(1, 32) - 1
 
   def_input_pad :input, caps: RTP, demand_mode: :auto
 
-  def_output_pad :output,
-    caps: {RemoteStream, type: :packetized, content_format: RTP},
-    demand_mode: :auto
+  def_output_pad :output, caps: RTP, demand_mode: :auto
 
   def_options ssrc: [spec: RTP.ssrc_t()],
               payload_type: [spec: RTP.payload_type_t()],
@@ -71,8 +69,7 @@ defmodule Membrane.RTP.Serializer do
 
   @impl true
   def handle_caps(:input, _caps, _ctx, state) do
-    caps = %RemoteStream{type: :packetized, content_format: RTP}
-    {{:ok, caps: {:output, caps}}, state}
+    {{:ok, caps: {:output, %RTP{}}}, state}
   end
 
   @impl true
