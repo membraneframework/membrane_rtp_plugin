@@ -133,7 +133,7 @@ defmodule Membrane.RTP.TWCCSender do
     buffer =
       Header.Extension.put(buffer, %Header.Extension{identifier: :twcc, data: <<seq_num::16>>})
 
-    # FIXME take into account header size
+    # TODO take into account header size
     # we are not taking into account header
     # size here which doesn't seem to be
     # fully correct
