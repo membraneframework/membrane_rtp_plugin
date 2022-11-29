@@ -392,7 +392,6 @@ defmodule Membrane.RTP.Session.BinTest do
     end)
 
     assert_end_of_stream(pipeline, {:sink, ^video_ssrc})
-    # Testing.Pipeline.terminate(pipeline, blocking?: true)
-    # assert_pipeline_(pipeline)
+    Testing.Pipeline.terminate(pipeline, blocking?: true)
   end
 end

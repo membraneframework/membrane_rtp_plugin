@@ -72,7 +72,7 @@ defmodule Membrane.RTP.ParserTest do
         assert_sink_buffer(pipeline, :sink, %Buffer{}, @buffer_receive_timeout)
       end)
 
-      # Pipeline.terminate(pipeline, blocking?: true)
+      Pipeline.terminate(pipeline, blocking?: true)
     end
   end
 end

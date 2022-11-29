@@ -172,7 +172,7 @@ defmodule Membrane.RTP.StreamSendBinTest do
              }
            } = packet
 
-    # Testing.Pipeline.terminate(pipeline, blocking?: true)
+    Testing.Pipeline.terminate(pipeline, blocking?: true)
   end
 
   test "Depayloaded RTP stream gets payloaded and passed through bin's output properly" do
@@ -191,7 +191,7 @@ defmodule Membrane.RTP.StreamSendBinTest do
 
     assert_end_of_stream(pipeline, :rtp_sink, :input, 4000)
 
-    # Testing.Pipeline.terminate(pipeline, blocking?: true)
+    Testing.Pipeline.terminate(pipeline, blocking?: true)
   end
 
   test "Payloaded RTP stream passes through bin's output properly" do
@@ -214,6 +214,6 @@ defmodule Membrane.RTP.StreamSendBinTest do
 
     assert_end_of_stream(pipeline, :rtp_sink, :input)
 
-    # Testing.Pipeline.terminate(pipeline, blocking?: true)
+    Testing.Pipeline.terminate(pipeline, blocking?: true)
   end
 end

@@ -81,7 +81,7 @@ defmodule Membrane.RTP.StreamReceiveBinTest do
     assert_pipeline_notified(pipeline, :frame_counter, {:frame_count, count})
     assert count == @frames_count
 
-    # Testing.Pipeline.terminate(pipeline, blocking?: true)
+    Testing.Pipeline.terminate(pipeline, blocking?: true)
   end
 
   test "RTCP reports are generated properly" do
@@ -140,7 +140,7 @@ defmodule Membrane.RTP.StreamReceiveBinTest do
     assert_start_of_stream(pipeline, :sink)
     assert_end_of_stream(pipeline, :rtp_parser, :input, 4000)
     assert_end_of_stream(pipeline, :sink)
-    # Testing.Pipeline.terminate(pipeline, blocking?: true)
+    Testing.Pipeline.terminate(pipeline, blocking?: true)
   end
 
   defmodule NoopSource do
@@ -233,6 +233,6 @@ defmodule Membrane.RTP.StreamReceiveBinTest do
 
     # ... and only one
     refute_pipeline_notified(pipeline, :src, %Membrane.RTCPEvent{}, half_throttle_duration)
-    # Testing.Pipeline.terminate(pipeline, blocking?: true)
+    Testing.Pipeline.terminate(pipeline, blocking?: true)
   end
 end
