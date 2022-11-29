@@ -15,6 +15,8 @@ defmodule Membrane.RTP.SSRCRouter do
 
   require Membrane.Logger
   require Membrane.TelemetryMetrics
+
+  alias __MODULE__.RequireExtensions
   alias Membrane.{RTCP, RTCPEvent, RTP, SRTP}
 
   @packet_arrival_event [Membrane.RTP, :packet, :arrival]
@@ -202,9 +204,9 @@ defmodule Membrane.RTP.SSRCRouter do
   end
 
   @impl true
-  def handle_other({:require_extensions, pt_to_extid}, _ctx, state) do
+  def handle_other(%RequireExtensions{pt_to_ext_id: pt_to_ext_id}, _ctx, state) do
     required_extensions =
-      Map.merge(state.required_extensions, pt_to_extid, fn _k, v1, v2 -> v1 ++ v2 end)
+      Map.merge(state.required_extensions, pt_to_ext_id, fn _k, v1, v2 -> v1 ++ v2 end)
 
     {:ok, %{state | required_extensions: required_extensions}}
   end
@@ -218,7 +220,10 @@ defmodule Membrane.RTP.SSRCRouter do
 
       Map.has_key?(state.required_extensions, payload_type) and
           Enum.all?(extensions, &(&1.identifier not in required_extensions)) ->
-        Membrane.Logger.info("Dropping packet without required extension")
+        Membrane.Logger.debug("""
+        Dropping packet of SSRC #{ssrc} without required extension(s).
+        Required: #{inspect(required_extensions)}, present: #{inspect(extensions)}
+        """)
 
         {[], state}
 

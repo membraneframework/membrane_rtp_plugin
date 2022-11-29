@@ -66,6 +66,7 @@ defmodule Membrane.RTP.SessionBin do
   require Membrane.Logger
   alias Membrane.RTP.{PayloadFormat, Session}
   alias Membrane.RTP.SessionBin.RtxInfo
+  alias Membrane.RTP.SSRCRouter.RequireExtensions
   alias Membrane.{ParentSpec, RemoteStream, RTCP, RTP, SRTP}
 
   @type new_stream_notification_t :: Membrane.RTP.SSRCRouter.new_stream_notification_t()
@@ -470,7 +471,6 @@ defmodule Membrane.RTP.SessionBin do
       router_link
       |> via_in(Pad.ref(:input, ssrc))
       # TODO: Replace funnel with something smarter that will handle possible repeats
-      # FIXME: FIR gets stuck here
       |> to({:rtx_funnel, ssrc}, Membrane.Funnel)
       |> to_bin_output(pad)
     ]
@@ -651,7 +651,7 @@ defmodule Membrane.RTP.SessionBin do
   end
 
   @impl true
-  def handle_other({:require_extensions, _pt_to_ext_id} = msg, _ctx, state) do
+  def handle_other(%RequireExtensions{} = msg, _ctx, state) do
     {{:ok, forward: {:ssrc_router, msg}}, state}
   end
 
@@ -665,6 +665,7 @@ defmodule Membrane.RTP.SessionBin do
     links = [
       link(:ssrc_router)
       |> via_out(Pad.ref(:output, ssrc))
+      # FIXME: TWCCReceiver won't notice packets dropped by SSRCRouter
       # FIXME: RTX should be included in TWCC conditionally
       |> to(:twcc_receiver)
       |> to(
