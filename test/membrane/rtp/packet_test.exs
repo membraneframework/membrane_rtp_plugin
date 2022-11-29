@@ -34,16 +34,18 @@ defmodule Membrane.RTP.PacketTest do
     assert Packet.serialize(packet) == packet_binary
   end
 
+  test "generates padding" do
+    ref_packet = Fixtures.sample_packet_binary_with_padding()
+    test_packet = Fixtures.sample_packet()
+    assert ref_packet == Packet.serialize(test_packet, padding_size: 20)
+  end
+
   test "ignores padding" do
-    test_padding_size = 2
-    padding_octets = test_padding_size - 1
-    test_padding = <<0::size(padding_octets)-unit(8), test_padding_size>>
-    <<version::2, _padding::1, rest::bitstring>> = Fixtures.sample_packet_binary()
-    test_packet = <<version::2, 1::1, rest::bitstring, test_padding::binary>>
+    ref_packet = Fixtures.sample_packet()
+    test_packet = Fixtures.sample_packet_binary_with_padding()
 
-    sample_packet = Fixtures.sample_packet()
-
-    assert {:ok, %{packet: ^sample_packet}} = Packet.parse(test_packet, @encrypted?)
+    assert {:ok, %{packet: ^ref_packet, padding_size: 20}} =
+             Packet.parse(test_packet, @encrypted?)
   end
 
   test "reads and serializes extension header" do
