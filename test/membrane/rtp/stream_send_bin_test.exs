@@ -109,16 +109,6 @@ defmodule Membrane.RTP.StreamSendBinTest do
 
       {[spec: structure, playback: :playing], %{}}
     end
-
-    @impl true
-    def handle_setup(_, state) do
-      {[], state}
-    end
-
-    @impl true
-    def handle_playing(_, state) do
-      {[], state}
-    end
   end
 
   test "RTCP sender reports are generated properly" do

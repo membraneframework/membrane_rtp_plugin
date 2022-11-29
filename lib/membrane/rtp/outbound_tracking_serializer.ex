@@ -139,11 +139,6 @@ defmodule Membrane.RTP.OutboundTrackingSerializer do
   end
 
   @impl true
-  def handle_setup(_, state) do
-    {[], state}
-  end
-
-  @impl true
   def handle_playing(_ctx, state) do
     if state.rtcp_output_pad do
       stream_format = %RemoteStream{type: :packetized, content_format: RTCP}
