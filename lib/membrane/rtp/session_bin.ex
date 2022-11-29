@@ -36,6 +36,25 @@ defmodule Membrane.RTP.SessionBin do
   In such a case, SessionBin will receive payloaded packets and work as a simple proxy just forwarding the packets (and decrypting them if necessary).
   Therefore it is possible to specify in newly added pads if payloaders/depayloaders should be used for the certain stream.
 
+  ## Padding
+  Addition and removal of a padding from RTP packets is handled by the RTP plugin.
+
+  To send a packet with a padding, one should include `padding_size` field in `Membrane.Buffer`'s metadata.
+
+  E.g.
+
+  ```elixir
+  metadata = %{rtp: %{padding_size: 20}}
+  ```
+
+  will result in adding 20 bytes of padding (in total i.e. including the last byte denoting padding size)
+  at the end of packet's payload.
+
+  When parsing an RTP stream, a padding is stripped out and the `padding_size` field is set appropriately to the
+  number of bytes that were removed (including last byte denoting padding size).
+
+  For more information, please refer to the [RFC 3550, sec. 5](https://www.rfc-editor.org/rfc/rfc3550#section-5)
+
   ## RTCP
   RTCP packets for inbound stream can be provided either in-band or via a separate `rtp_input` pad instance. Corresponding
   receiver report packets will be sent back through `rtcp_receiver_output` with the same id as `rtp_input` for the RTP stream.
