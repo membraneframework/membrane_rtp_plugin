@@ -91,7 +91,7 @@ if Code.ensure_loaded?(ExLibSRTP) do
         payload: payload,
         metadata: %{
           rtp: %{
-            has_padding?: has_padding?,
+            padding_size: padding_size,
             total_header_size: total_header_size
           }
         }
@@ -104,7 +104,7 @@ if Code.ensure_loaded?(ExLibSRTP) do
           # decrypted payload contains the header that we can simply strip without any parsing as we know its length
           <<_header::binary-size(total_header_size), payload::binary>> = payload
 
-          {:ok, {payload, _size}} = Utils.strip_padding(payload, has_padding?)
+          {:ok, {payload, _size}} = Utils.strip_padding(payload, padding_size > 0)
 
           {{:ok, buffer: {:output, %Buffer{buffer | payload: payload}}}, state}
 
