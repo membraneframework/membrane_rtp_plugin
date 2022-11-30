@@ -46,8 +46,22 @@ if Code.ensure_loaded?(ExLibSRTP) do
 
     @impl true
     def handle_process(:input, buffer, _ctx, state) do
-      {:ok, payload} = ExLibSRTP.unprotect_rtcp(state.srtp, buffer.payload)
-      {{:ok, buffer: {:output, %Buffer{buffer | payload: payload}}}, state}
+      case ExLibSRTP.unprotect_rtcp(state.srtp, buffer.payload) do
+        {:ok, payload} ->
+          {{:ok, buffer: {:output, %Buffer{buffer | payload: payload}}}, state}
+
+        {:error, reason} when reason in [:replay_fail, :replay_old] ->
+          Membrane.Logger.debug("""
+          Couldn't unprotect srtcp packet:
+          #{inspect(buffer.payload, limit: :infinity)}
+          Reason: #{inspect(reason)}. Ignoring packet.
+          """)
+
+          {:ok, state}
+
+        {:error, reason} ->
+          raise "Couldn't unprotect SRTCP packet due to #{inspect(reason)}"
+      end
     end
 
     @impl true
