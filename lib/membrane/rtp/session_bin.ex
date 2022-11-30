@@ -635,7 +635,8 @@ defmodule Membrane.RTP.SessionBin do
   end
 
   @impl true
-  def handle_notification({:vad, _val} = msg, _from, _ctx, state) do
+  def handle_notification({:vad, value}, {:vad, ssrc}, _ctx, state) do
+    msg = {:vad, {ssrc, value}}
     {{:ok, notify: msg}, state}
   end
 
