@@ -47,11 +47,10 @@ defmodule Membrane.RTP.SessionBin do
   metadata = %{rtp: %{padding_size: 20}}
   ```
 
-  will result in adding 20 bytes of padding (in total i.e. including the last byte denoting padding size)
-  at the end of packet's payload.
+  will result in adding 20 bytes of padding at the end of packet's payload.
 
   When parsing an RTP stream, a padding is stripped out and the `padding_size` field is set appropriately to the
-  number of bytes that were removed (including last byte denoting padding size).
+  number of bytes that were removed.
 
   For more information, please refer to the [RFC 3550, sec. 5](https://www.rfc-editor.org/rfc/rfc3550#section-5)
 

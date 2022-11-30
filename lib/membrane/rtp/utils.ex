@@ -1,6 +1,8 @@
 defmodule Membrane.RTP.Utils do
   @moduledoc false
 
+  alias Membrane.RTP.Packet
+
   @spec strip_padding(binary, padding_present? :: boolean) ::
           {:ok, {binary, padding_size :: non_neg_integer()}} | :error
   def strip_padding(binary, padding_present?)
@@ -17,14 +19,7 @@ defmodule Membrane.RTP.Utils do
     end
   end
 
-  @doc """
-  Generates padding binary.
-
-  `padding_size` is the final padding size including
-  the last byte denoting padding size. `padding_size`
-  cannot be greater than 255.
-  """
-  @spec generate_padding(non_neg_integer()) :: binary()
+  @spec generate_padding(Packet.padding_size()) :: binary()
   def generate_padding(0), do: <<>>
 
   def generate_padding(padding_size) when padding_size in 1..255 do

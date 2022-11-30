@@ -14,6 +14,13 @@ defmodule Membrane.RTP.Packet do
           payload: binary()
         }
 
+  @typedoc """
+  Possible padding size.
+
+  It includes the last byte denoting the size of the padding.
+  """
+  @type padding_size :: 0..255
+
   @enforce_keys [:header, :payload]
   defstruct @enforce_keys
 
@@ -27,15 +34,16 @@ defmodule Membrane.RTP.Packet do
 
   def identify(_packet), do: :rtp
 
-  @spec serialize(t, padding_size: non_neg_integer()) :: binary
-  def serialize(%__MODULE__{} = packet, opts \\ [padding_size: 0]) do
+  @spec serialize(t, padding_size: padding_size()) :: binary
+  def serialize(%__MODULE__{} = packet, opts \\ []) do
     %__MODULE__{header: header, payload: payload} = packet
     %Header{version: 2} = header
-    has_padding = if opts[:padding_size] > 0, do: 1, else: 0
+    padding_size = Keyword.get(opts, :padding_size, 0)
+    has_padding = if padding_size > 0, do: 1, else: 0
     has_extension = if header.extensions == [], do: 0, else: 1
     marker = if header.marker, do: 1, else: 0
     csrcs = Enum.map_join(header.csrcs, &<<&1::32>>)
-    padding = Utils.generate_padding(opts[:padding_size])
+    padding = Utils.generate_padding(padding_size)
 
     <<header.version::2, has_padding::1, has_extension::1, length(header.csrcs)::4, marker::1,
       header.payload_type::7, header.sequence_number::16, header.timestamp::32, header.ssrc::32,
