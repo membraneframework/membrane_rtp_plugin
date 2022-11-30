@@ -85,7 +85,7 @@ defmodule Membrane.RTP.Packet do
 
   @spec parse(binary(), boolean()) ::
           {:ok,
-           %{packet: t(), padding_size: non_neg_integer(), total_header_size: non_neg_integer()}}
+           %{packet: t(), padding_size: padding_size(), total_header_size: non_neg_integer()}}
           | {:error, :wrong_version | :malformed_packet}
   def parse(packet, encrypted?)
 
