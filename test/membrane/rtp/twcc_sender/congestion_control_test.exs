@@ -117,11 +117,10 @@ defmodule Membrane.RTP.TWCCSender.CongestionControlTest do
     } do
       # Setup:
       # 20 reports delivered in a regular 200ms interval -> simulating 4s of bandwidth estimation process
-      packet_size = 1200 * 8
-      n_reports = 132
-      report_interval_ms = 30
-
-      packets_per_report = round(target_bandwidth / packet_size * (report_interval_ms / 1000))
+      # 10 packets per report gives us 50 packets/s
+      n_reports = 20
+      packets_per_report = 10
+      report_interval_ms = 200
 
       {reference_times, send_deltas, packet_sizes, rtts} =
         make_fixtures(
@@ -174,7 +173,6 @@ defmodule Membrane.RTP.TWCCSender.CongestionControlTest do
       assert cc.a_hat > initial_bwe
     end
 
-    @tag :debug
     test "decreases estimated receive bandwidth if interpacket delay increases", %{
       cc: %CongestionControl{a_hat: initial_bwe} = cc,
       n_reports: n_reports,
