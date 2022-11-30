@@ -136,7 +136,6 @@ defmodule Membrane.RTP.InboundPacketTrackerTest do
     ]
 
     {:ok, pipeline} = Pipeline.start_link(links: ParentSpec.link_linear(children))
-    on_exit(fn -> Pipeline.terminate(pipeline, blocking?: true) end)
     Pipeline.execute_actions(pipeline, playback: :playing)
     assert_pipeline_playback_changed(pipeline, :prepared, :playing)
     assert_end_of_stream(pipeline, :sink)
@@ -144,5 +143,7 @@ defmodule Membrane.RTP.InboundPacketTrackerTest do
     for buffer <- buffers do
       assert_sink_buffer(pipeline, :sink, ^buffer)
     end
+
+    Pipeline.terminate(pipeline, blocking?: true)
   end
 end
