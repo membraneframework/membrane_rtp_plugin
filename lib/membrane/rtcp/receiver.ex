@@ -4,16 +4,15 @@ defmodule Membrane.RTCP.Receiver do
   """
   use Membrane.Filter
 
-  alias Membrane.RTCPEvent
-  alias Membrane.RTCP.{FeedbackPacket, SenderReportPacket, TransportFeedbackPacket}
-  alias Membrane.{RTCP, RTP}
-  alias Membrane.RTCP.ReceiverReport
-  alias Membrane.RTCP.TransportFeedbackPacket.NACK
-  alias Membrane.RTP.RetransmissionRequest
-  alias Membrane.Time
-
   require Membrane.Logger
   require Membrane.TelemetryMetrics
+  alias Membrane.RTCP.ReceiverReport
+  alias Membrane.RTCP.{FeedbackPacket, SenderReportPacket, TransportFeedbackPacket}
+  alias Membrane.RTCPEvent
+  alias Membrane.Time
+  alias Membrane.{RTCP, RTP}
+  alias Membrane.RTCP.TransportFeedbackPacket.NACK
+  alias Membrane.RTP.RetransmissionRequest
 
   def_input_pad :input, caps: :any, demand_mode: :auto
   def_output_pad :output, caps: :any, demand_mode: :auto

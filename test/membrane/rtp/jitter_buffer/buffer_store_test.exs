@@ -2,10 +2,10 @@ defmodule Membrane.RTP.JitterBuffer.BufferStoreTest do
   use ExUnit.Case, async: true
   use Bunch
 
+  alias Membrane.RTP.BufferFactory
+  alias Membrane.RTP.JitterBuffer.BufferStore
   alias Membrane.RTP.PacketStore
   alias Membrane.RTP.PacketStore.Entry
-  alias Membrane.RTP.JitterBuffer.BufferStore
-  alias Membrane.RTP.BufferFactory
 
   @seq_number_limit 65_536
   @base_index 65_505

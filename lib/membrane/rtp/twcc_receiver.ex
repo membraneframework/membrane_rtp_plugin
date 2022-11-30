@@ -5,12 +5,12 @@ defmodule Membrane.RTP.TWCCReceiver do
   """
   use Membrane.Filter
 
-  alias Membrane.{RTP, RTCPEvent, Time}
-  alias Membrane.RTP.Header
-  alias Membrane.RTCP.TransportFeedbackPacket
-  alias __MODULE__.PacketInfoStore
-
   require Bitwise
+
+  alias __MODULE__.PacketInfoStore
+  alias Membrane.RTCP.TransportFeedbackPacket
+  alias Membrane.RTP.Header
+  alias Membrane.{RTCPEvent, RTP, Time}
 
   @feedback_count_limit Bitwise.bsl(1, 8)
 

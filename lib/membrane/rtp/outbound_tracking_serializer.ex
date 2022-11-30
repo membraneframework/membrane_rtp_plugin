@@ -1,4 +1,4 @@
-defmodule Membrane.RTP.OutboundPacketTracker do
+defmodule Membrane.RTP.OutboundTrackingSerializer do
   @moduledoc """
   Tracks statistics of outbound packets.
 
@@ -8,37 +8,33 @@ defmodule Membrane.RTP.OutboundPacketTracker do
   """
   use Membrane.Filter
 
-  alias Membrane.{Buffer, RTCPEvent, RTP, Payload, Time}
-  alias Membrane.RTCP.FeedbackPacket.{PLI, FIR}
-  alias Membrane.RTCP.TransportFeedbackPacket.NACK
+  require Membrane.Logger
+  alias Membrane.RTCP.FeedbackPacket.{FIR, PLI}
   alias Membrane.RTP.Session.SenderReport
+  alias Membrane.{Buffer, Payload, RemoteStream, RTCPEvent, RTP, Time}
+  alias Membrane.RTCP.TransportFeedbackPacket.NACK
   alias Membrane.RTP.RetransmissionRequest
 
-  require Membrane.Logger
+  def_input_pad :input, caps: RTP, demand_mode: :auto
 
-  def_input_pad :input, caps: :any, demand_mode: :auto
-
-  def_output_pad :output, caps: :any, demand_mode: :auto
+  def_output_pad :output,
+    caps: {RemoteStream, type: :packetized, content_format: RTP},
+    demand_mode: :auto
 
   def_input_pad :rtcp_input,
     availability: :on_request,
     caps: :any,
     demand_mode: :auto
 
-  def_output_pad :rtcp_output, availability: :on_request, caps: :any, demand_mode: :auto
+  def_output_pad :rtcp_output,
+    availability: :on_request,
+    caps: {RemoteStream, type: :packetized, content_format: RTCP},
+    demand_mode: :auto
 
   def_options ssrc: [spec: RTP.ssrc_t()],
               payload_type: [spec: RTP.payload_type_t()],
               clock_rate: [spec: RTP.clock_rate_t()],
-              extension_mapping: [spec: RTP.SessionBin.rtp_extension_mapping_t()],
-              alignment: [
-                default: 1,
-                spec: pos_integer(),
-                description: """
-                Number of bytes that each packet should be aligned to.
-                Alignment is achieved by adding RTP padding.
-                """
-              ]
+              extension_mapping: [spec: RTP.SessionBin.rtp_extension_mapping_t()]
 
   defmodule State do
     @moduledoc false
@@ -50,7 +46,6 @@ defmodule Membrane.RTP.OutboundPacketTracker do
             ssrc: RTP.ssrc_t(),
             payload_type: RTP.payload_type_t(),
             extension_mapping: RTP.SessionBin.rtp_extension_mapping_t(),
-            alignment: pos_integer(),
             any_buffer_sent?: boolean(),
             rtcp_output_pad: Membrane.Pad.ref_t() | nil,
             stats_acc: %{}
@@ -59,7 +54,6 @@ defmodule Membrane.RTP.OutboundPacketTracker do
     defstruct ssrc: 0,
               payload_type: 0,
               extension_mapping: %{},
-              alignment: 1,
               any_buffer_sent?: false,
               rtcp_output_pad: nil,
               stats_acc: %{
@@ -87,6 +81,16 @@ defmodule Membrane.RTP.OutboundPacketTracker do
   end
 
   @impl true
+  def handle_pad_added(
+        Pad.ref(:rtcp_output, _id) = pad,
+        %{playback: :playing},
+        %{rtcp_output_pad: nil} = state
+      ) do
+    caps = %RemoteStream{type: :packetized, content_format: RTCP}
+    {{:ok, caps: {pad, caps}}, %{state | rtcp_output_pad: pad}}
+  end
+
+  @impl true
   def handle_pad_added(Pad.ref(:rtcp_output, _id) = pad, _ctx, %{rtcp_output_pad: nil} = state) do
     {:ok, %{state | rtcp_output_pad: pad}}
   end
@@ -97,6 +101,17 @@ defmodule Membrane.RTP.OutboundPacketTracker do
   end
 
   @impl true
+  def handle_caps(:input, _caps, _ctx, state) do
+    caps = %RemoteStream{type: :packetized, content_format: RTP}
+    {{:ok, caps: {:output, caps}}, state}
+  end
+
+  @impl true
+  def handle_caps(_pad, _caps, _ctx, state) do
+    {:ok, state}
+  end
+
+  @impl true
   def handle_event(
         Pad.ref(:rtcp_input, _id),
         %RTCPEvent{rtcp: %{payload: %keyframe_request{}}},
@@ -104,7 +119,7 @@ defmodule Membrane.RTP.OutboundPacketTracker do
         state
       )
       when keyframe_request in [PLI, FIR] do
-    # PLI or FIR reaching OutboundPacketTracker means the receiving peer sent it
+    # PLI or FIR reaching OutboundTrackingSerializer means the receiving peer sent it
     # We need to pass it to the sending peer's RTCP.Receiver (in StreamReceiveBin) to get translated again into FIR/PLI with proper SSRCs
     # and then sent to the sender. So the KeyframeRequestEvent, like salmon, starts an upstream journey here trying to reach that peer.
     {{:ok, event: {:input, %Membrane.KeyframeRequestEvent{}}}, state}
@@ -123,6 +138,16 @@ defmodule Membrane.RTP.OutboundPacketTracker do
   @impl true
   def handle_event(pad, event, ctx, state) do
     super(pad, event, ctx, state)
+  end
+
+  @impl true
+  def handle_prepared_to_playing(_ctx, state) do
+    if state.rtcp_output_pad do
+      caps = %RemoteStream{type: :packetized, content_format: RTCP}
+      {{:ok, caps: {state.rtcp_output_pad, caps}}, state}
+    else
+      {:ok, state}
+    end
   end
 
   @impl true
@@ -148,12 +173,11 @@ defmodule Membrane.RTP.OutboundPacketTracker do
           extensions: extensions
       })
 
-    is_padding_packet? = Map.get(buffer.metadata.rtp, :is_padding?, false)
+    padding_size = Map.get(rtp_metadata, :padding_size, 0)
 
     payload =
       RTP.Packet.serialize(%RTP.Packet{header: header, payload: buffer.payload},
-        align_to: state.alignment,
-        is_padding_packet?: is_padding_packet?
+        padding_size: padding_size
       )
 
     buffer = %Buffer{buffer | payload: payload}

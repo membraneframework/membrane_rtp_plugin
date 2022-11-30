@@ -1,4 +1,4 @@
-defmodule Membrane.RTP.Serializer do
+defmodule Membrane.RTP.HeaderGenerator do
   @moduledoc """
   Given following RTP payloads and their minimal metadata, creates their proper header information,
   incrementing timestamps and sequence numbers for each packet. Header information then is put
@@ -9,30 +9,19 @@ defmodule Membrane.RTP.Serializer do
   """
   use Membrane.Filter
 
-  alias Membrane.{RTP, RemoteStream}
-
   require Bitwise
+  alias Membrane.RTP
 
   @max_seq_num Bitwise.bsl(1, 16) - 1
   @max_timestamp Bitwise.bsl(1, 32) - 1
 
   def_input_pad :input, caps: RTP, demand_mode: :auto
 
-  def_output_pad :output,
-    caps: {RemoteStream, type: :packetized, content_format: RTP},
-    demand_mode: :auto
+  def_output_pad :output, caps: RTP, demand_mode: :auto
 
   def_options ssrc: [spec: RTP.ssrc_t()],
               payload_type: [spec: RTP.payload_type_t()],
-              clock_rate: [spec: RTP.clock_rate_t()],
-              alignment: [
-                default: 1,
-                spec: pos_integer(),
-                description: """
-                Number of bytes that each packet should be aligned to.
-                Alignment is achieved by adding RTP padding.
-                """
-              ]
+              clock_rate: [spec: RTP.clock_rate_t()]
 
   defmodule State do
     @moduledoc false
@@ -42,7 +31,6 @@ defmodule Membrane.RTP.Serializer do
       :ssrc,
       :payload_type,
       :clock_rate,
-      :alignment,
       sequence_number: 0,
       init_timestamp: 0
     ]
@@ -51,7 +39,6 @@ defmodule Membrane.RTP.Serializer do
             ssrc: RTP.ssrc_t(),
             payload_type: RTP.payload_type_t(),
             clock_rate: RTP.clock_rate_t(),
-            alignment: pos_integer(),
             sequence_number: non_neg_integer(),
             init_timestamp: non_neg_integer()
           }
@@ -72,8 +59,7 @@ defmodule Membrane.RTP.Serializer do
 
   @impl true
   def handle_caps(:input, _caps, _ctx, state) do
-    caps = %RemoteStream{type: :packetized, content_format: RTP}
-    {{:ok, caps: {:output, caps}}, state}
+    {{:ok, caps: {:output, %RTP{}}}, state}
   end
 
   @impl true

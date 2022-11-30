@@ -7,9 +7,13 @@ if Code.ensure_loaded?(ExLibSRTP) do
     """
     use Membrane.Filter
 
+    require Membrane.Logger
+
     alias Membrane.{Buffer, RTP, SRTP}
 
-    require Membrane.Logger
+    defguardp is_protection_error_fatal(type, reason)
+              when type == :rtcp or
+                     (type == :rtp and reason not in [:replay_fail, :replay_old])
 
     def_input_pad :input, caps: :any, demand_mode: :auto
     def_output_pad :output, caps: :any, demand_mode: :auto
@@ -111,21 +115,21 @@ if Code.ensure_loaded?(ExLibSRTP) do
       %Buffer{payload: payload} = buffer
       packet_type = RTP.Packet.identify(payload)
 
-      case packet_type do
-        :rtp -> ExLibSRTP.protect(srtp, payload)
-        :rtcp -> ExLibSRTP.protect_rtcp(srtp, payload)
-      end
-      |> case do
+      protection_result =
+        case packet_type do
+          :rtp -> ExLibSRTP.protect(srtp, payload)
+          :rtcp -> ExLibSRTP.protect_rtcp(srtp, payload)
+        end
+
+      case protection_result do
         {:ok, payload} ->
           [%Buffer{buffer | payload: payload}]
 
-        {:error, reason} ->
-          Membrane.Logger.warn("""
-          Couldn't protect #{packet_type} payload:
-          #{inspect(payload, limit: :infinity)}
-          Reason: #{inspect(reason)}. Ignoring packet.
-          """)
+        {:error, reason} when is_protection_error_fatal(packet_type, reason) ->
+          raise "Failed to protect #{inspect(packet_type)} due to unhandled error #{reason}"
 
+        {:error, reason} ->
+          Membrane.Logger.warn("Ignoring #{inspect(packet_type)} packet due to `#{reason}`")
           []
       end
     end

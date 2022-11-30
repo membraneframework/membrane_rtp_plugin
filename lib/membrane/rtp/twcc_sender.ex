@@ -5,12 +5,13 @@ defmodule Membrane.RTP.TWCCSender do
   """
   use Membrane.Filter
 
-  alias Membrane.{RTP, Time}
-  alias Membrane.RTP.Header
-  alias Membrane.RTCP.TransportFeedbackPacket.TWCC
-  alias __MODULE__.CongestionControl
-
   require Bitwise
+
+  alias __MODULE__.{CongestionControl, ReceiverRate}
+  alias Membrane.RTCP.TransportFeedbackPacket.TWCC
+  alias Membrane.RTP
+  alias Membrane.RTP.Header
+  alias Membrane.Time
 
   @seq_number_limit Bitwise.bsl(1, 16)
 
@@ -61,9 +62,9 @@ defmodule Membrane.RTP.TWCCSender do
   def handle_tick(
         :bandwidth_report_timer,
         _ctx,
-        %{cc: %CongestionControl{last_r_hat: nil}} = state
+        %{cc: %CongestionControl{r_hat: %ReceiverRate{value: nil}}} = state
       ) do
-    # wait until first r_hat is calculated
+    # wait until the first r_hat is calculated
     {:ok, state}
   end
 
@@ -132,17 +133,20 @@ defmodule Membrane.RTP.TWCCSender do
     buffer =
       Header.Extension.put(buffer, %Header.Extension{identifier: :twcc, data: <<seq_num::16>>})
 
-    size =
-      if Map.get(buffer.metadata.rtp, :is_padding?, false) do
-        Membrane.RTP.Packet.padding_packet_size() * 8
-      else
-        bit_size(buffer.payload)
-      end
+    # TODO take into account header size
+    # we are not taking into account header
+    # size here which doesn't seem to be
+    # fully correct
+    padding_size = Map.get(buffer.metadata.rtp, :padding_size, 0)
+
+    unless padding_size in 0..255, do: raise("padding_size has to be in 0..255")
+
+    overall_payload_size = bit_size(buffer.payload) + padding_size * 8
 
     state =
       state
       |> put_in([:seq_to_timestamp, seq_num], Time.vm_time())
-      |> put_in([:seq_to_size, seq_num], size)
+      |> put_in([:seq_to_size, seq_num], overall_payload_size)
 
     out_pad = Pad.ref(:output, id)
     [buffer: {out_pad, buffer}] |> send_when_pad_connected(out_pad, ctx, state)

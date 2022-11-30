@@ -14,6 +14,13 @@ defmodule Membrane.RTP.Packet do
           payload: binary()
         }
 
+  @typedoc """
+  Possible padding size.
+
+  It includes the last byte denoting the size of the padding.
+  """
+  @type padding_size :: 0..255
+
   @enforce_keys [:header, :payload]
   defstruct @enforce_keys
 
@@ -27,56 +34,21 @@ defmodule Membrane.RTP.Packet do
 
   def identify(_packet), do: :rtp
 
-  # This is the max amount of padding that can be added. It is limited by the size of the padding size indication
-  # being 1 byte
-  @padding_packet_size 256
-
-  @doc """
-  Returns the constant size of the padding packet
-  """
-  @spec padding_packet_size() :: non_neg_integer()
-  def padding_packet_size(), do: @padding_packet_size
-
-  @spec serialize(t, align_to: pos_integer()) :: binary
-  def serialize(
-        %__MODULE__{} = packet,
-        [align_to: align_to, is_padding_packet?: is_padding?] \\ [
-          align_to: 1,
-          is_padding_packet?: false
-        ]
-      ) do
+  @spec serialize(t, padding_size: padding_size()) :: binary
+  def serialize(%__MODULE__{} = packet, opts \\ []) do
     %__MODULE__{header: header, payload: payload} = packet
     %Header{version: 2} = header
-    has_padding = if is_padding?, do: 1, else: 0
+    padding_size = Keyword.get(opts, :padding_size, 0)
+    has_padding = if padding_size > 0, do: 1, else: 0
     has_extension = if header.extensions == [], do: 0, else: 1
     marker = if header.marker, do: 1, else: 0
     csrcs = Enum.map_join(header.csrcs, &<<&1::32>>)
+    padding = Utils.generate_padding(padding_size)
 
-    header =
-      <<header.version::2, has_padding::1, has_extension::1, length(header.csrcs)::4, marker::1,
-        header.payload_type::7, header.sequence_number::16, header.timestamp::32, header.ssrc::32,
-        csrcs::binary, serialize_header_extensions(header.extensions)::binary>>
-
-    payload =
-      if is_padding? do
-        # TODO: fix alignment
-        # -1 accounts for the last
-        padding_size = @padding_packet_size - byte_size(header)
-        <<padding_size::integer-size(padding_size)-unit(8)>>
-      else
-        payload
-      end
-
-    serialized = header <> payload
-
-    case Utils.align(serialized, align_to) do
-      {serialized, 0} ->
-        serialized
-
-      {serialized, _padding} ->
-        <<pre::2, _has_padding::1, post::bitstring>> = serialized
-        <<pre::2, 1::1, post::bitstring>>
-    end
+    <<header.version::2, has_padding::1, has_extension::1, length(header.csrcs)::4, marker::1,
+      header.payload_type::7, header.sequence_number::16, header.timestamp::32, header.ssrc::32,
+      csrcs::binary, serialize_header_extensions(header.extensions)::binary, payload::binary,
+      padding::binary>>
   end
 
   defp serialize_header_extensions([]), do: <<>>
@@ -112,7 +84,8 @@ defmodule Membrane.RTP.Packet do
   end
 
   @spec parse(binary(), boolean()) ::
-          {:ok, %{packet: t(), has_padding?: boolean(), total_header_size: non_neg_integer()}}
+          {:ok,
+           %{packet: t(), padding_size: padding_size(), total_header_size: non_neg_integer()}}
           | {:error, :wrong_version | :malformed_packet}
   def parse(packet, encrypted?)
 
@@ -146,7 +119,7 @@ defmodule Membrane.RTP.Packet do
            header: header,
            payload: if(encrypted?, do: original_packet, else: payload)
          },
-         has_padding?: has_padding == 1,
+         padding_size: padding,
          total_header_size: byte_size(original_packet) - byte_size(payload) - padding
        }}
     else

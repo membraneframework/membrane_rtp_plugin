@@ -14,11 +14,22 @@ The package can be installed by adding `membrane_rtp_plugin` to your list of dep
 ```elixir
 def deps do
   [
-    {:membrane_rtp_plugin, "~> 0.14.0"}
+    {:membrane_rtp_plugin, "~> 0.17.0"}
     {:ex_libsrtp, "~> 0.3.0"} # required only if SRTP/SRTCP support is needed
   ]
 end
 ```
+
+If SRTP/SRTCP support is needed, one has to install `libsrtp` to their system. 
+### MacOS 
+Run `brew install srtp`
+
+### Ubuntu
+Run `apt install libsrtp2-dev`
+
+### Other
+
+For more details and manual installation, see [ExLibSRTP HexDocs](https://hexdocs.pm/ex_libsrtp/readme.html).
 
 ## Usage
 

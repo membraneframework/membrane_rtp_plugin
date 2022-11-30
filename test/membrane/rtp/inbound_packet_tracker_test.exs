@@ -3,13 +3,11 @@ defmodule Membrane.RTP.InboundPacketTrackerTest do
   use Bunch
 
   import Membrane.Testing.Assertions
-
-  alias Membrane.{Buffer, ParentSpec}
-  alias Membrane.RTP.InboundPacketTracker
-  alias Membrane.RTP.BufferFactory
-  alias Membrane.Testing.{Source, Sink, Pipeline}
-
   require Bitwise
+  alias Membrane.{Buffer, ParentSpec}
+  alias Membrane.RTP.BufferFactory
+  alias Membrane.RTP.InboundPacketTracker
+  alias Membrane.Testing.{Source, Sink, Pipeline}
 
   @max_seq_number Bitwise.bsl(1, 16) - 1
   @base_seq_number BufferFactory.base_seq_number()

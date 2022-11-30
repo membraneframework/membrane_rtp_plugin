@@ -6,6 +6,8 @@ defmodule Membrane.RTP.JitterBuffer.BufferStore do
 
   use Bunch
   use Bunch.Access
+
+  require Bitwise
   alias Membrane.Buffer
   alias Membrane.RTP.PacketStore
 

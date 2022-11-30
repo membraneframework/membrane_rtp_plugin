@@ -2,20 +2,20 @@ defmodule Membrane.RTCP.Packet do
   @moduledoc """
   Functions common to all RTCP Packets
   """
+  require Membrane.Logger
 
   alias Membrane.RTCP.{
     AppPacket,
     ByePacket,
     FeedbackPacket,
-    TransportFeedbackPacket,
     Header,
     ReceiverReportPacket,
     SdesPacket,
-    SenderReportPacket
+    SenderReportPacket,
+    TransportFeedbackPacket
   }
 
   alias Membrane.RTP
-  require Membrane.Logger
 
   @type t ::
           AppPacket.t()
