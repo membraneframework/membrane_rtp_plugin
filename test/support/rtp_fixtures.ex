@@ -2,8 +2,13 @@ defmodule Membrane.RTP.Fixtures do
   @moduledoc false
   alias Membrane.RTP.{Header, Packet}
 
+  @external_resource "test/fixtures/rtp/rtp_packet.bin"
   @sample_packet File.read!("test/fixtures/rtp/rtp_packet.bin")
+
+  @external_resource "test/fixtures/rtp/rtp_packet_payload.bin"
   @sample_packet_payload File.read!("test/fixtures/rtp/rtp_packet_payload.bin")
+
+  @external_resource "test/fixtures/rtp/rtp_packet_with_padding.bin"
   @sample_packet_with_padding File.read!("test/fixtures/rtp/rtp_packet_with_padding.bin")
 
   @spec sample_packet_binary() :: binary()
