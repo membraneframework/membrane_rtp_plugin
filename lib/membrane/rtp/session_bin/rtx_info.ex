@@ -4,5 +4,5 @@ defmodule Membrane.RTP.SessionBin.RtxInfo do
   with data allowing to set up proper part of a pipeline
   """
   @enforce_keys [:ssrc, :rtx_payload_type, :original_ssrc, :original_payload_type]
-  defstruct @enforce_keys ++ [use_twcc?: true]
+  defstruct @enforce_keys
 end
