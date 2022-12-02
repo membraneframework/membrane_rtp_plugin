@@ -83,25 +83,23 @@ defmodule Membrane.RTP.Packet do
     <<extension.identifier::integer-size(4), data_size::integer-size(4), data::binary>>
   end
 
-  @spec parse(binary(), boolean()) ::
-          {:ok,
-           %{packet: t(), padding_size: padding_size(), total_header_size: non_neg_integer()}}
+  @spec parse(binary()) ::
+          {:ok, %{packet: t(), padding_size: padding_size()}}
           | {:error, :wrong_version | :malformed_packet}
-  def parse(packet, encrypted?)
+  def parse(packet)
 
-  def parse(<<version::2, _payload::bitstring>>, _encrypted?) when version != 2,
+  def parse(<<version::2, _payload::bitstring>>) when version != 2,
     do: {:error, :wrong_version}
 
   def parse(
         <<version::2, has_padding::1, has_extension::1, csrcs_cnt::4, marker::1, payload_type::7,
           sequence_number::16, timestamp::32, ssrc::32, csrcs::binary-size(csrcs_cnt)-unit(32),
-          rest::binary>> = original_packet,
-        encrypted?
+          rest::binary>>
       ) do
     with {:ok, {extensions, payload}} <-
            parse_header_extension(rest, has_extension == 1),
          {:ok, {payload, padding}} <-
-           Utils.strip_padding(payload, not encrypted? and has_padding == 1) do
+           Utils.strip_padding(payload, has_padding == 1) do
       header = %Header{
         version: version,
         marker: marker == 1,
@@ -117,17 +115,16 @@ defmodule Membrane.RTP.Packet do
        %{
          packet: %__MODULE__{
            header: header,
-           payload: if(encrypted?, do: original_packet, else: payload)
+           payload: payload
          },
          padding_size: padding,
-         total_header_size: byte_size(original_packet) - byte_size(payload) - padding
        }}
     else
       :error -> {:error, :malformed_packet}
     end
   end
 
-  def parse(_binary, _parse_payload?), do: {:error, :malformed_packet}
+  def parse(_binary), do: {:error, :malformed_packet}
 
   defp parse_header_extension(binary, header_present?)
   defp parse_header_extension(binary, false), do: {:ok, {[], binary}}
