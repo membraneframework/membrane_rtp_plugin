@@ -17,15 +17,7 @@ defmodule Membrane.RTP.PayloaderBin do
               ],
               ssrc: [spec: RTP.ssrc_t()],
               payload_type: [spec: RTP.payload_type_t()],
-              clock_rate: [spec: RTP.clock_rate_t()],
-              alignment: [
-                default: 1,
-                spec: pos_integer(),
-                description: """
-                Number of bytes that each packet should be aligned to.
-                Alignment is achieved by adding RTP padding.
-                """
-              ]
+              clock_rate: [spec: RTP.clock_rate_t()]
 
   @impl true
   def handle_init(_ctx, opts) do
@@ -35,8 +27,7 @@ defmodule Membrane.RTP.PayloaderBin do
       |> child(:header_generator, %RTP.HeaderGenerator{
         ssrc: opts.ssrc,
         payload_type: opts.payload_type,
-        clock_rate: opts.clock_rate,
-        alignment: opts.alignment
+        clock_rate: opts.clock_rate
       })
       |> bin_output()
     ]

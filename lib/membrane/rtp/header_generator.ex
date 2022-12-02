@@ -21,15 +21,7 @@ defmodule Membrane.RTP.HeaderGenerator do
 
   def_options ssrc: [spec: RTP.ssrc_t()],
               payload_type: [spec: RTP.payload_type_t()],
-              clock_rate: [spec: RTP.clock_rate_t()],
-              alignment: [
-                default: 1,
-                spec: pos_integer(),
-                description: """
-                Number of bytes that each packet should be aligned to.
-                Alignment is achieved by adding RTP padding.
-                """
-              ]
+              clock_rate: [spec: RTP.clock_rate_t()]
 
   defmodule State do
     @moduledoc false
@@ -39,7 +31,6 @@ defmodule Membrane.RTP.HeaderGenerator do
       :ssrc,
       :payload_type,
       :clock_rate,
-      :alignment,
       sequence_number: 0,
       init_timestamp: 0
     ]
@@ -48,7 +39,6 @@ defmodule Membrane.RTP.HeaderGenerator do
             ssrc: RTP.ssrc_t(),
             payload_type: RTP.payload_type_t(),
             clock_rate: RTP.clock_rate_t(),
-            alignment: pos_integer(),
             sequence_number: non_neg_integer(),
             init_timestamp: non_neg_integer()
           }

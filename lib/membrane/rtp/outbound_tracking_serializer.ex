@@ -32,15 +32,7 @@ defmodule Membrane.RTP.OutboundTrackingSerializer do
   def_options ssrc: [spec: RTP.ssrc_t()],
               payload_type: [spec: RTP.payload_type_t()],
               clock_rate: [spec: RTP.clock_rate_t()],
-              extension_mapping: [spec: RTP.SessionBin.rtp_extension_mapping_t()],
-              alignment: [
-                default: 1,
-                spec: pos_integer(),
-                description: """
-                Number of bytes that each packet should be aligned to.
-                Alignment is achieved by adding RTP padding.
-                """
-              ]
+              extension_mapping: [spec: RTP.SessionBin.rtp_extension_mapping_t()]
 
   defmodule State do
     @moduledoc false
@@ -52,7 +44,6 @@ defmodule Membrane.RTP.OutboundTrackingSerializer do
             ssrc: RTP.ssrc_t(),
             payload_type: RTP.payload_type_t(),
             extension_mapping: RTP.SessionBin.rtp_extension_mapping_t(),
-            alignment: pos_integer(),
             any_buffer_sent?: boolean(),
             rtcp_output_pad: Membrane.Pad.ref_t() | nil,
             stats_acc: %{}
@@ -61,7 +52,6 @@ defmodule Membrane.RTP.OutboundTrackingSerializer do
     defstruct ssrc: 0,
               payload_type: 0,
               extension_mapping: %{},
-              alignment: 1,
               any_buffer_sent?: false,
               rtcp_output_pad: nil,
               stats_acc: %{
@@ -171,9 +161,11 @@ defmodule Membrane.RTP.OutboundTrackingSerializer do
           extensions: extensions
       })
 
+    padding_size = Map.get(rtp_metadata, :padding_size, 0)
+
     payload =
       RTP.Packet.serialize(%RTP.Packet{header: header, payload: buffer.payload},
-        align_to: state.alignment
+        padding_size: padding_size
       )
 
     buffer = %Buffer{buffer | payload: payload, metadata: metadata}

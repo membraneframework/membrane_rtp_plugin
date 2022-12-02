@@ -1,7 +1,7 @@
 defmodule Membrane.RTP.Plugin.MixProject do
   use Mix.Project
 
-  @version "0.15.0"
+  @version "0.18.0"
   @github_url "https://github.com/membraneframework/membrane_rtp_plugin"
 
   def project do
@@ -38,7 +38,8 @@ defmodule Membrane.RTP.Plugin.MixProject do
     [
       {:membrane_core,
        github: "membraneframework/membrane_core", branch: "fix-dependent-specs", override: true},
-      # {:membrane_core, path: "../membrane_core", override: true},
+      # path: "../membrane_core", override: true},
+      # "~> 0.11"},
       {:membrane_telemetry_metrics, "~> 0.1.0"},
       {:ex_libsrtp, "~> 0.5.1", optional: true},
       {:qex, "~> 0.5.1"},
@@ -47,19 +48,11 @@ defmodule Membrane.RTP.Plugin.MixProject do
       {:bimap, "~> 1.2"},
 
       # Test
-      {:membrane_rtp_h264_plugin,
-       github: "membraneframework/membrane_rtp_h264_plugin", branch: "core-v0.11", only: :test},
+      {:membrane_rtp_h264_plugin, "~> 0.14.0", only: :test},
       {:membrane_rtp_mpegaudio_plugin, "~> 0.12.0", only: :test},
-      {
-        :membrane_h264_ffmpeg_plugin,
-        github: "membraneframework/membrane_h264_ffmpeg_plugin",
-        branch: "rtp-plugin-core-v0.11-dependency",
-        only: :test
-      },
-      {
-        :membrane_pcap_plugin,
-        github: "membraneframework/membrane_pcap_plugin", branch: "core-v0.11", only: :test
-      },
+      {:membrane_h264_ffmpeg_plugin, "~> 0.25.0", only: :test},
+      {:membrane_pcap_plugin,
+       github: "membraneframework/membrane_pcap_plugin", tag: "v0.7.0", only: :test},
       {:membrane_hackney_plugin, "~> 0.9.0", only: :test},
 
       # Dev

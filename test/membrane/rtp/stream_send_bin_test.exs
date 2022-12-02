@@ -101,10 +101,9 @@ defmodule Membrane.RTP.StreamSendBinTest do
         |> get_child(:limiter)
         |> get_child(:rtp)
         |> get_child(:rtp_sink),
-        child(:rtcp_sink, Testing.Sink),
         get_child(:rtp)
         |> via_out(Pad.ref(:rtcp_output, @ssrc))
-        |> get_child(:rtcp_sink)
+        |> child(:rtcp_sink, Testing.Sink)
       ]
 
       {[spec: structure, playback: :playing], %{}}

@@ -86,7 +86,7 @@ if Code.ensure_loaded?(ExLibSRTP) do
         payload: payload,
         metadata: %{
           rtp: %{
-            has_padding?: has_padding?,
+            padding_size: padding_size,
             total_header_size: total_header_size
           }
         }
@@ -99,11 +99,11 @@ if Code.ensure_loaded?(ExLibSRTP) do
           # decrypted payload contains the header that we can simply strip without any parsing as we know its length
           <<_header::binary-size(total_header_size), payload::binary>> = payload
 
-          {:ok, {payload, _size}} = Utils.strip_padding(payload, has_padding?)
+          {:ok, {payload, _size}} = Utils.strip_padding(payload, padding_size > 0)
 
           {[buffer: {:output, %Buffer{buffer | payload: payload}}], state}
 
-        {:error, reason} ->
+        {:error, reason} when reason in [:replay_fail, :replay_old] ->
           Membrane.Logger.debug("""
           Couldn't unprotect srtp packet:
           #{inspect(payload, limit: :infinity)}
@@ -111,6 +111,9 @@ if Code.ensure_loaded?(ExLibSRTP) do
           """)
 
           {[], state}
+
+        {:error, reason} ->
+          raise "Couldn't unprotect SRTP packet due to #{inspect(reason)}"
       end
     end
   end
