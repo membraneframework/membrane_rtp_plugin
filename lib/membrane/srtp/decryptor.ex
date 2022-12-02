@@ -84,12 +84,7 @@ if Code.ensure_loaded?(ExLibSRTP) do
     def handle_process(:input, buffer, _ctx, state) do
       %Buffer{
         payload: payload,
-        metadata: %{
-          rtp: %{
-            padding_size: padding_size,
-            total_header_size: total_header_size
-          }
-        }
+        metadata: %{rtp: %{total_header_size: total_header_size}}
       } = buffer
 
       state.srtp
@@ -97,11 +92,16 @@ if Code.ensure_loaded?(ExLibSRTP) do
       |> case do
         {:ok, payload} ->
           # decrypted payload contains the header that we can simply strip without any parsing as we know its length
-          <<_header::binary-size(total_header_size), payload::binary>> = payload
+          remaining_header_size = total_header_size * 8 - 3
 
-          {:ok, {payload, _size}} = Utils.strip_padding(payload, padding_size > 0)
+          <<_ver::2, has_padding::1, _header::bitstring-size(remaining_header_size),
+            payload::binary>> = payload
 
-          {[buffer: {:output, %Buffer{buffer | payload: payload}}], state}
+          {:ok, {payload, padding_size}} = Utils.strip_padding(payload, has_padding == 1)
+          metadata = put_in(buffer.metadata, [:rtp, :padding_size], padding_size)
+          buffer = %Buffer{buffer | metadata: metadata, payload: payload}
+
+          {[buffer: {:output, buffer}], state}
 
         {:error, reason} when reason in [:replay_fail, :replay_old] ->
           Membrane.Logger.debug("""
