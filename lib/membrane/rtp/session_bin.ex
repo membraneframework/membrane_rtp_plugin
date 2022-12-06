@@ -670,7 +670,7 @@ defmodule Membrane.RTP.SessionBin do
       [
         link(:ssrc_router)
         |> via_out(Pad.ref(:output, ssrc))
-        # FIXME: TWCCReceiver won't notice packets dropped by SSRCRouter
+        # TODO: Fix TWCCReceiver not noticing packets dropped by SSRCRouter
         |> then(&link_twcc_receiver_if(twcc?, &1, ssrc))
         |> to(
           {:decryptor, ssrc},
