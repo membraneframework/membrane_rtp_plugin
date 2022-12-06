@@ -1,6 +1,8 @@
 defmodule Membrane.RTP.Utils do
   @moduledoc false
 
+  alias Membrane.RTP.Packet
+
   @spec strip_padding(binary, padding_present? :: boolean) ::
           {:ok, {binary, padding_size :: non_neg_integer()}} | :error
   def strip_padding(binary, padding_present?)
@@ -17,17 +19,12 @@ defmodule Membrane.RTP.Utils do
     end
   end
 
-  @spec align(payload :: binary, align_to :: pos_integer()) ::
-          {binary, padding_size :: non_neg_integer()}
-  def align(payload, align_to) do
-    case rem(byte_size(payload), align_to) do
-      0 ->
-        {payload, 0}
+  @spec generate_padding(Packet.padding_size()) :: binary()
+  def generate_padding(0), do: <<>>
 
-      padding_size ->
-        zeros_no = padding_size - 1
-        {<<payload::binary, 0::size(zeros_no)-unit(8), padding_size>>, padding_size}
-    end
+  def generate_padding(padding_size) when padding_size in 1..255 do
+    zeros_no = padding_size - 1
+    <<0::size(zeros_no)-unit(8), padding_size>>
   end
 
   @spec from_which_rollover(number() | nil, number(), number()) :: :current | :previous | :next

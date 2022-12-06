@@ -86,14 +86,14 @@ defmodule Membrane.RTP.Parser do
   def handle_process(:input, %Buffer{payload: payload, metadata: metadata} = buffer, _ctx, state) do
     with :rtp <- RTP.Packet.identify(payload),
          {:ok,
-          %{packet: packet, has_padding?: has_padding?, total_header_size: total_header_size}} <-
+          %{packet: packet, padding_size: padding_size, total_header_size: total_header_size}} <-
            RTP.Packet.parse(payload, state.secure?) do
       %RTP.Packet{payload: payload, header: header} = packet
 
       rtp =
         header
         |> Map.take(@metadata_fields)
-        |> Map.merge(%{has_padding?: has_padding?, total_header_size: total_header_size})
+        |> Map.merge(%{padding_size: padding_size, total_header_size: total_header_size})
 
       metadata = Map.put(metadata, :rtp, rtp)
       {{:ok, buffer: {:output, %Buffer{payload: payload, metadata: metadata}}}, state}

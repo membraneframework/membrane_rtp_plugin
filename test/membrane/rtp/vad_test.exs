@@ -74,7 +74,7 @@ defmodule Membrane.RTP.VADTest do
           data: data
         }
       ],
-      has_padding?: false,
+      padding_size: 0,
       marker: false,
       payload_type: 111,
       sequence_number: 16_503,
