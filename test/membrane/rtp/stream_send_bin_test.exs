@@ -111,8 +111,8 @@ defmodule Membrane.RTP.StreamSendBinTest do
   end
 
   test "RTCP sender reports are generated properly" do
-    {:ok, _supervisor, pipeline} =
-      Testing.Pipeline.start_link_supervised(
+    pipeline =
+      Testing.Pipeline.start_link_supervised!(
         module: SenderPipeline,
         custom_args: %{
           limit: 5,
@@ -140,8 +140,8 @@ defmodule Membrane.RTP.StreamSendBinTest do
   end
 
   test "Depayloaded RTP stream gets payloaded and passed through bin's output properly" do
-    {:ok, _supervisor, pipeline} =
-      Testing.Pipeline.start_link_supervised(
+    pipeline =
+      Testing.Pipeline.start_link_supervised!(
         module: SenderPipeline,
         custom_args: %{
           limit: :infinity,
@@ -159,8 +159,8 @@ defmodule Membrane.RTP.StreamSendBinTest do
   end
 
   test "Payloaded RTP stream passes through bin's output properly" do
-    {:ok, _supervisor, pipeline} =
-      Testing.Pipeline.start_link_supervised(
+    pipeline =
+      Testing.Pipeline.start_link_supervised!(
         module: SenderPipeline,
         custom_args: %{
           limit: :infinity,

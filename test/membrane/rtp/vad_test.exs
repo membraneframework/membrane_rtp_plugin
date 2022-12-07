@@ -98,7 +98,7 @@ defmodule Membrane.RTP.VADTest do
       new_timestamp = original_timestamp + time_delta * index
       buffer = rtp_buffer(volume, new_timestamp)
 
-      {_, new_state} = VAD.handle_process(:input, buffer, %{}, state)
+      {_actions, new_state} = VAD.handle_process(:input, buffer, %{}, state)
       new_state
     end)
   end

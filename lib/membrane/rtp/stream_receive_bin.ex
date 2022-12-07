@@ -42,18 +42,18 @@ defmodule Membrane.RTP.StreamReceiveBin do
     if opts.secure? and not Code.ensure_loaded?(ExLibSRTP),
       do: raise("Optional dependency :ex_libsrtp is required when using secure? option")
 
-    maybe_start_decryptor =
+    add_decryptor =
       &child(&1, :decryptor, struct(SRTP.Decryptor, %{policies: opts.srtp_policies}))
 
-    maybe_start_depayloader_bin =
+    add_depayloader_bin =
       &child(&1, :depayloader, %RTP.DepayloaderBin{
         depayloader: opts.depayloader,
         clock_rate: opts.clock_rate
       })
 
-    structure = [
+    structure =
       bin_input()
-      |> start_extensions(opts.extensions)
+      |> add_extensions(opts.extensions)
       |> child(:rtcp_receiver, %RTCP.Receiver{
         local_ssrc: opts.local_ssrc,
         remote_ssrc: opts.remote_ssrc,
@@ -64,15 +64,14 @@ defmodule Membrane.RTP.StreamReceiveBin do
         clock_rate: opts.clock_rate,
         repair_sequence_numbers?: true
       })
-      |> then(if opts.secure?, do: maybe_start_decryptor, else: & &1)
-      |> then(if opts.depayloader, do: maybe_start_depayloader_bin, else: & &1)
+      |> then(if opts.secure?, do: add_decryptor, else: & &1)
+      |> then(if opts.depayloader, do: add_depayloader_bin, else: & &1)
       |> bin_output()
-    ]
 
     {[spec: structure], %{}}
   end
 
-  defp start_extensions(link_builder, extensions) do
+  defp add_extensions(link_builder, extensions) do
     Enum.reduce(extensions, link_builder, fn {extension_name, extension}, builder ->
       builder |> child(extension_name, extension)
     end)

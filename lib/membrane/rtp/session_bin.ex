@@ -349,7 +349,7 @@ defmodule Membrane.RTP.SessionBin do
     if options.secure? and not Code.ensure_loaded?(ExLibSRTP),
       do: raise("Optional dependency :ex_libsrtp is required when using secure option")
 
-    structure = [child(:ssrc_router, RTP.SSRCRouter)]
+    structure = child(:ssrc_router, RTP.SSRCRouter)
     {receiver_srtp_policies, options} = Map.pop(options, :receiver_srtp_policies)
     {fmt_mapping, options} = Map.pop(options, :fmt_mapping)
 
@@ -373,14 +373,14 @@ defmodule Membrane.RTP.SessionBin do
     rtcp_receiver_output = Pad.ref(:rtcp_receiver_output, ref)
     rtcp? = Map.has_key?(ctx.pads, rtcp_receiver_output)
 
-    maybe_start_srtcp_decryptor =
+    add_srtcp_decryptor =
       &child(
         &1,
         {:srtcp_decryptor, ref},
         struct(Membrane.SRTCP.Decryptor, %{policies: state.srtp_policies})
       )
 
-    maybe_start_srtcp_encryptor =
+    add_srtcp_encryptor =
       &child(
         &1,
         {:srtcp_encryptor, ref},
@@ -399,10 +399,10 @@ defmodule Membrane.RTP.SessionBin do
           [
             get_child({:rtp_parser, ref})
             |> via_out(:rtcp_output)
-            |> then(if secure?, do: maybe_start_srtcp_decryptor, else: & &1)
+            |> then(if secure?, do: add_srtcp_decryptor, else: & &1)
             |> child({:rtcp_parser, ref}, RTCP.Parser)
             |> via_out(:receiver_report_output)
-            |> then(if secure?, do: maybe_start_srtcp_encryptor, else: & &1)
+            |> then(if secure?, do: add_srtcp_encryptor, else: & &1)
             |> bin_output(rtcp_receiver_output),
             get_child({:rtcp_parser, ref})
             |> via_in(Pad.ref(:input, {:rtcp, ref}))
@@ -434,7 +434,7 @@ defmodule Membrane.RTP.SessionBin do
 
     rtp_stream_name = {:stream_receive_bin, ssrc}
 
-    new_children = [
+    stream_receive_bin_child =
       child(rtp_stream_name, %RTP.StreamReceiveBin{
         clock_rate: clock_rate,
         depayloader: depayloader,
@@ -446,9 +446,8 @@ defmodule Membrane.RTP.SessionBin do
         secure?: state.secure?,
         srtp_policies: state.srtp_policies
       })
-    ]
 
-    {rtp_extensions, maybe_start_twcc_receiver, state} =
+    {rtp_extensions, maybe_add_twcc_receiver, state} =
       maybe_handle_twcc_receiver(rtp_extensions, ssrc, ctx, state)
 
     ssrc_router_pad_options = [
@@ -459,26 +458,18 @@ defmodule Membrane.RTP.SessionBin do
     router_link_builder =
       get_child(:ssrc_router)
       |> via_out(Pad.ref(:output, ssrc), options: ssrc_router_pad_options)
-      |> then(maybe_start_twcc_receiver)
+      |> then(maybe_add_twcc_receiver)
       |> get_child(rtp_stream_name)
 
-    acc = {new_children, router_link_builder}
-
-    {new_children, router_link_builder} =
+    structure =
       rtp_extensions
-      |> Enum.reduce(acc, fn {extension_name, config}, {new_children, new_link} ->
+      |> Enum.reduce(router_link_builder, fn {extension_name, config}, builder ->
         extension_id = {extension_name, ssrc}
-
-        {
-          # Map.merge(new_children, %{extension_id => config}),
-          [child(extension_id, config)] ++ new_children,
-          new_link |> get_child(extension_id)
-        }
+        builder |> child(extension_id, config)
       end)
+      |> bin_output(pad)
 
-    new_links = [router_link_builder |> bin_output(pad)]
-
-    structure = new_children ++ new_links
+    structure = [stream_receive_bin_child, structure]
 
     {[spec: structure], state}
   end
@@ -523,7 +514,7 @@ defmodule Membrane.RTP.SessionBin do
       payload_type = get_output_payload_type!(ctx, ssrc)
       clock_rate = clock_rate || get_from_register!(:clock_rate, payload_type, state)
 
-      maybe_link_encryptor =
+      add_srtp_encryptor =
         &child(
           &1,
           {:srtp_encryptor, ssrc},
@@ -545,7 +536,7 @@ defmodule Membrane.RTP.SessionBin do
           rtcp_report_interval: state.rtcp_sender_report_interval,
           rtp_extension_mapping: rtp_extension_mapping || %{}
         })
-        |> then(if state.secure?, do: maybe_link_encryptor, else: & &1)
+        |> then(if state.secure?, do: add_srtp_encryptor, else: & &1)
         |> bin_output(output_pad)
       ]
 
@@ -739,11 +730,9 @@ defmodule Membrane.RTP.SessionBin do
 
     to_twcc_sender = fn link ->
       if should_create_child? do
-        link
-        |> child(:twcc_sender, maybe_twcc)
+        link |> child(:twcc_sender, maybe_twcc)
       else
-        link
-        |> get_child(:twcc_sender)
+        link |> get_child(:twcc_sender)
       end
     end
 

@@ -81,7 +81,7 @@ defmodule Membrane.RTP.JitterBuffer.PipelineTest do
 
     latency_ms = latency |> Membrane.Time.round_to_milliseconds()
 
-    structure = [
+    structure =
       child(:source, %PushTestingSrc{
         buffer_num: buffers,
         buffer_delay_ms: buffer_delay_ms,
@@ -90,9 +90,8 @@ defmodule Membrane.RTP.JitterBuffer.PipelineTest do
       |> via_in(:input, target_queue_size: 50)
       |> child(:buffer, %RTPJitterBuffer{latency: latency, clock_rate: 8000})
       |> child(:sink, Testing.Sink)
-    ]
 
-    {:ok, _supervisor, pipeline} = Testing.Pipeline.start_link_supervised(structure: structure)
+    pipeline = Testing.Pipeline.start_link_supervised!(structure: structure)
 
     assert_pipeline_setup(pipeline)
     assert_pipeline_play(pipeline)

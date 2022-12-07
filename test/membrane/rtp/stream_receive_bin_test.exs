@@ -41,7 +41,7 @@ defmodule Membrane.RTP.StreamReceiveBinTest do
   end
 
   test "RTP stream passes through bin properly" do
-    structure = [
+    structure =
       child(:pcap, %Membrane.Pcap.Source{path: @pcap_file})
       |> child(:rtp_parser, RTP.Parser)
       |> child(:rtp, %StreamReceiveBin{
@@ -53,9 +53,8 @@ defmodule Membrane.RTP.StreamReceiveBinTest do
       })
       |> child(:video_parser, %Membrane.H264.FFmpeg.Parser{framerate: {30, 1}})
       |> child(:frame_counter, FrameCounter)
-    ]
 
-    {:ok, _supervisor, pipeline} = Testing.Pipeline.start_link_supervised(structure: structure)
+    pipeline = Testing.Pipeline.start_link_supervised!(structure: structure)
 
     assert_pipeline_play(pipeline)
     assert_start_of_stream(pipeline, :rtp_parser)
@@ -71,7 +70,7 @@ defmodule Membrane.RTP.StreamReceiveBinTest do
   test "RTCP reports are generated properly" do
     pcap_file = "test/fixtures/rtp/session/h264_before_sr.pcap"
 
-    structure = [
+    structure =
       child(:pcap, %Membrane.Pcap.Source{
         path: pcap_file,
         packet_transformer: fn %ExPcap.Packet{
@@ -91,9 +90,8 @@ defmodule Membrane.RTP.StreamReceiveBinTest do
         rtcp_report_interval: Membrane.Time.seconds(5)
       })
       |> child(:sink, Testing.Sink)
-    ]
 
-    {:ok, _supervisor, pipeline} = Testing.Pipeline.start_link_supervised(structure: structure)
+    pipeline = Testing.Pipeline.start_link_supervised!(structure: structure)
 
     assert_pipeline_play(pipeline)
     assert_start_of_stream(pipeline, :rtp_parser)
@@ -144,7 +142,7 @@ defmodule Membrane.RTP.StreamReceiveBinTest do
     half_throttle_duration = div(@fir_throttle_duration_ms, 2)
     delta = div(@fir_throttle_duration_ms, 10)
 
-    structure = [
+    structure =
       child(:src, NoopSource)
       |> child(:rtp, %StreamReceiveBin{
         clock_rate: @h264_clock_rate,
@@ -154,9 +152,8 @@ defmodule Membrane.RTP.StreamReceiveBinTest do
         rtcp_report_interval: nil
       })
       |> child(:sink, %KeyframeRequester{delay: @fir_throttle_duration_ms + delta})
-    ]
 
-    {:ok, _supervisor, pipeline} = Testing.Pipeline.start_link_supervised(structure: structure)
+    pipeline = Testing.Pipeline.start_link_supervised!(structure: structure)
 
     assert_pipeline_play(pipeline)
     assert_pipeline_notified(pipeline, :src, %Membrane.RTCPEvent{rtcp: rtcp})

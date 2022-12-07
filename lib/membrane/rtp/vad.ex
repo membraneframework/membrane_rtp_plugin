@@ -104,16 +104,16 @@ defmodule Membrane.RTP.VAD do
   end
 
   @impl true
-  def handle_process(:input, %Membrane.Buffer{} = buffer, ctx, state) do
+  def handle_process(:input, %Membrane.Buffer{} = buffer, _ctx, state) do
     {extension, buffer} = Header.Extension.pop(buffer, state.vad_id)
-    handle_if_present(buffer, extension, ctx, state)
+    handle_if_present(buffer, extension, state)
   end
 
-  defp handle_if_present(buffer, nil, _ctx, state), do: {[buffer: {:output, buffer}], state}
+  defp handle_if_present(buffer, nil, state), do: {[buffer: {:output, buffer}], state}
 
   @timestamp_limit Bitwise.bsl(1, 32)
 
-  defp handle_if_present(buffer, extension, ctx, state) do
+  defp handle_if_present(buffer, extension, state) do
     <<_v::1, level::7>> = extension.data
 
     new_extension = %Header.Extension{
@@ -132,7 +132,7 @@ defmodule Membrane.RTP.VAD do
         handle_vad(buffer, rtp_timestamp, level, state)
 
       rollover == :next ->
-        {[], state} = handle_init(ctx, state)
+        {[], state} = handle_init(%{}, state)
         {[buffer: {:output, buffer}], state}
 
       true ->

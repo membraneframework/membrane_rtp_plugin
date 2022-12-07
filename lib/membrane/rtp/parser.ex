@@ -75,11 +75,6 @@ defmodule Membrane.RTP.Parser do
   end
 
   @impl true
-  def handle_setup(_ctx, state) do
-    {[], state}
-  end
-
-  @impl true
   def handle_playing(_ctx, %{rtcp_output_pad: pad} = state) when pad != nil do
     actions = [stream_format: {pad, %RemoteStream{content_format: RTCP, type: :packetized}}]
     {actions, state}

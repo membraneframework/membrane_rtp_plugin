@@ -9,7 +9,7 @@ defmodule Membrane.RTP.PayloaderBin do
 
   def_input_pad :input, accepted_format: _any, demand_unit: :buffers
 
-  def_output_pad :output, accepted_format: _any, demand_unit: :buffers
+  def_output_pad :output, accepted_format: RTP, demand_unit: :buffers
 
   def_options payloader: [
                 spec: module(),
@@ -21,7 +21,7 @@ defmodule Membrane.RTP.PayloaderBin do
 
   @impl true
   def handle_init(_ctx, opts) do
-    structure = [
+    structure =
       bin_input()
       |> child(:payloader, opts.payloader)
       |> child(:header_generator, %RTP.HeaderGenerator{
@@ -30,7 +30,6 @@ defmodule Membrane.RTP.PayloaderBin do
         clock_rate: opts.clock_rate
       })
       |> bin_output()
-    ]
 
     {[spec: structure], %{}}
   end

@@ -17,16 +17,15 @@ defmodule Membrane.RTP.PipelineTest do
     test_data_base = 1..100
     test_data = Fixtures.fake_packet_list(test_data_base)
 
-    {:ok, _supervisor, pipeline} =
-      Pipeline.start_link_supervised(
-        structure: [
+    pipeline =
+      Pipeline.start_link_supervised!(
+        structure:
           child(:source, %Source{
             output: test_data,
             stream_format: %RemoteStream{type: :packetized, content_format: RTP}
           })
           |> child(:parser, Parser)
           |> child(:sink, Sink)
-        ]
       )
 
     Enum.each(test_data_base, fn _test_data ->

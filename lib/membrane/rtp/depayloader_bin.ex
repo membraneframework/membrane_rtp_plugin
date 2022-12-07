@@ -28,12 +28,11 @@ defmodule Membrane.RTP.DepayloaderBin do
 
   @impl true
   def handle_init(_ctx, opts) do
-    structure = [
+    structure =
       bin_input()
       |> child(:jitter_buffer, %JitterBuffer{clock_rate: opts.clock_rate})
       |> child(:depayloader, opts.depayloader)
       |> bin_output()
-    ]
 
     {[spec: structure], %{}}
   end

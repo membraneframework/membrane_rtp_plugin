@@ -36,9 +36,11 @@ defmodule Membrane.RTP.Plugin.MixProject do
 
   defp deps do
     [
-      {:membrane_core,
-       github: "membraneframework/membrane_core", branch: "fix-dependent-specs", override: true},
-      # path: "../membrane_core", override: true},
+      {
+        :membrane_core,
+        #  github: "membraneframework/membrane_core", branch: "fix-dependent-specs", override: true},
+        path: "../membrane_core", override: true
+      },
       # "~> 0.11"},
       {:membrane_telemetry_metrics, "~> 0.1.0"},
       {:ex_libsrtp, "~> 0.5.1", optional: true},

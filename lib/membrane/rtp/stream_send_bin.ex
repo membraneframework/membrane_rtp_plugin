@@ -41,7 +41,7 @@ defmodule Membrane.RTP.StreamSendBin do
         payload_type: opts.payload_type
       })
 
-    structure = [
+    structure =
       bin_input()
       |> then(if use_payloader, do: maybe_link_payloader_bin, else: & &1)
       |> child(:packet_tracker, %RTP.OutboundTrackingSerializer{
@@ -51,7 +51,6 @@ defmodule Membrane.RTP.StreamSendBin do
         extension_mapping: opts.rtp_extension_mapping || %{}
       })
       |> bin_output()
-    ]
 
     {[spec: structure], %{ssrc: opts.ssrc, rtcp_report_interval: opts.rtcp_report_interval}}
   end
@@ -68,11 +67,10 @@ defmodule Membrane.RTP.StreamSendBin do
 
   @impl true
   def handle_pad_added(Pad.ref(:rtcp_output, _id) = pad, _ctx, state) do
-    structure = [
+    structure =
       get_child(:packet_tracker)
       |> via_out(:rtcp_output)
       |> bin_output(pad)
-    ]
 
     {[spec: structure], state}
   end

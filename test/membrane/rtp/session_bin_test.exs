@@ -184,13 +184,12 @@ defmodule Membrane.RTP.Session.BinTest do
           nil
         end
 
-      structure = [
+      structure =
         get_child(:rtp)
         |> via_out(Pad.ref(:output, ssrc),
           options: [depayloader: depayloader]
         )
         |> child({:sink, ssrc}, Testing.Sink)
-      ]
 
       {[spec: structure], state}
     end
@@ -252,8 +251,8 @@ defmodule Membrane.RTP.Session.BinTest do
          _sr_senders_ssrcs,
          payload_and_depayload
        ) do
-    {:ok, _supervisor, pipeline} =
-      Testing.Pipeline.start_link_supervised(
+    pipeline =
+      Testing.Pipeline.start_link_supervised!(
         module: DynamicPipeline,
         custom_args: %{
           input: input,
