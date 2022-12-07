@@ -1,4 +1,4 @@
-defmodule Membrane.RTP.SessionBin.RtxInfo do
+defmodule Membrane.RTP.SessionBin.RTXInfo do
   @moduledoc """
   A struct used to inform SessionBin about availability of RTX stream
   with data allowing to set up proper part of a pipeline

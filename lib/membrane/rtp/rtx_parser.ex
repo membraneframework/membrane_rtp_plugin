@@ -1,4 +1,4 @@
-defmodule Membrane.RTP.RtxParser do
+defmodule Membrane.RTP.RTXParser do
   @moduledoc """
   An element responsible for handling retransmission packets (`rtx`) defined in
   [RFC 4588](https://datatracker.ietf.org/doc/html/rfc4588#section-4).
@@ -34,14 +34,9 @@ defmodule Membrane.RTP.RtxParser do
   end
 
   @impl true
-  def handle_process(:input, %Buffer{payload: ""}, _ctx, state) do
-    # Ignore empty buffers, most likely used for bandwidth estimation
-    {:ok, state}
-  end
-
-  @impl true
-  def handle_process(:input, %Buffer{} = buffer, _ctx, state) do
-    <<original_seq_num::16, original_payload::binary>> = buffer.payload
+  def handle_process(:input, %Buffer{payload: payload} = buffer, _ctx, state)
+      when byte_size(payload) >= 2 do
+    <<original_seq_num::16, original_payload::binary>> = payload
 
     Membrane.Logger.debug(
       "[RTX SSRC: #{buffer.metadata.rtp.ssrc}] got retransmitted packet with seq_num #{original_seq_num}"
@@ -60,5 +55,17 @@ defmodule Membrane.RTP.RtxParser do
     }
 
     {{:ok, buffer: {:output, recreated_buffer}}, state}
+  end
+
+  @impl true
+  def handle_process(:input, %Buffer{payload: payload, metadata: metadata}, _ctx, state) do
+    # Ignore empty buffers, most likely used for bandwidth estimation
+    if byte_size(payload) > 0 do
+      Membrane.Logger.warn(
+        "Received invalid RTX buffer with sequence_number #{metadata.rtp.sequence_number}"
+      )
+    end
+
+    {:ok, state}
   end
 end

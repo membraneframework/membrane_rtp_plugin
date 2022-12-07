@@ -65,7 +65,7 @@ defmodule Membrane.RTP.SessionBin do
   require Bitwise
   require Membrane.Logger
   alias Membrane.RTP.{PayloadFormat, Session}
-  alias Membrane.RTP.SessionBin.RtxInfo
+  alias Membrane.RTP.SessionBin.RTXInfo
   alias Membrane.RTP.SSRCRouter.RequireExtensions
   alias Membrane.{ParentSpec, RemoteStream, RTCP, RTP, SRTP}
 
@@ -464,8 +464,8 @@ defmodule Membrane.RTP.SessionBin do
 
     router_link =
       rtp_extensions
-      |> Enum.reduce(router_link, fn {extension_name, config}, new_link ->
-        new_link |> to({extension_name, ssrc}, config)
+      |> Enum.reduce(router_link, fn {extension_name, config}, upstream ->
+        upstream |> to({extension_name, ssrc}, config)
       end)
 
     new_links = [
@@ -660,8 +660,8 @@ defmodule Membrane.RTP.SessionBin do
   end
 
   @impl true
-  def handle_other(%RtxInfo{ssrc: ssrc} = msg, ctx, state) do
-    rtx_parser_opts = %RTP.RtxParser{
+  def handle_other(%RTXInfo{ssrc: ssrc} = msg, ctx, state) do
+    rtx_parser_opts = %RTP.RTXParser{
       rtx_payload_type: msg.rtx_payload_type,
       payload_type: msg.original_payload_type
     }
