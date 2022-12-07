@@ -219,7 +219,7 @@ defmodule Membrane.RTP.SSRCRouter do
         {[], state}
 
       Map.has_key?(state.required_extensions, payload_type) and
-          Enum.all?(extensions, &(&1.identifier not in required_extensions)) ->
+          required_extensions -- Enum.map(extensions, & &1.identifier) != [] ->
         Membrane.Logger.debug("""
         Dropping packet of SSRC #{ssrc} without required extension(s).
         Required: #{inspect(required_extensions)}, present: #{inspect(extensions)}
