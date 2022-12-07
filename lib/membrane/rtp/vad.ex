@@ -4,7 +4,7 @@ defmodule Membrane.RTP.VAD do
 
   To make this module work appropriate RTP header extension has to be set in SDP offer/answer.
 
-  If avg of audio level in packets in `time_window` exceeds `vad_threshold` it emits `Membrane.RTP.VAD.Event`
+  If avg of audio level in packets in `time_window` exceeds `vad_threshold` it emits `Membrane.RTP.VadEvent`
   on its output pad.
 
   When avg falls below `vad_threshold` and doesn't exceed it in the next `vad_silence_timer`
@@ -25,7 +25,7 @@ defmodule Membrane.RTP.VAD do
   """
   use Membrane.Filter
 
-  alias Membrane.RTP.{Header, Utils}
+  alias Membrane.RTP.{Header, Utils, VadEvent}
 
   def_input_pad :input, availability: :always, caps: :any, demand_mode: :auto
 
@@ -66,7 +66,7 @@ defmodule Membrane.RTP.VAD do
                 spec: pos_integer(),
                 default: 300,
                 description: """
-                Time to wait before emitting `Membrane.RTP.VAD.Event` after audio track is
+                Time to wait before emitting `Membrane.RTP.VadEvent` after audio track is
                 no longer considered to represent speech.
                 If at this time audio track is considered to represent speech again the event will not be sent.
                 """
@@ -181,7 +181,7 @@ defmodule Membrane.RTP.VAD do
 
   defp maybe_send_event(audio_levels_vad, state) do
     if vad_silence?(audio_levels_vad, state) or vad_speech?(audio_levels_vad, state) do
-      [event: {:output, %__MODULE__.Event{vad: audio_levels_vad}}]
+      [event: {:output, %VadEvent{vad: audio_levels_vad}}]
     else
       []
     end
