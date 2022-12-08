@@ -33,7 +33,7 @@ defmodule Membrane.RTP.StreamSendBin do
   def handle_init(_ctx, opts) do
     use_payloader = !is_nil(opts.payloader)
 
-    maybe_link_payloader_bin =
+    add_payloader_bin =
       &child(&1, :payloader, %RTP.PayloaderBin{
         payloader: opts.payloader,
         ssrc: opts.ssrc,
@@ -43,7 +43,7 @@ defmodule Membrane.RTP.StreamSendBin do
 
     structure =
       bin_input()
-      |> then(if use_payloader, do: maybe_link_payloader_bin, else: & &1)
+      |> then(if use_payloader, do: add_payloader_bin, else: & &1)
       |> child(:packet_tracker, %RTP.OutboundTrackingSerializer{
         ssrc: opts.ssrc,
         payload_type: opts.payload_type,

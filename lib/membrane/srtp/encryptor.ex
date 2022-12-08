@@ -14,10 +14,6 @@ if Code.ensure_loaded?(ExLibSRTP) do
     def_input_pad :input, accepted_format: _any, demand_mode: :auto
     def_output_pad :output, accepted_format: _any, demand_mode: :auto
 
-    defguardp is_protection_error_fatal(type, reason)
-              when type == :rtcp or
-                     (type == :rtp and reason not in [:replay_fail, :replay_old])
-
     def_options policies: [
                   spec: [ExLibSRTP.Policy.t()],
                   default: [],
@@ -110,23 +106,13 @@ if Code.ensure_loaded?(ExLibSRTP) do
       %Buffer{payload: payload} = buffer
       packet_type = RTP.Packet.identify(payload)
 
-      protection_result =
+      {:ok, payload} =
         case packet_type do
           :rtp -> ExLibSRTP.protect(srtp, payload)
           :rtcp -> ExLibSRTP.protect_rtcp(srtp, payload)
         end
 
-      case protection_result do
-        {:ok, payload} ->
-          [%Buffer{buffer | payload: payload}]
-
-        {:error, reason} when is_protection_error_fatal(packet_type, reason) ->
-          raise "Failed to protect #{inspect(packet_type)} due to unhandled error #{reason}"
-
-        {:error, reason} ->
-          Membrane.Logger.warn("Ignoring #{inspect(packet_type)} packet due to `#{reason}`")
-          []
-      end
+      [%Buffer{buffer | payload: payload}]
     end
   end
 end
