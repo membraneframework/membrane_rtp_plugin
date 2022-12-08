@@ -65,7 +65,7 @@ defmodule Membrane.RTP.SessionBin do
   require Bitwise
   require Membrane.Logger
   alias Membrane.RTP.{PayloadFormat, Session}
-  alias Membrane.{ParentSpec, RemoteStream, RTCP, RTP, SRTP}
+  alias Membrane.{RemoteStream, RTCP, RTP, SRTP}
 
   @type new_stream_notification_t :: Membrane.RTP.SSRCRouter.new_stream_notification_t()
 
@@ -94,9 +94,11 @@ defmodule Membrane.RTP.SessionBin do
   will handle all RTP streams that have declared support for it. For outgoing streams, an `RTP.TWCCSender`
   element will be spawned and linked to all `RTP.StreamSendBin`s.
   """
-  @type rtp_extension_options_t ::
+  @type rtp_extension_option_t ::
           {extension_name :: rtp_extension_name_t(),
-           extension_config :: Membrane.ParentSpec.child_spec_t()}
+           extension_config :: Membrane.ChildrenSpec.child_definition_t()}
+
+  @type rtp_extension_options_t :: [rtp_extension_option_t]
 
   @typedoc """
   A mapping between internally used `rtp_extension_name_t()` and extension identifiers expected by RTP stream receiver.
@@ -110,7 +112,7 @@ defmodule Membrane.RTP.SessionBin do
   Extensions can implement different functionalities, for example a filter can be responsible for dropping silent
   audio packets when encountered VAD extension data in header extensions of a packet.
   """
-  @type extension_t :: {Membrane.Child.name_t(), Membrane.ParentSpec.child_spec_t()}
+  @type extension_t :: {Membrane.Child.name_t(), Membrane.ChildrenSpec.child_definition_t()}
 
   @ssrc_boundaries 2..(Bitwise.bsl(1, 32) - 1)
 
@@ -132,7 +134,6 @@ defmodule Membrane.RTP.SessionBin do
                 description: "Interval between sending subseqent RTCP sender reports."
               ],
               receiver_ssrc_generator: [
-                type: :function,
                 spec:
                   (local_ssrcs :: [pos_integer], remote_ssrcs :: [pos_integer] ->
                      ssrc :: pos_integer),
@@ -143,7 +144,6 @@ defmodule Membrane.RTP.SessionBin do
                 """
               ],
               secure?: [
-                type: :boolean,
                 default: false,
                 description: """
                 Specifies whether to use SRTP.
@@ -179,7 +179,7 @@ defmodule Membrane.RTP.SessionBin do
 
   def_input_pad :input,
     demand_unit: :buffers,
-    caps: :any,
+    accepted_format: _any,
     availability: :on_request,
     options: [
       payloader: [
@@ -210,12 +210,13 @@ defmodule Membrane.RTP.SessionBin do
 
   def_input_pad :rtp_input,
     demand_unit: :buffers,
-    caps: {RemoteStream, type: :packetized, content_format: one_of([nil, RTP])},
+    accepted_format:
+      %RemoteStream{type: :packetized, content_format: cf} when cf in [RTP, RTCP, nil],
     availability: :on_request
 
   def_output_pad :output,
     demand_unit: :buffers,
-    caps: :any,
+    accepted_format: _any,
     availability: :on_request,
     options: [
       depayloader: [
@@ -280,7 +281,7 @@ defmodule Membrane.RTP.SessionBin do
 
   def_output_pad :rtp_output,
     demand_unit: :buffers,
-    caps: {RemoteStream, type: :packetized, content_format: RTP},
+    accepted_format: %RemoteStream{type: :packetized, content_format: RTP},
     availability: :on_request,
     options: [
       payload_type: [
@@ -316,12 +317,12 @@ defmodule Membrane.RTP.SessionBin do
 
   def_output_pad :rtcp_receiver_output,
     demand_unit: :buffers,
-    caps: {RemoteStream, type: :packetized, content_format: RTCP},
+    accepted_format: %RemoteStream{type: :packetized, content_format: RTCP},
     availability: :on_request
 
   def_output_pad :rtcp_sender_output,
     demand_unit: :buffers,
-    caps: {RemoteStream, type: :packetized, content_format: RTCP},
+    accepted_format: %RemoteStream{type: :packetized, content_format: RTCP},
     availability: :on_request
 
   defmodule State do
@@ -344,13 +345,11 @@ defmodule Membrane.RTP.SessionBin do
   end
 
   @impl true
-  def handle_init(options) do
+  def handle_init(_ctx, options) do
     if options.secure? and not Code.ensure_loaded?(ExLibSRTP),
       do: raise("Optional dependency :ex_libsrtp is required when using secure option")
 
-    children = [ssrc_router: RTP.SSRCRouter]
-    links = []
-    spec = %ParentSpec{children: children, links: links}
+    structure = child(:ssrc_router, RTP.SSRCRouter)
     {receiver_srtp_policies, options} = Map.pop(options, :receiver_srtp_policies)
     {fmt_mapping, options} = Map.pop(options, :fmt_mapping)
 
@@ -366,7 +365,7 @@ defmodule Membrane.RTP.SessionBin do
       }
       |> Map.merge(Map.from_struct(options))
 
-    {{:ok, spec: spec}, state}
+    {[spec: structure], state}
   end
 
   @impl true
@@ -374,46 +373,47 @@ defmodule Membrane.RTP.SessionBin do
     rtcp_receiver_output = Pad.ref(:rtcp_receiver_output, ref)
     rtcp? = Map.has_key?(ctx.pads, rtcp_receiver_output)
 
-    maybe_link_srtcp_decryptor =
-      &to(
+    add_srtcp_decryptor =
+      &child(
         &1,
         {:srtcp_decryptor, ref},
         struct(Membrane.SRTCP.Decryptor, %{policies: state.srtp_policies})
       )
 
-    maybe_link_srtcp_encryptor =
-      &to(
+    add_srtcp_encryptor =
+      &child(
         &1,
         {:srtcp_encryptor, ref},
         struct(Membrane.SRTP.Encryptor, %{policies: state.receiver_srtp_policies})
       )
 
-    links =
+    structure = [
       [
-        link_bin_input(pad)
+        bin_input(pad)
         |> via_in(:input, @rtp_input_params)
-        |> to({:rtp_parser, ref}, %RTP.Parser{secure?: secure?})
+        |> child({:rtp_parser, ref}, %RTP.Parser{secure?: secure?})
         |> via_in(Pad.ref(:input, ref))
-        |> to(:ssrc_router)
+        |> get_child(:ssrc_router)
       ] ++
         if rtcp? do
           [
-            link({:rtp_parser, ref})
+            get_child({:rtp_parser, ref})
             |> via_out(:rtcp_output)
-            |> then(if secure?, do: maybe_link_srtcp_decryptor, else: & &1)
-            |> to({:rtcp_parser, ref}, RTCP.Parser)
+            |> then(if secure?, do: add_srtcp_decryptor, else: & &1)
+            |> child({:rtcp_parser, ref}, RTCP.Parser)
             |> via_out(:receiver_report_output)
-            |> then(if secure?, do: maybe_link_srtcp_encryptor, else: & &1)
-            |> to_bin_output(rtcp_receiver_output),
-            link({:rtcp_parser, ref})
+            |> then(if secure?, do: add_srtcp_encryptor, else: & &1)
+            |> bin_output(rtcp_receiver_output),
+            get_child({:rtcp_parser, ref})
             |> via_in(Pad.ref(:input, {:rtcp, ref}))
-            |> to(:ssrc_router)
+            |> get_child(:ssrc_router)
           ]
         else
           []
         end
+    ]
 
-    {{:ok, spec: %ParentSpec{links: links}}, state}
+    {[spec: structure], state}
   end
 
   @impl true
@@ -434,8 +434,8 @@ defmodule Membrane.RTP.SessionBin do
 
     rtp_stream_name = {:stream_receive_bin, ssrc}
 
-    new_children = %{
-      rtp_stream_name => %RTP.StreamReceiveBin{
+    stream_receive_bin_child =
+      child(rtp_stream_name, %RTP.StreamReceiveBin{
         clock_rate: clock_rate,
         depayloader: depayloader,
         extensions: extensions,
@@ -445,10 +445,9 @@ defmodule Membrane.RTP.SessionBin do
         telemetry_label: telemetry_label,
         secure?: state.secure?,
         srtp_policies: state.srtp_policies
-      }
-    }
+      })
 
-    {rtp_extensions, maybe_link_twcc_receiver, state} =
+    {rtp_extensions, maybe_add_twcc_receiver, state} =
       maybe_handle_twcc_receiver(rtp_extensions, ssrc, ctx, state)
 
     ssrc_router_pad_options = [
@@ -456,28 +455,23 @@ defmodule Membrane.RTP.SessionBin do
       telemetry_label: telemetry_label
     ]
 
-    router_link =
-      link(:ssrc_router)
+    router_link_builder =
+      get_child(:ssrc_router)
       |> via_out(Pad.ref(:output, ssrc), options: ssrc_router_pad_options)
-      |> then(maybe_link_twcc_receiver)
-      |> to(rtp_stream_name)
+      |> then(maybe_add_twcc_receiver)
+      |> get_child(rtp_stream_name)
 
-    acc = {new_children, router_link}
-
-    {new_children, router_link} =
+    structure =
       rtp_extensions
-      |> Enum.reduce(acc, fn {extension_name, config}, {new_children, new_link} ->
+      |> Enum.reduce(router_link_builder, fn {extension_name, config}, builder ->
         extension_id = {extension_name, ssrc}
-
-        {
-          Map.merge(new_children, %{extension_id => config}),
-          new_link |> to(extension_id)
-        }
+        builder |> child(extension_id, config)
       end)
+      |> bin_output(pad)
 
-    new_links = [router_link |> to_bin_output(pad)]
+    structure = [stream_receive_bin_child, structure]
 
-    {{:ok, spec: %ParentSpec{children: new_children, links: new_links}}, state}
+    {[spec: structure], state}
   end
 
   @impl true
@@ -486,7 +480,7 @@ defmodule Membrane.RTP.SessionBin do
       raise "RTCP receiver output has to be linked before corresponding RTP input"
     end
 
-    {:ok, state}
+    {[], state}
   end
 
   @impl true
@@ -495,7 +489,7 @@ defmodule Membrane.RTP.SessionBin do
       raise "RTCP sender output has to be linked before corresponding input"
     end
 
-    {:ok, state}
+    {[], state}
   end
 
   @impl true
@@ -510,7 +504,7 @@ defmodule Membrane.RTP.SessionBin do
     rtcp? = Map.has_key?(ctx.pads, rtcp_sender_output)
 
     if not pads_present? or Map.has_key?(ctx.children, {:stream_send_bin, ssrc}) do
-      {:ok, state}
+      {[], state}
     else
       %{payloader: payloader} = ctx.pads[input_pad].options
 
@@ -520,17 +514,21 @@ defmodule Membrane.RTP.SessionBin do
       payload_type = get_output_payload_type!(ctx, ssrc)
       clock_rate = clock_rate || get_from_register!(:clock_rate, payload_type, state)
 
-      maybe_link_encryptor =
-        &to(&1, {:srtp_encryptor, ssrc}, struct(SRTP.Encryptor, %{policies: state.srtp_policies}))
+      add_srtp_encryptor =
+        &child(
+          &1,
+          {:srtp_encryptor, ssrc},
+          struct(SRTP.Encryptor, %{policies: state.srtp_policies})
+        )
 
       %{rtp_extensions: rtp_extensions} = ctx.pads[input_pad].options
 
       maybe_link_twcc_sender = maybe_handle_twcc_sender(rtp_extensions, ssrc, ctx)
 
-      links = [
-        link_bin_input(input_pad)
+      structure = [
+        bin_input(input_pad)
         |> then(maybe_link_twcc_sender)
-        |> to({:stream_send_bin, ssrc}, %RTP.StreamSendBin{
+        |> child({:stream_send_bin, ssrc}, %RTP.StreamSendBin{
           ssrc: ssrc,
           payload_type: payload_type,
           payloader: payloader,
@@ -538,15 +536,15 @@ defmodule Membrane.RTP.SessionBin do
           rtcp_report_interval: state.rtcp_sender_report_interval,
           rtp_extension_mapping: rtp_extension_mapping || %{}
         })
-        |> then(if state.secure?, do: maybe_link_encryptor, else: & &1)
-        |> to_bin_output(output_pad)
+        |> then(if state.secure?, do: add_srtp_encryptor, else: & &1)
+        |> bin_output(output_pad)
       ]
 
       # if RTCP is present create all set of input and output pads for RTCP flow
-      rtcp_links =
+      rtcp_structure =
         if rtcp? do
           link_srtcp_encryptor =
-            &to(
+            &child(
               &1,
               {:srtcp_sender_encryptor, ssrc},
               struct(SRTP.Encryptor, %{
@@ -555,23 +553,23 @@ defmodule Membrane.RTP.SessionBin do
             )
 
           [
-            link({:stream_send_bin, ssrc})
+            get_child({:stream_send_bin, ssrc})
             |> via_out(:rtcp_output)
             |> then(if state.secure?, do: link_srtcp_encryptor, else: & &1)
-            |> to_bin_output(rtcp_sender_output),
-            link(:ssrc_router)
+            |> bin_output(rtcp_sender_output),
+            get_child(:ssrc_router)
             |> via_out(Pad.ref(:output, ssrc))
             |> via_in(:rtcp_input)
-            |> to({:stream_send_bin, ssrc})
+            |> get_child({:stream_send_bin, ssrc})
           ]
         else
           []
         end
 
-      spec = %ParentSpec{links: links ++ rtcp_links}
+      spec = structure ++ rtcp_structure
       state = %{state | senders_ssrcs: MapSet.put(state.senders_ssrcs, ssrc)}
 
-      {{:ok, spec: spec}, state}
+      {[spec: spec], state}
     end
   end
 
@@ -587,7 +585,7 @@ defmodule Membrane.RTP.SessionBin do
       |> Enum.map(&{&1, ref})
       |> Enum.filter(&Map.has_key?(ctx.children, &1))
 
-    {{:ok, remove_child: children}, state}
+    {[remove_child: children], state}
   end
 
   @impl true
@@ -597,9 +595,9 @@ defmodule Membrane.RTP.SessionBin do
     stream_receive_bin = Map.get(ctx.children, {:stream_receive_bin, ssrc})
 
     if stream_receive_bin != nil and !stream_receive_bin.terminating? do
-      {{:ok, remove_child: {:stream_receive_bin, ssrc}}, state}
+      {[remove_child: {:stream_receive_bin, ssrc}], state}
     else
-      {:ok, state}
+      {[], state}
     end
   end
 
@@ -614,39 +612,39 @@ defmodule Membrane.RTP.SessionBin do
         child_name
       end
 
-    {{:ok, remove_child: children}, state}
+    {[remove_child: children], state}
   end
 
   @impl true
   def handle_pad_removed(Pad.ref(name, _ref), _ctx, state)
       when name in [:rtcp_receiver_output, :rtcp_sender_output] do
-    {:ok, state}
+    {[], state}
   end
 
   @impl true
-  def handle_notification(
+  def handle_child_notification(
         {:new_rtp_stream, ssrc, payload_type, extensions},
         :ssrc_router,
         _ctx,
         state
       ) do
     state = put_in(state.ssrc_pt_mapping[ssrc], payload_type)
-    {{:ok, notify: {:new_rtp_stream, ssrc, payload_type, extensions}}, state}
+    {[notify_parent: {:new_rtp_stream, ssrc, payload_type, extensions}], state}
   end
 
   @impl true
-  def handle_notification({:vad, _val} = msg, _from, _ctx, state) do
-    {{:ok, notify: msg}, state}
+  def handle_child_notification({:vad, _val} = msg, _from, _ctx, state) do
+    {[notify_parent: msg], state}
   end
 
   @impl true
-  def handle_notification({:bandwidth_estimation, _val} = msg, :twcc_sender, _ctx, state) do
-    {{:ok, notify: msg}, state}
+  def handle_child_notification({:bandwidth_estimation, _val} = msg, :twcc_sender, _ctx, state) do
+    {[notify_parent: msg], state}
   end
 
   @impl true
-  def handle_notification({:twcc_feedback, _feedback} = msg, _rtcp_parser, _ctx, state) do
-    {{:ok, forward: {:twcc_sender, msg}}, state}
+  def handle_child_notification({:twcc_feedback, _feedback} = msg, _rtcp_parser, _ctx, state) do
+    {[notify_child: {:twcc_sender, msg}], state}
   end
 
   defp add_ssrc(remote_ssrc, state) do
@@ -701,9 +699,11 @@ defmodule Membrane.RTP.SessionBin do
 
     to_twcc_receiver = fn link ->
       if should_create_child? do
-        to(link, :twcc_receiver, %{maybe_twcc | feedback_sender_ssrc: maybe_twcc_ssrc})
+        link
+        |> child(:twcc_receiver, %{maybe_twcc | feedback_sender_ssrc: maybe_twcc_ssrc})
       else
-        to(link, :twcc_receiver)
+        link
+        |> get_child(:twcc_receiver)
       end
     end
 
@@ -730,9 +730,9 @@ defmodule Membrane.RTP.SessionBin do
 
     to_twcc_sender = fn link ->
       if should_create_child? do
-        to(link, :twcc_sender, maybe_twcc)
+        link |> child(:twcc_sender, maybe_twcc)
       else
-        to(link, :twcc_sender)
+        link |> get_child(:twcc_sender)
       end
     end
 

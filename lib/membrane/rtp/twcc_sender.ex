@@ -15,12 +15,12 @@ defmodule Membrane.RTP.TWCCSender do
 
   @seq_number_limit Bitwise.bsl(1, 16)
 
-  def_input_pad :input, caps: RTP, availability: :on_request, demand_mode: :auto
-  def_output_pad :output, caps: RTP, availability: :on_request, demand_mode: :auto
+  def_input_pad :input, accepted_format: RTP, availability: :on_request, demand_mode: :auto
+  def_output_pad :output, accepted_format: RTP, availability: :on_request, demand_mode: :auto
 
   @impl true
-  def handle_init(_options) do
-    {:ok,
+  def handle_init(_ctx, _options) do
+    {[],
      %{
        seq_num: 0,
        seq_to_timestamp: %{},
@@ -35,27 +35,22 @@ defmodule Membrane.RTP.TWCCSender do
   def handle_pad_added(pad, _ctx, state) do
     {queued_actions, other_actions} = Map.pop(state.buffered_actions, pad, [])
 
-    {{:ok, Enum.to_list(queued_actions)},
+    {Enum.to_list(queued_actions),
      %{state | cc: %CongestionControl{}, buffered_actions: other_actions}}
   end
 
   @impl true
-  def handle_pad_removed(_pad, _ctx, state), do: {:ok, %{state | cc: %CongestionControl{}}}
+  def handle_pad_removed(_pad, _ctx, state), do: {[], %{state | cc: %CongestionControl{}}}
 
   @impl true
-  def handle_caps(Pad.ref(:input, id), caps, ctx, state) do
+  def handle_stream_format(Pad.ref(:input, id), stream_format, ctx, state) do
     out_pad = Pad.ref(:output, id)
-    [caps: {out_pad, caps}] |> send_when_pad_connected(out_pad, ctx, state)
+    [stream_format: {out_pad, stream_format}] |> send_when_pad_connected(out_pad, ctx, state)
   end
 
   @impl true
-  def handle_prepared_to_playing(_ctx, state) do
-    {{:ok, start_timer: {:bandwidth_report_timer, state.bandwidth_report_interval}}, state}
-  end
-
-  @impl true
-  def handle_playing_to_prepared(_ctx, state) do
-    {{:ok, stop_timer: :bandwidth_report_timer}, state}
+  def handle_playing(_ctx, state) do
+    {[start_timer: {:bandwidth_report_timer, state.bandwidth_report_interval}], state}
   end
 
   @impl true
@@ -65,12 +60,12 @@ defmodule Membrane.RTP.TWCCSender do
         %{cc: %CongestionControl{r_hat: %ReceiverRate{value: nil}}} = state
       ) do
     # wait until the first r_hat is calculated
-    {:ok, state}
+    {[], state}
   end
 
   @impl true
   def handle_tick(:bandwidth_report_timer, _ctx, %{cc: cc} = state) do
-    {{:ok, notify: {:bandwidth_estimation, min(cc.a_hat, cc.as_hat)}}, state}
+    {[notify_parent: {:bandwidth_estimation, min(cc.a_hat, cc.as_hat)}], state}
   end
 
   @impl true
@@ -81,7 +76,7 @@ defmodule Membrane.RTP.TWCCSender do
   end
 
   @impl true
-  def handle_other({:twcc_feedback, feedback}, _ctx, state) do
+  def handle_parent_notification({:twcc_feedback, feedback}, _ctx, state) do
     %TWCC{
       # TODO: consider what to do when we lose some feedback
       feedback_packet_count: _feedback_packet_count,
@@ -123,7 +118,7 @@ defmodule Membrane.RTP.TWCCSender do
         rtt
       )
 
-    {:ok, %{state | cc: cc}}
+    {[], %{state | cc: cc}}
   end
 
   @impl true
@@ -160,12 +155,12 @@ defmodule Membrane.RTP.TWCCSender do
 
   defp send_when_pad_connected(actions, pad, ctx, state) do
     if Map.has_key?(ctx.pads, pad) do
-      {{:ok, actions}, state}
+      {actions, state}
     else
       state =
         update_in(state, [:buffered_actions, pad], &Qex.join(&1 || Qex.new(), Qex.new(actions)))
 
-      {:ok, state}
+      {[], state}
     end
   end
 end

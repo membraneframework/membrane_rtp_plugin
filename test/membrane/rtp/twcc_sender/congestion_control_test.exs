@@ -220,7 +220,7 @@ defmodule Membrane.RTP.TWCCSender.CongestionControlTest do
       # be bumped by a lot
 
       rate = initial_bwe * 10
-      report_interval_ms = Membrane.Time.to_milliseconds(report_interval)
+      report_interval_ms = Membrane.Time.round_to_milliseconds(report_interval)
       packet_size = rate * (report_interval_ms / 1000) / packets_per_report
 
       packet_sizes =

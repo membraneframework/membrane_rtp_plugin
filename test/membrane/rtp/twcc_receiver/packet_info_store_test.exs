@@ -151,7 +151,7 @@ defmodule Membrane.RTP.TWCCReceiver.PacketInfoStoreTest do
     end
 
     test "makes reference time divisible by 64ms", %{stats: stats} do
-      ref_time_as_ms = stats.reference_time |> Membrane.Time.as_milliseconds()
+      ref_time_as_ms = stats.reference_time |> Membrane.Time.round_to_milliseconds()
 
       assert is_integer(ref_time_as_ms)
       assert rem(ref_time_as_ms, 64) == 0

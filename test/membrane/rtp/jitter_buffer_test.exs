@@ -25,15 +25,15 @@ defmodule Membrane.RTP.JitterBufferTest do
     end
 
     test "start of stream starts timer that changes state", %{state: state} do
-      assert {:ok, state} = JitterBuffer.handle_start_of_stream(:input, %{}, state)
-      assert_receive message, (state.latency |> Membrane.Time.to_milliseconds()) + 5
-      assert {{:ok, []}, final_state} = JitterBuffer.handle_other(message, %{}, state)
+      assert {[], state} = JitterBuffer.handle_start_of_stream(:input, %{}, state)
+      assert_receive message, (state.latency |> Membrane.Time.round_to_milliseconds()) + 5
+      assert {[], final_state} = JitterBuffer.handle_info(message, %{}, state)
       assert final_state.waiting? == false
     end
 
     test "any new buffer is kept", %{state: state, buffer: buffer} do
       assert BufferStore.dump(state.store) == []
-      assert {:ok, state} = JitterBuffer.handle_process(:input, buffer, nil, state)
+      assert {[], state} = JitterBuffer.handle_process(:input, buffer, nil, state)
 
       assert %State{store: store} = state
       assert {%Record{buffer: ^buffer}, new_store} = BufferStore.flush_one(store)
@@ -49,7 +49,7 @@ defmodule Membrane.RTP.JitterBufferTest do
     end
 
     test "outputs it immediately if it is in order", %{state: state, buffer: buffer} do
-      assert {{:ok, buffer: {:output, ^buffer}}, state} =
+      assert {[buffer: {:output, ^buffer}], state} =
                JitterBuffer.handle_process(:input, buffer, nil, state)
 
       assert %JitterBuffer.State{store: store} = state
@@ -58,7 +58,7 @@ defmodule Membrane.RTP.JitterBufferTest do
 
     test "refuses to add that packet when it comes too late", %{state: state} do
       late_buffer = BufferFactory.sample_buffer(@base_seq_number - 2)
-      assert {:ok, new_state} = JitterBuffer.handle_process(:input, late_buffer, nil, state)
+      assert {[], new_state} = JitterBuffer.handle_process(:input, late_buffer, nil, state)
       assert new_state == state
     end
 
@@ -83,7 +83,7 @@ defmodule Membrane.RTP.JitterBufferTest do
 
       state = %State{state | store: store}
 
-      assert {{:ok, commands}, %State{store: result_store}} =
+      assert {commands, %State{store: result_store}} =
                JitterBuffer.handle_process(:input, first_buffer, nil, state)
 
       buffers = commands |> Keyword.get_values(:buffer) |> Enum.map(fn {:output, buf} -> buf end)
@@ -105,12 +105,12 @@ defmodule Membrane.RTP.JitterBufferTest do
 
       state = %{state | store: store, waiting?: false}
 
-      assert {{:ok, commands}, state} = JitterBuffer.handle_process(:input, buffer, nil, state)
+      assert {commands, state} = JitterBuffer.handle_process(:input, buffer, nil, state)
       assert commands |> Keyword.get(:buffer) == nil
       assert is_reference(state.max_latency_timer)
-      assert_receive message, (state.latency |> Membrane.Time.to_milliseconds()) + 20
+      assert_receive message, (state.latency |> Membrane.Time.round_to_milliseconds()) + 20
 
-      assert {{:ok, actions}, _state} = JitterBuffer.handle_other(message, %{}, state)
+      assert {actions, _state} = JitterBuffer.handle_info(message, %{}, state)
 
       assert [event: event, buffer: buffer_action] = actions
       assert event == {:output, %Membrane.Event.Discontinuity{}}
@@ -130,7 +130,7 @@ defmodule Membrane.RTP.JitterBufferTest do
 
       {:ok, store} = BufferStore.insert_buffer(store, buffer)
       state = %{state | store: store}
-      assert {{:ok, actions}, _state} = JitterBuffer.handle_end_of_stream(:input, nil, state)
+      assert {actions, _state} = JitterBuffer.handle_end_of_stream(:input, nil, state)
 
       assert [event: event, buffer: buffer_action, end_of_stream: :output] = actions
       assert event == {:output, %Membrane.Event.Discontinuity{}}

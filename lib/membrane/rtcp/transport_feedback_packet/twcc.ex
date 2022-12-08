@@ -271,7 +271,7 @@ defmodule Membrane.RTCP.TransportFeedbackPacket.TWCC do
   defp scale_delta(delta) do
     # Deltas are represented as multiples of 250μs
     # https://datatracker.ietf.org/doc/html/draft-holmer-rmcat-transport-wide-cc-extensions-01#section-3.1.5
-    delta |> Time.to_microseconds() |> div(250)
+    delta |> Time.round_to_microseconds() |> div(250)
   end
 
   defp delta_to_packet_status(scaled_delta) do
