@@ -103,11 +103,11 @@ if Code.ensure_loaded?(ExLibSRTP) do
 
           {[buffer: {:output, buffer}], state}
 
-        {:error, reason} when reason in [:replay_fail, :replay_old] ->
+        {:error, :reply_fail} ->
           Membrane.Logger.debug("""
           Couldn't unprotect srtp packet:
           #{inspect(payload, limit: :infinity)}
-          Reason: #{inspect(reason)}. Ignoring packet.
+          Reason: :reply_fail. Ignoring packet.
           """)
 
           {[], state}
