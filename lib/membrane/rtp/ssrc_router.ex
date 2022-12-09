@@ -48,7 +48,9 @@ defmodule Membrane.RTP.SSRCRouter do
     @type t() :: %__MODULE__{
             input_pads: %{RTP.ssrc_t() => [input_pad :: Pad.ref_t()]},
             buffered_actions: %{RTP.ssrc_t() => [Membrane.Element.Action.t()]},
-            required_extensions: %{RTP.payload_type_t() => [RTP.Header.Extension.identifier_t()]},
+            required_extensions: %{
+              RTP.payload_type_t() => MapSet.t(RTP.Header.Extension.identifier_t())
+            },
             srtp_keying_material_event: struct() | nil
           }
 
@@ -205,21 +207,25 @@ defmodule Membrane.RTP.SSRCRouter do
 
   @impl true
   def handle_other(%RequireExtensions{pt_to_ext_id: pt_to_ext_id}, _ctx, state) do
+    pt_to_ext_id = Map.new(pt_to_ext_id, fn {pt, ids} -> {pt, MapSet.new(ids)} end)
+
     required_extensions =
-      Map.merge(state.required_extensions, pt_to_ext_id, fn _k, v1, v2 -> v1 ++ v2 end)
+      Map.merge(state.required_extensions, pt_to_ext_id, fn _pt, set, ext_ids ->
+        MapSet.union(set, ext_ids)
+      end)
 
     {:ok, %{state | required_extensions: required_extensions}}
   end
 
   defp maybe_handle_new_stream(pad, ssrc, payload_type, extensions, state) do
-    required_extensions = Map.get(state.required_extensions, payload_type, [])
+    required_extensions = Map.get(state.required_extensions, payload_type, MapSet.new())
 
     cond do
       Map.has_key?(state.input_pads, ssrc) ->
         {[], state}
 
       Map.has_key?(state.required_extensions, payload_type) and
-          required_extensions -- Enum.map(extensions, & &1.identifier) != [] ->
+          not MapSet.subset?(required_extensions, MapSet.new(extensions, & &1.identifier)) ->
         Membrane.Logger.debug("""
         Dropping packet of SSRC #{ssrc} without required extension(s).
         Required: #{inspect(required_extensions)}, present: #{inspect(extensions)}

@@ -3,7 +3,7 @@ defmodule Membrane.RTP.RTXParser do
   An element responsible for handling retransmission packets (`rtx`) defined in
   [RFC 4588](https://datatracker.ietf.org/doc/html/rfc4588#section-4).
 
-  It parses rtx packet and recreates the lost packet
+  It parses RTX packet and recreates the lost packet
   """
 
   use Membrane.Filter
@@ -21,6 +21,18 @@ defmodule Membrane.RTP.RTXParser do
               payload_type: [
                 description:
                   "Payload type of original RTP stream that is retransmitted via this SSRC"
+              ],
+              repaired_rid_id: [
+                spec: RTP.Header.Extension.identifier_t(),
+                description:
+                  "The numerical ID of an extension carrying repaired-rid that will be rewritten into rid",
+                default: nil
+              ],
+              rid_id: [
+                spec: RTP.Header.Extension.identifier_t(),
+                description:
+                  "The numerical ID of an extension carrying rid, will replace repaired_rid_id",
+                default: nil
               ]
 
   @impl true
@@ -42,13 +54,18 @@ defmodule Membrane.RTP.RTXParser do
       "[RTX SSRC: #{buffer.metadata.rtp.ssrc}] got retransmitted packet with seq_num #{original_seq_num}"
     )
 
+    extensions =
+      buffer.metadata.rtp.extensions
+      |> maybe_rewrite_rid_ext_id(state)
+
     recreated_buffer = %Buffer{
       buffer
       | payload: original_payload,
         metadata: %{
           rtp: %{
             buffer.metadata.rtp
-            | sequence_number: original_seq_num,
+            | extensions: extensions,
+              sequence_number: original_seq_num,
               payload_type: state.payload_type
           }
         }
@@ -67,5 +84,18 @@ defmodule Membrane.RTP.RTXParser do
     end
 
     {:ok, state}
+  end
+
+  defp maybe_rewrite_rid_ext_id(extensions, %{repaired_rid_id: rrid, rid_id: rid})
+       when rrid != nil and rid != nil do
+    extensions
+    |> Enum.map(fn
+      %{identifier: ^rrid} = ext -> %{ext | identifier: rid}
+      ext -> ext
+    end)
+  end
+
+  defp maybe_rewrite_rid_ext_id(extensions, _state) do
+    extensions
   end
 end

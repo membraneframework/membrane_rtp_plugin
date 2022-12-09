@@ -663,7 +663,9 @@ defmodule Membrane.RTP.SessionBin do
   def handle_other(%RTXInfo{ssrc: ssrc} = msg, ctx, state) do
     rtx_parser_opts = %RTP.RTXParser{
       rtx_payload_type: msg.rtx_payload_type,
-      payload_type: msg.original_payload_type
+      payload_type: msg.original_payload_type,
+      rid_id: msg.rid_id,
+      repaired_rid_id: msg.repaired_rid_id
     }
 
     links_generator = fn twcc? ->
