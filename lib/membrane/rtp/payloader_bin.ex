@@ -5,11 +5,11 @@ defmodule Membrane.RTP.PayloaderBin do
 
   use Membrane.Bin
 
-  alias Membrane.{ParentSpec, RTP}
+  alias Membrane.RTP
 
-  def_input_pad :input, demand_unit: :buffers, caps: :any
+  def_input_pad :input, accepted_format: _any, demand_unit: :buffers
 
-  def_output_pad :output, caps: :any, demand_unit: :buffers
+  def_output_pad :output, accepted_format: RTP, demand_unit: :buffers
 
   def_options payloader: [
                 spec: module(),
@@ -20,18 +20,17 @@ defmodule Membrane.RTP.PayloaderBin do
               clock_rate: [spec: RTP.clock_rate_t()]
 
   @impl true
-  def handle_init(opts) do
-    links = [
-      link_bin_input()
-      |> to(:payloader, opts.payloader)
-      |> to(:header_generator, %RTP.HeaderGenerator{
+  def handle_init(_ctx, opts) do
+    structure =
+      bin_input()
+      |> child(:payloader, opts.payloader)
+      |> child(:header_generator, %RTP.HeaderGenerator{
         ssrc: opts.ssrc,
         payload_type: opts.payload_type,
         clock_rate: opts.clock_rate
       })
-      |> to_bin_output()
-    ]
+      |> bin_output()
 
-    {{:ok, spec: %ParentSpec{links: links}}, %{}}
+    {[spec: structure], %{}}
   end
 end

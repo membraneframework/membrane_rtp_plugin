@@ -1,6 +1,7 @@
 defmodule Membrane.RTP.PipelineTest do
   use ExUnit.Case
 
+  import Membrane.ChildrenSpec
   import Membrane.Testing.Assertions
 
   alias Membrane.Buffer
@@ -16,17 +17,16 @@ defmodule Membrane.RTP.PipelineTest do
     test_data_base = 1..100
     test_data = Fixtures.fake_packet_list(test_data_base)
 
-    {:ok, pipeline} =
-      Pipeline.start_link(%Pipeline.Options{
-        elements: [
-          source: %Source{
+    pipeline =
+      Pipeline.start_link_supervised!(
+        structure:
+          child(:source, %Source{
             output: test_data,
-            caps: %RemoteStream{type: :packetized, content_format: RTP}
-          },
-          parser: Parser,
-          sink: %Sink{}
-        ]
-      })
+            stream_format: %RemoteStream{type: :packetized, content_format: RTP}
+          })
+          |> child(:parser, Parser)
+          |> child(:sink, Sink)
+      )
 
     Enum.each(test_data_base, fn _test_data ->
       assert_sink_buffer(pipeline, :sink, %Buffer{}, @buffer_receive_timeout)

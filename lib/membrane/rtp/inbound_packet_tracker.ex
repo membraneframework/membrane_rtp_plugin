@@ -19,11 +19,10 @@ defmodule Membrane.RTP.InboundPacketTracker do
   @max_s24_val Bitwise.bsl(1, 23) - 1
   @min_s24_val -Bitwise.bsl(1, 23)
 
-  def_input_pad :input, caps: :any, demand_mode: :auto
-  def_output_pad :output, caps: :any, demand_mode: :auto
+  def_input_pad :input, accepted_format: _any, demand_mode: :auto
+  def_output_pad :output, accepted_format: _any, demand_mode: :auto
 
   def_options clock_rate: [
-                type: :integer,
                 spec: Membrane.RTP.clock_rate_t()
               ],
               repair_sequence_numbers?: [
@@ -69,8 +68,8 @@ defmodule Membrane.RTP.InboundPacketTracker do
   end
 
   @impl true
-  def handle_init(opts) do
-    {:ok,
+  def handle_init(_ctx, opts) do
+    {[],
      %State{clock_rate: opts.clock_rate, repair_sequence_numbers?: opts.repair_sequence_numbers?}}
   end
 
@@ -90,11 +89,11 @@ defmodule Membrane.RTP.InboundPacketTracker do
           |> update_received()
           |> update_jitter(buffer)
 
-        {{:ok, buffer: {:output, repair_sequence_number(buffer, state)}}, state}
+        {[buffer: {:output, repair_sequence_number(buffer, state)}], state}
 
       # the packets is either too old or too new
       delta <= @max_seq_num - @max_unordered ->
-        {:ok, update_received(state)}
+        {[], update_received(state)}
 
       # packet is old but within dropout threshold
       true ->
@@ -103,7 +102,7 @@ defmodule Membrane.RTP.InboundPacketTracker do
           |> update_received()
           |> update_jitter(buffer)
 
-        {{:ok, buffer: {:output, repair_sequence_number(buffer, state)}}, update_received(state)}
+        {[buffer: {:output, repair_sequence_number(buffer, state)}], update_received(state)}
     end
   end
 
@@ -156,7 +155,7 @@ defmodule Membrane.RTP.InboundPacketTracker do
       interarrival_jitter: jitter
     }
 
-    {{:ok, event: {:input, %ReceiverReport.StatsEvent{stats: stats}}}, state}
+    {[event: {:input, %ReceiverReport.StatsEvent{stats: stats}}], state}
   end
 
   @impl true
@@ -166,7 +165,7 @@ defmodule Membrane.RTP.InboundPacketTracker do
         _ctx,
         %State{discarded: discarded} = state
       ) do
-    {:ok, %State{state | discarded: discarded + packets_discarded}}
+    {[], %State{state | discarded: discarded + packets_discarded}}
   end
 
   @impl true

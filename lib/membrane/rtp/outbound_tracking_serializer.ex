@@ -13,20 +13,20 @@ defmodule Membrane.RTP.OutboundTrackingSerializer do
   alias Membrane.RTP.Session.SenderReport
   alias Membrane.{Buffer, Payload, RemoteStream, RTCPEvent, RTP, Time}
 
-  def_input_pad :input, caps: RTP, demand_mode: :auto
+  def_input_pad :input, accepted_format: RTP, demand_mode: :auto
 
   def_output_pad :output,
-    caps: {RemoteStream, type: :packetized, content_format: RTP},
+    accepted_format: %RemoteStream{type: :packetized, content_format: RTP},
     demand_mode: :auto
 
   def_input_pad :rtcp_input,
     availability: :on_request,
-    caps: :any,
+    accepted_format: _any,
     demand_mode: :auto
 
   def_output_pad :rtcp_output,
     availability: :on_request,
-    caps: {RemoteStream, type: :packetized, content_format: RTCP},
+    accepted_format: %RemoteStream{type: :packetized, content_format: RTCP},
     demand_mode: :auto
 
   def_options ssrc: [spec: RTP.ssrc_t()],
@@ -64,18 +64,18 @@ defmodule Membrane.RTP.OutboundTrackingSerializer do
   end
 
   @impl true
-  def handle_init(options) do
+  def handle_init(_ctx, options) do
     state =
       %State{}
       |> put_in([:stats_acc, :clock_rate], options.clock_rate)
       |> Map.merge(options |> Map.from_struct() |> Map.drop([:clock_rate]))
 
-    {:ok, state}
+    {[], state}
   end
 
   @impl true
   def handle_pad_added(Pad.ref(:rtcp_input, _id), _ctx, state) do
-    {:ok, state}
+    {[], state}
   end
 
   @impl true
@@ -84,13 +84,13 @@ defmodule Membrane.RTP.OutboundTrackingSerializer do
         %{playback: :playing},
         %{rtcp_output_pad: nil} = state
       ) do
-    caps = %RemoteStream{type: :packetized, content_format: RTCP}
-    {{:ok, caps: {pad, caps}}, %{state | rtcp_output_pad: pad}}
+    stream_format = %RemoteStream{type: :packetized, content_format: RTCP}
+    {[stream_format: {pad, stream_format}], %{state | rtcp_output_pad: pad}}
   end
 
   @impl true
   def handle_pad_added(Pad.ref(:rtcp_output, _id) = pad, _ctx, %{rtcp_output_pad: nil} = state) do
-    {:ok, %{state | rtcp_output_pad: pad}}
+    {[], %{state | rtcp_output_pad: pad}}
   end
 
   @impl true
@@ -99,14 +99,14 @@ defmodule Membrane.RTP.OutboundTrackingSerializer do
   end
 
   @impl true
-  def handle_caps(:input, _caps, _ctx, state) do
-    caps = %RemoteStream{type: :packetized, content_format: RTP}
-    {{:ok, caps: {:output, caps}}, state}
+  def handle_stream_format(:input, _stream_format, _ctx, state) do
+    stream_format = %RemoteStream{type: :packetized, content_format: RTP}
+    {[stream_format: {:output, stream_format}], state}
   end
 
   @impl true
-  def handle_caps(_pad, _caps, _ctx, state) do
-    {:ok, state}
+  def handle_stream_format(_pad, _stream_format, _ctx, state) do
+    {[], state}
   end
 
   @impl true
@@ -120,7 +120,7 @@ defmodule Membrane.RTP.OutboundTrackingSerializer do
     # PLI or FIR reaching OutboundTrackingSerializer means the receiving peer sent it
     # We need to pass it to the sending peer's RTCP.Receiver (in StreamReceiveBin) to get translated again into FIR/PLI with proper SSRCs
     # and then sent to the sender. So the KeyframeRequestEvent, like salmon, starts an upstream journey here trying to reach that peer.
-    {{:ok, event: {:input, %Membrane.KeyframeRequestEvent{}}}, state}
+    {[event: {:input, %Membrane.KeyframeRequestEvent{}}], state}
   end
 
   @impl true
@@ -129,12 +129,12 @@ defmodule Membrane.RTP.OutboundTrackingSerializer do
   end
 
   @impl true
-  def handle_prepared_to_playing(_ctx, state) do
+  def handle_playing(_ctx, state) do
     if state.rtcp_output_pad do
-      caps = %RemoteStream{type: :packetized, content_format: RTCP}
-      {{:ok, caps: {state.rtcp_output_pad, caps}}, state}
+      stream_format = %RemoteStream{type: :packetized, content_format: RTCP}
+      {[stream_format: {state.rtcp_output_pad, stream_format}], state}
     else
-      {:ok, state}
+      {[], state}
     end
   end
 
@@ -170,11 +170,11 @@ defmodule Membrane.RTP.OutboundTrackingSerializer do
 
     buffer = %Buffer{buffer | payload: payload, metadata: metadata}
 
-    {{:ok, buffer: {:output, buffer}}, %{state | any_buffer_sent?: true}}
+    {[buffer: {:output, buffer}], %{state | any_buffer_sent?: true}}
   end
 
   @impl true
-  def handle_other(:send_stats, ctx, state) do
+  def handle_parent_notification(:send_stats, ctx, state) do
     %{rtcp_output_pad: rtcp_output} = state
 
     if rtcp_output && not ctx.pads[rtcp_output].end_of_stream? do
@@ -186,9 +186,9 @@ defmodule Membrane.RTP.OutboundTrackingSerializer do
         |> Enum.map(&Membrane.RTCP.Packet.serialize(&1))
         |> Enum.map(&{:buffer, {rtcp_output, %Membrane.Buffer{payload: &1}}})
 
-      {{:ok, actions}, %{state | any_buffer_sent?: false}}
+      {actions, %{state | any_buffer_sent?: false}}
     else
-      {:ok, state}
+      {[], state}
     end
   end
 

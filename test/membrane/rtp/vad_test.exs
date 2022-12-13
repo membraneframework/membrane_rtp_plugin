@@ -49,8 +49,8 @@ defmodule Membrane.RTP.VADTest do
   end
 
   defp setup_initial_vad_state(ctx) do
-    {:ok, state} =
-      VAD.handle_init(%{
+    {[], state} =
+      VAD.handle_init(nil, %{
         vad_id: @default_vad_id,
         clock_rate: ctx.clock_rate,
         min_packet_num: ctx.min_packet_num,
@@ -98,13 +98,13 @@ defmodule Membrane.RTP.VADTest do
       new_timestamp = original_timestamp + time_delta * index
       buffer = rtp_buffer(volume, new_timestamp)
 
-      {{:ok, _}, new_state} = VAD.handle_process(:input, buffer, %{}, state)
+      {_actions, new_state} = VAD.handle_process(:input, buffer, %{}, state)
       new_state
     end)
   end
 
   defp process_buffer(buffer, state) do
-    {{:ok, _actions}, new_state} = VAD.handle_process(:input, buffer, %{}, state)
+    {_actions, new_state} = VAD.handle_process(:input, buffer, %{}, state)
     new_state
   end
 

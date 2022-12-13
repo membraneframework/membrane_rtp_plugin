@@ -14,8 +14,8 @@ defmodule Membrane.RTP.SilenceDiscarder do
 
   alias Membrane.RTP.{Header, PacketsDiscardedEvent}
 
-  def_input_pad :input, caps: :any, demand_mode: :auto
-  def_output_pad :output, caps: :any, demand_mode: :auto
+  def_input_pad :input, accepted_format: _any, demand_mode: :auto
+  def_output_pad :output, accepted_format: _any, demand_mode: :auto
 
   def_options max_consecutive_drops: [
                 spec: non_neg_integer() | :infinity,
@@ -45,8 +45,8 @@ defmodule Membrane.RTP.SilenceDiscarder do
               ]
 
   @impl true
-  def handle_init(opts) do
-    {:ok, Map.from_struct(opts) |> Map.put(:dropped, 0)}
+  def handle_init(_ctx, opts) do
+    {[], Map.from_struct(opts) |> Map.put(:dropped, 0)}
   end
 
   @impl true
@@ -70,7 +70,7 @@ defmodule Membrane.RTP.SilenceDiscarder do
     |> handle_vad(buffer, state)
   end
 
-  defp handle_vad(nil, buffer, state), do: {{:ok, buffer: {:output, buffer}}, state}
+  defp handle_vad(nil, buffer, state), do: {[buffer: {:output, buffer}], state}
 
   defp handle_vad(vad, buffer, state) do
     %{dropped: dropped, silence_threshold: silence_threshold} = state
@@ -78,19 +78,20 @@ defmodule Membrane.RTP.SilenceDiscarder do
 
     cond do
       audio_level >= silence_threshold ->
-        {:ok, %{state | dropped: dropped + 1}}
+        {[], %{state | dropped: dropped + 1}}
 
       dropped > 0 ->
         stop_dropping(buffer, state)
 
       true ->
-        {{:ok, buffer: {:output, buffer}}, state}
+        {[buffer: {:output, buffer}], state}
     end
   end
 
   defp stop_dropping(buffer, state) do
-    {{:ok,
-      event: {:output, %PacketsDiscardedEvent{discarded: state.dropped}},
-      buffer: {:output, buffer}}, %{state | dropped: 0}}
+    {[
+       event: {:output, %PacketsDiscardedEvent{discarded: state.dropped}},
+       buffer: {:output, buffer}
+     ], %{state | dropped: 0}}
   end
 end

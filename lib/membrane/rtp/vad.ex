@@ -4,11 +4,11 @@ defmodule Membrane.RTP.VAD do
 
   To make this module work appropriate RTP header extension has to be set in SDP offer/answer.
 
-  If avg of audio level in packets in `time_window` exceeds `vad_threshold` it emits
-  notification `t:speech_notification_t/0`.
+  If avg of audio level in packets in `time_window` exceeds `vad_threshold` it emits `Membrane.RTP.VadEvent`
+  on its output pad.
 
   When avg falls below `vad_threshold` and doesn't exceed it in the next `vad_silence_timer`
-  it emits notification `t:silence_notification_t/0`.
+  it also emits the event.
 
   Buffers that are processed by this element may or may not have been processed by
   a depayloader and passed through a jitter buffer. If they have not, then the only timestamp
@@ -25,11 +25,11 @@ defmodule Membrane.RTP.VAD do
   """
   use Membrane.Filter
 
-  alias Membrane.RTP.{Header, Utils}
+  alias Membrane.RTP.{Header, Utils, VadEvent}
 
-  def_input_pad :input, availability: :always, caps: :any, demand_mode: :auto
+  def_input_pad :input, availability: :always, accepted_format: _any, demand_mode: :auto
 
-  def_output_pad :output, availability: :always, caps: :any, demand_mode: :auto
+  def_output_pad :output, availability: :always, accepted_format: _any, demand_mode: :auto
 
   def_options vad_id: [
                 spec: 1..14,
@@ -66,24 +66,14 @@ defmodule Membrane.RTP.VAD do
                 spec: pos_integer(),
                 default: 300,
                 description: """
-                Time to wait before emitting notification `t:silence_notification_t/0` after audio track is
+                Time to wait before emitting `Membrane.RTP.VadEvent` after audio track is
                 no longer considered to represent speech.
-                If at this time audio track is considered to represent speech again the notification will not be sent.
+                If at this time audio track is considered to represent speech again the event will not be sent.
                 """
               ]
 
-  @typedoc """
-  Notification sent after detecting speech activity.
-  """
-  @type speech_notification_t() :: {:vad, :speech}
-
-  @typedoc """
-  Notification sent after detecting silence activity.
-  """
-  @type silence_notification_t() :: {:vad, :silence}
-
   @impl true
-  def handle_init(opts) do
+  def handle_init(_ctx, opts) do
     state = %{
       vad_id: opts.vad_id,
       audio_levels: Qex.new(),
@@ -100,7 +90,7 @@ defmodule Membrane.RTP.VAD do
       audio_levels_count: 0
     }
 
-    {:ok, state}
+    {[], state}
   end
 
   @impl true
@@ -109,7 +99,7 @@ defmodule Membrane.RTP.VAD do
     handle_if_present(buffer, extension, state)
   end
 
-  defp handle_if_present(buffer, nil, state), do: {{:ok, buffer: {:output, buffer}}, state}
+  defp handle_if_present(buffer, nil, state), do: {[buffer: {:output, buffer}], state}
 
   @timestamp_limit Bitwise.bsl(1, 32)
 
@@ -132,11 +122,11 @@ defmodule Membrane.RTP.VAD do
         handle_vad(buffer, rtp_timestamp, level, state)
 
       rollover == :next ->
-        {:ok, state} = handle_init(state)
-        {{:ok, buffer: {:output, buffer}}, state}
+        {[], state} = handle_init(%{}, state)
+        {[buffer: {:output, buffer}], state}
 
       true ->
-        {{:ok, buffer: {:output, buffer}}, state}
+        {[buffer: {:output, buffer}], state}
     end
   end
 
@@ -145,7 +135,7 @@ defmodule Membrane.RTP.VAD do
     state = filter_old_audio_levels(state)
     state = add_new_audio_level(state, level)
     audio_levels_vad = get_audio_levels_vad(state)
-    actions = [buffer: {:output, buffer}] ++ maybe_notify(audio_levels_vad, state)
+    actions = [buffer: {:output, buffer}] ++ maybe_send_event(audio_levels_vad, state)
     state = update_vad_state(audio_levels_vad, state)
     {{:ok, actions}, state}
   end
@@ -189,9 +179,9 @@ defmodule Membrane.RTP.VAD do
 
   defp avg(state), do: state.audio_levels_sum / state.audio_levels_count
 
-  defp maybe_notify(audio_levels_vad, state) do
+  defp maybe_send_event(audio_levels_vad, state) do
     if vad_silence?(audio_levels_vad, state) or vad_speech?(audio_levels_vad, state) do
-      [notify: {:vad, audio_levels_vad}]
+      [event: {:output, %VadEvent{vad: audio_levels_vad}}]
     else
       []
     end

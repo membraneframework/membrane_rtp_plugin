@@ -20,11 +20,11 @@ defmodule Membrane.RTP.JitterBuffer.TimestampsCalculationTest do
   defp process_and_receive_buffer_timestamps(buffers, state) do
     state =
       Enum.reduce(buffers, state, fn buffer, state ->
-        {:ok, state} = JitterBuffer.handle_process(:input, buffer, %{}, state)
+        {[], state} = JitterBuffer.handle_process(:input, buffer, %{}, state)
         state
       end)
 
-    {{:ok, actions}, _state} = JitterBuffer.handle_other(:send_buffers, %{}, state)
+    {actions, _state} = JitterBuffer.handle_info(:send_buffers, %{}, state)
 
     actions
     |> action_buffers()
@@ -46,8 +46,8 @@ defmodule Membrane.RTP.JitterBuffer.TimestampsCalculationTest do
 
   describe "JitterBuffer correctly calculates timestamps for buffers that" do
     setup do
-      {:ok, state} =
-        JitterBuffer.handle_init(%JitterBuffer{clock_rate: BufferFactory.clock_rate()})
+      {[], state} =
+        JitterBuffer.handle_init(nil, %JitterBuffer{clock_rate: BufferFactory.clock_rate()})
 
       seq_num = BufferFactory.base_seq_number()
       buffer1 = BufferFactory.sample_buffer(seq_num + 1)

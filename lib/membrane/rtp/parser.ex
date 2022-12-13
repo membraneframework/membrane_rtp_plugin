@@ -42,45 +42,48 @@ defmodule Membrane.RTP.Parser do
               ]
 
   def_input_pad :input,
-    caps: {RemoteStream, type: :packetized, content_format: one_of([nil, RTP, RTCP])},
+    accepted_format:
+      %RemoteStream{type: :packetized, content_format: cf} when cf in [nil, RTP, RTCP],
     demand_mode: :auto
 
-  def_output_pad :output, caps: RTP, demand_mode: :auto
+  def_output_pad :output, accepted_format: RTP, demand_mode: :auto
 
   def_output_pad :rtcp_output,
     mode: :push,
-    caps: {RemoteStream, content_format: RTCP, type: :packetized},
+    accepted_format: %RemoteStream{content_format: RTCP, type: :packetized},
     availability: :on_request
 
   @impl true
-  def handle_init(opts) do
-    {:ok, %{rtcp_output_pad: nil, secure?: opts.secure?}}
+  def handle_init(_ctx, opts) do
+    {[], %{rtcp_output_pad: nil, secure?: opts.secure?}}
   end
 
   @impl true
-  def handle_caps(:input, _caps, _ctx, state) do
-    {{:ok, caps: {:output, %RTP{}}}, state}
+  def handle_stream_format(:input, _stream_format, _ctx, state) do
+    {[stream_format: {:output, %RTP{}}], state}
   end
 
   @impl true
   def handle_pad_added(Pad.ref(:rtcp_output, _ref) = pad, %{playback_state: :playing}, state) do
-    caps = {:caps, {pad, %RemoteStream{content_format: RTCP, type: :packetized}}}
-    {{:ok, [caps]}, %{state | rtcp_output_pad: pad}}
+    actions = [stream_format: {pad, %RemoteStream{content_format: RTCP, type: :packetized}}]
+    {actions, %{state | rtcp_output_pad: pad}}
   end
 
   @impl true
   def handle_pad_added(Pad.ref(:rtcp_output, _ref) = pad, _ctx, state) do
-    {:ok, %{state | rtcp_output_pad: pad}}
+    {[], %{state | rtcp_output_pad: pad}}
   end
 
   @impl true
-  def handle_prepared_to_playing(_ctx, %{rtcp_output_pad: pad} = state) when pad != nil do
-    caps = {:caps, {pad, %RemoteStream{content_format: RTCP, type: :packetized}}}
-    {{:ok, [caps]}, state}
+  def handle_playing(_ctx, %{rtcp_output_pad: pad} = state) when pad != nil do
+    actions = [stream_format: {pad, %RemoteStream{content_format: RTCP, type: :packetized}}]
+    {actions, state}
   end
 
   @impl true
-  def handle_prepared_to_playing(ctx, state), do: super(ctx, state)
+  def handle_playing(ctx, state) do
+    super(ctx, state)
+  end
 
   @impl true
   def handle_process(:input, %Buffer{payload: payload, metadata: metadata} = buffer, _ctx, state) do
@@ -96,12 +99,12 @@ defmodule Membrane.RTP.Parser do
         |> Map.merge(%{padding_size: padding_size, total_header_size: total_header_size})
 
       metadata = Map.put(metadata, :rtp, rtp)
-      {{:ok, buffer: {:output, %Buffer{payload: payload, metadata: metadata}}}, state}
+      {[buffer: {:output, %Buffer{payload: payload, metadata: metadata}}], state}
     else
       :rtcp ->
         case state.rtcp_output_pad do
-          nil -> {:ok, state}
-          pad -> {{:ok, buffer: {pad, buffer}}, state}
+          nil -> {[], state}
+          pad -> {[buffer: {pad, buffer}], state}
         end
 
       {:error, reason} ->
@@ -111,7 +114,7 @@ defmodule Membrane.RTP.Parser do
         Reason: #{inspect(reason)}. Ignoring packet.
         """)
 
-        {:ok, state}
+        {[], state}
     end
   end
 
@@ -119,10 +122,10 @@ defmodule Membrane.RTP.Parser do
   def handle_event(:output, %RTCPEvent{} = event, _ctx, state) do
     case state.rtcp_output_pad do
       nil ->
-        {:ok, state}
+        {[], state}
 
       pad ->
-        {{:ok, event: {pad, event}}, state}
+        {[event: {pad, event}], state}
     end
   end
 

@@ -15,15 +15,16 @@ defmodule Membrane.RTP.JitterBuffer do
 
   @timestamp_limit Bitwise.bsl(1, 32)
 
-  def_output_pad :output, caps: RTP, demand_mode: :auto
+  def_output_pad :output, accepted_format: RTP, demand_mode: :auto
 
-  def_input_pad :input, caps: RTP, demand_mode: :auto
+  def_input_pad :input, accepted_format: RTP, demand_mode: :auto
 
   @default_latency 200 |> Time.milliseconds()
 
-  def_options clock_rate: [type: :integer, spec: RTP.clock_rate_t()],
+  def_options clock_rate: [spec: RTP.clock_rate_t()],
               latency: [
-                type: :time,
+                spec: Time.t(),
+                inspector: &Time.inspect/1,
                 default: @default_latency,
                 description: """
                 Delay introduced by JitterBuffer
@@ -52,12 +53,12 @@ defmodule Membrane.RTP.JitterBuffer do
   end
 
   @impl true
-  def handle_init(%__MODULE__{latency: latency, clock_rate: clock_rate}) do
+  def handle_init(_ctx, %__MODULE__{latency: latency, clock_rate: clock_rate}) do
     if latency == nil do
       raise "Latancy cannot be nil"
     end
 
-    {:ok, %State{latency: latency, clock_rate: clock_rate}}
+    {[], %State{latency: latency, clock_rate: clock_rate}}
   end
 
   @impl true
@@ -65,10 +66,10 @@ defmodule Membrane.RTP.JitterBuffer do
     Process.send_after(
       self(),
       :initial_latency_passed,
-      state.latency |> Time.to_milliseconds()
+      state.latency |> Time.round_to_milliseconds()
     )
 
-    {:ok, %{state | waiting?: true}}
+    {[], %{state | waiting?: true}}
   end
 
   @impl true
@@ -78,7 +79,7 @@ defmodule Membrane.RTP.JitterBuffer do
       |> BufferStore.dump()
       |> Enum.map_reduce(state, &record_to_action/2)
 
-    {{:ok, actions ++ [end_of_stream: :output]}, %State{state | store: %BufferStore{}}}
+    {actions ++ [end_of_stream: :output], %State{state | store: %BufferStore{}}}
   end
 
   @impl true
@@ -93,7 +94,7 @@ defmodule Membrane.RTP.JitterBuffer do
           state
       end
 
-    {:ok, state}
+    {[], state}
   end
 
   @impl true
@@ -105,7 +106,7 @@ defmodule Membrane.RTP.JitterBuffer do
 
       {:error, :late_packet} ->
         Membrane.Logger.debug("Late packet has arrived")
-        {:ok, state}
+        {[], state}
     end
   end
 
@@ -113,13 +114,13 @@ defmodule Membrane.RTP.JitterBuffer do
   def handle_event(pad, event, ctx, state), do: super(pad, event, ctx, state)
 
   @impl true
-  def handle_other(:initial_latency_passed, _context, state) do
+  def handle_info(:initial_latency_passed, _context, state) do
     state = %State{state | waiting?: false}
     send_buffers(state)
   end
 
   @impl true
-  def handle_other(:send_buffers, _context, state) do
+  def handle_info(:send_buffers, _context, state) do
     state = %State{state | max_latency_timer: nil}
     send_buffers(state)
   end
@@ -134,7 +135,7 @@ defmodule Membrane.RTP.JitterBuffer do
 
     state = %{state | store: store} |> set_timer()
 
-    {{:ok, actions}, state}
+    {actions, state}
   end
 
   @spec set_timer(State.t()) :: State.t()
@@ -146,7 +147,7 @@ defmodule Membrane.RTP.JitterBuffer do
 
         buffer_ts ->
           since_insertion = Time.monotonic_time() - buffer_ts
-          send_after_time = max(0, latency - since_insertion) |> Time.to_milliseconds()
+          send_after_time = max(0, latency - since_insertion) |> Time.round_to_milliseconds()
           Process.send_after(self(), :send_buffers, send_after_time)
       end
 

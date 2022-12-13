@@ -14,8 +14,8 @@ defmodule Membrane.RTP.TWCCReceiver do
 
   @feedback_count_limit Bitwise.bsl(1, 8)
 
-  def_input_pad :input, caps: RTP, availability: :on_request, demand_mode: :auto
-  def_output_pad :output, caps: RTP, availability: :on_request, demand_mode: :auto
+  def_input_pad :input, accepted_format: RTP, availability: :on_request, demand_mode: :auto
+  def_output_pad :output, accepted_format: RTP, availability: :on_request, demand_mode: :auto
 
   def_options twcc_id: [
                 spec: 1..14,
@@ -58,34 +58,29 @@ defmodule Membrane.RTP.TWCCReceiver do
   end
 
   @impl true
-  def handle_init(options) do
-    {:ok, struct!(State, Map.from_struct(options))}
+  def handle_init(_ctx, options) do
+    {[], struct!(State, Map.from_struct(options))}
   end
 
   @impl true
-  def handle_prepared_to_playing(_ctx, state) do
-    {{:ok, start_timer: {:report_timer, state.report_interval}}, state}
+  def handle_playing(_ctx, state) do
+    {[start_timer: {:report_timer, state.report_interval}], state}
   end
 
   @impl true
-  def handle_playing_to_prepared(_ctx, state) do
-    {{:ok, stop_timer: :report_timer}, state}
-  end
-
-  @impl true
-  def handle_caps(Pad.ref(:input, ssrc), caps, ctx, state) do
+  def handle_stream_format(Pad.ref(:input, ssrc), stream_format, ctx, state) do
     pad = Pad.ref(:output, ssrc)
-    actions = [caps: {pad, caps}]
+    actions = [stream_format: {pad, stream_format}]
 
     if Map.has_key?(ctx.pads, pad),
-      do: {{:ok, actions}, state},
-      else: {:ok, buffer_actions(actions, pad, state)}
+      do: {actions, state},
+      else: {[], buffer_actions(actions, pad, state)}
   end
 
   @impl true
   def handle_pad_added(pad, _ctx, state) do
     {actions, buffer} = Map.pop(state.buffered_actions, pad, [])
-    {{:ok, Enum.to_list(actions)}, %{state | buffered_actions: buffer}}
+    {Enum.to_list(actions), %{state | buffered_actions: buffer}}
   end
 
   @impl true
@@ -95,16 +90,16 @@ defmodule Membrane.RTP.TWCCReceiver do
     actions = [event: {pad, event}]
 
     if Map.has_key?(ctx.pads, pad),
-      do: {{:ok, actions}, state},
-      else: {:ok, buffer_actions(actions, pad, state)}
+      do: {actions, state},
+      else: {[], buffer_actions(actions, pad, state)}
   end
 
   @impl true
   def handle_pad_removed(Pad.ref(_direction, ssrc), _ctx, %State{media_ssrc: media_ssrc} = state) do
     if media_ssrc == ssrc do
-      {:ok, %State{state | media_ssrc: nil}}
+      {[], %State{state | media_ssrc: nil}}
     else
-      {:ok, state}
+      {[], state}
     end
   end
 
@@ -126,14 +121,14 @@ defmodule Membrane.RTP.TWCCReceiver do
     actions = [buffer: {pad, buffer}]
 
     if Map.has_key?(ctx.pads, pad),
-      do: {{:ok, actions}, state},
-      else: {:ok, buffer_actions(actions, pad, state)}
+      do: {actions, state},
+      else: {[], buffer_actions(actions, pad, state)}
   end
 
   @impl true
   def handle_tick(:report_timer, ctx, %State{packet_info_store: store} = state) do
     if PacketInfoStore.empty?(store) or state.media_ssrc == nil do
-      {:ok, state}
+      {[], state}
     else
       event = make_rtcp_event(state)
 
@@ -147,8 +142,8 @@ defmodule Membrane.RTP.TWCCReceiver do
       actions = [event: {pad, event}]
 
       if Map.has_key?(ctx.pads, pad),
-        do: {{:ok, actions}, state},
-        else: {:ok, buffer_actions(actions, pad, state)}
+        do: {actions, state},
+        else: {[], buffer_actions(actions, pad, state)}
     end
   end
 
@@ -158,8 +153,8 @@ defmodule Membrane.RTP.TWCCReceiver do
     actions = [end_of_stream: pad]
 
     if Map.has_key?(ctx.pads, pad),
-      do: {{:ok, actions}, state},
-      else: {:ok, buffer_actions(actions, pad, state)}
+      do: {actions, state},
+      else: {[], buffer_actions(actions, pad, state)}
   end
 
   defp make_rtcp_event(state) do
