@@ -65,6 +65,8 @@ defmodule Membrane.RTP.SessionBin do
   require Bitwise
   require Membrane.Logger
   alias Membrane.RTP.{PayloadFormat, Session}
+  alias Membrane.RTP.SessionBin.RTXInfo
+  alias Membrane.RTP.SSRCRouter.RequireExtensions
   alias Membrane.{ParentSpec, RemoteStream, RTCP, RTP, SRTP}
 
   @type new_stream_notification_t :: Membrane.RTP.SSRCRouter.new_stream_notification_t()
@@ -337,6 +339,7 @@ defmodule Membrane.RTP.SessionBin do
               rtcp_receiver_report_interval: nil,
               rtcp_sender_report_interval: nil,
               receiver_ssrc_generator: nil,
+              awaiting_rtx_links: %{},
               rtcp_sender_report_data: %Session.SenderReport.Data{},
               secure?: false,
               srtp_policies: nil,
@@ -432,24 +435,21 @@ defmodule Membrane.RTP.SessionBin do
 
     {local_ssrc, state} = add_ssrc(ssrc, state)
 
-    rtp_stream_name = {:stream_receive_bin, ssrc}
-
-    new_children = %{
-      rtp_stream_name => %RTP.StreamReceiveBin{
-        clock_rate: clock_rate,
-        depayloader: depayloader,
-        extensions: extensions,
-        local_ssrc: local_ssrc,
-        remote_ssrc: ssrc,
-        rtcp_report_interval: state.rtcp_receiver_report_interval,
-        telemetry_label: telemetry_label,
-        secure?: state.secure?,
-        srtp_policies: state.srtp_policies
-      }
+    stream_receive_bin_opts = %RTP.StreamReceiveBin{
+      clock_rate: clock_rate,
+      depayloader: depayloader,
+      extensions: extensions,
+      local_ssrc: local_ssrc,
+      remote_ssrc: ssrc,
+      rtcp_report_interval: state.rtcp_receiver_report_interval,
+      telemetry_label: telemetry_label,
+      secure?: state.secure?,
+      srtp_policies: state.srtp_policies
     }
 
-    {rtp_extensions, maybe_link_twcc_receiver, state} =
-      maybe_handle_twcc_receiver(rtp_extensions, ssrc, ctx, state)
+    {maybe_twcc, rtp_extensions} = Keyword.pop(rtp_extensions, :twcc)
+    use_twcc? = maybe_twcc != nil
+    {twcc_children, state} = maybe_spawn_twcc_receiver(maybe_twcc, ctx, state)
 
     ssrc_router_pad_options = [
       encoding: encoding,
@@ -459,25 +459,30 @@ defmodule Membrane.RTP.SessionBin do
     router_link =
       link(:ssrc_router)
       |> via_out(Pad.ref(:output, ssrc), options: ssrc_router_pad_options)
-      |> then(maybe_link_twcc_receiver)
-      |> to(rtp_stream_name)
+      |> then(&link_twcc_receiver_if(use_twcc?, &1, ssrc))
+      |> to({:stream_receive_bin, ssrc}, stream_receive_bin_opts)
 
-    acc = {new_children, router_link}
-
-    {new_children, router_link} =
+    router_link =
       rtp_extensions
-      |> Enum.reduce(acc, fn {extension_name, config}, {new_children, new_link} ->
-        extension_id = {extension_name, ssrc}
-
-        {
-          Map.merge(new_children, %{extension_id => config}),
-          new_link |> to(extension_id)
-        }
+      |> Enum.reduce(router_link, fn {extension_name, config}, upstream ->
+        upstream |> to({extension_name, ssrc}, config)
       end)
 
-    new_links = [router_link |> to_bin_output(pad)]
+    new_links = [
+      router_link
+      |> via_in(Pad.ref(:input, ssrc))
+      # TODO: Replace funnel with something smarter that will handle possible repeats
+      |> to({:rtx_funnel, ssrc}, Membrane.Funnel)
+      |> to_bin_output(pad)
+    ]
 
-    {{:ok, spec: %ParentSpec{children: new_children, links: new_links}}, state}
+    {rtx_links_generator, awaiting_rtx_links} =
+      Map.pop(state.awaiting_rtx_links, ssrc, fn _twcc -> [] end)
+
+    state = %State{state | awaiting_rtx_links: awaiting_rtx_links}
+    links = new_links ++ rtx_links_generator.(use_twcc?)
+
+    {{:ok, spec: %ParentSpec{children: twcc_children, links: links}}, state}
   end
 
   @impl true
@@ -649,6 +654,49 @@ defmodule Membrane.RTP.SessionBin do
     {{:ok, forward: {:twcc_sender, msg}}, state}
   end
 
+  @impl true
+  def handle_other(%RequireExtensions{} = msg, _ctx, state) do
+    {{:ok, forward: {:ssrc_router, msg}}, state}
+  end
+
+  @impl true
+  def handle_other(%RTXInfo{ssrc: ssrc} = msg, ctx, state) do
+    rtx_parser_opts = %RTP.RTXParser{
+      original_payload_type: msg.original_payload_type,
+      rid_id: msg.rid_id,
+      repaired_rid_id: msg.repaired_rid_id
+    }
+
+    link_decryptor =
+      &to(
+        &1,
+        {:decryptor, ssrc},
+        struct(Membrane.SRTP.Decryptor, %{policies: state.srtp_policies})
+      )
+
+    links_generator = fn twcc? ->
+      [
+        link(:ssrc_router)
+        |> via_out(Pad.ref(:output, ssrc))
+        # TODO: Fix TWCCReceiver not noticing packets dropped by SSRCRouter
+        |> then(&link_twcc_receiver_if(twcc?, &1, ssrc))
+        |> then(if(state.secure?, do: link_decryptor, else: & &1))
+        |> to({:rtx, ssrc}, rtx_parser_opts)
+        |> via_in(Pad.ref(:input, ssrc))
+        |> to({:rtx_funnel, msg.original_ssrc})
+      ]
+    end
+
+    # Always link RTX after the original pad
+    if Map.has_key?(ctx.pads, Pad.ref(:output, msg.original_ssrc)) do
+      twcc? = ctx.children[:twcc_receiver] != nil
+      {{:ok, spec: %ParentSpec{links: links_generator.(twcc?)}}, state}
+    else
+      awaiting_rtx_links = Map.put(state.awaiting_rtx_links, msg.original_ssrc, links_generator)
+      {:ok, %{state | awaiting_rtx_links: awaiting_rtx_links}}
+    end
+  end
+
   defp add_ssrc(remote_ssrc, state) do
     %{ssrcs: ssrcs, receiver_ssrc_generator: generator} = state
     local_ssrc = generator.([remote_ssrc | Map.keys(ssrcs)], Map.values(ssrcs))
@@ -684,39 +732,30 @@ defmodule Membrane.RTP.SessionBin do
       raise "Cannot find default RTP payload type for encoding #{encoding}"
   end
 
-  defp maybe_handle_twcc_receiver(rtp_extensions, pad_ssrc, ctx, state) do
-    # Workaround: as TWCC is a transport-wide extension, there should exist only one TWCC receiver
-    # child that handles packets from all incoming streams that have declared support for it.
-    {maybe_twcc, rtp_extensions} = Keyword.pop(rtp_extensions, :twcc)
+  defp maybe_spawn_twcc_receiver(nil, _ctx, state) do
+    {[], state}
+  end
 
-    should_link? = maybe_twcc != nil
-    should_create_child? = not Map.has_key?(ctx.children, :twcc_receiver)
+  # TWCC is a transport-wide extension, there should exist only one TWCC receiver
+  # spawn it only if it doesn't exist
+  defp maybe_spawn_twcc_receiver(_twcc_struct, %{children: %{twcc_receiver: _receiver}}, state) do
+    {[], state}
+  end
 
-    {maybe_twcc_ssrc, state} =
-      if should_link? and should_create_child? do
-        add_ssrc(nil, state)
-      else
-        {nil, state}
-      end
+  defp maybe_spawn_twcc_receiver(%_twcc_struct{} = twcc, _ctx, state) do
+    {twcc_ssrc, state} = add_ssrc(nil, state)
+    {[{:twcc_receiver, %{twcc | feedback_sender_ssrc: twcc_ssrc}}], state}
+  end
 
-    to_twcc_receiver = fn link ->
-      if should_create_child? do
-        to(link, :twcc_receiver, %{maybe_twcc | feedback_sender_ssrc: maybe_twcc_ssrc})
-      else
-        to(link, :twcc_receiver)
-      end
-    end
+  defp link_twcc_receiver_if(false, builder, _pad_ssrc) do
+    builder
+  end
 
-    link_twcc = fn link_builder ->
-      link_builder
-      |> via_in(Pad.ref(:input, pad_ssrc))
-      |> then(to_twcc_receiver)
-      |> via_out(Pad.ref(:output, pad_ssrc))
-    end
-
-    maybe_link_twcc = if should_link?, do: link_twcc, else: & &1
-
-    {rtp_extensions, maybe_link_twcc, state}
+  defp link_twcc_receiver_if(true, builder, pad_ssrc) do
+    builder
+    |> via_in(Pad.ref(:input, pad_ssrc))
+    |> to(:twcc_receiver)
+    |> via_out(Pad.ref(:output, pad_ssrc))
   end
 
   defp maybe_handle_twcc_sender(rtp_extensions, pad_ssrc, ctx) do
