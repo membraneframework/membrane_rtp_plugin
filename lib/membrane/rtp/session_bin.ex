@@ -662,11 +662,17 @@ defmodule Membrane.RTP.SessionBin do
   @impl true
   def handle_other(%RTXInfo{ssrc: ssrc} = msg, ctx, state) do
     rtx_parser_opts = %RTP.RTXParser{
-      rtx_payload_type: msg.rtx_payload_type,
-      payload_type: msg.original_payload_type,
+      original_payload_type: msg.original_payload_type,
       rid_id: msg.rid_id,
       repaired_rid_id: msg.repaired_rid_id
     }
+
+    link_decryptor =
+      &to(
+        &1,
+        {:decryptor, ssrc},
+        struct(Membrane.SRTP.Decryptor, %{policies: state.srtp_policies})
+      )
 
     links_generator = fn twcc? ->
       [
@@ -674,10 +680,7 @@ defmodule Membrane.RTP.SessionBin do
         |> via_out(Pad.ref(:output, ssrc))
         # TODO: Fix TWCCReceiver not noticing packets dropped by SSRCRouter
         |> then(&link_twcc_receiver_if(twcc?, &1, ssrc))
-        |> to(
-          {:decryptor, ssrc},
-          struct(Membrane.SRTP.Decryptor, %{policies: state.srtp_policies})
-        )
+        |> then(if(state.secure?, do: link_decryptor, else: & &1))
         |> to({:rtx, ssrc}, rtx_parser_opts)
         |> via_in(Pad.ref(:input, ssrc))
         |> to({:rtx_funnel, msg.original_ssrc})

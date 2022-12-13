@@ -3,7 +3,11 @@ defmodule Membrane.RTP.RTXParser do
   An element responsible for handling retransmission packets (`rtx`) defined in
   [RFC 4588](https://datatracker.ietf.org/doc/html/rfc4588#section-4).
 
-  It parses RTX packet and recreates the lost packet
+  It parses RTX packet and recreates the lost packet by stripping rtx header from buffer's payload
+  and updating rtp metadata. The changed fields are:
+    * `sequence_number` - set to value transported in rtx header
+    * `payload_type` - set via `original_payload_type` option
+    * if `rid_id` and `repaired_rid_id` are provided, the former replaces the latter in a matching `:extensions` entry
   """
 
   use Membrane.Filter
@@ -15,12 +19,9 @@ defmodule Membrane.RTP.RTXParser do
   def_input_pad :input, caps: RTP, demand_mode: :auto
   def_output_pad :output, caps: RTP, demand_mode: :auto
 
-  def_options rtx_payload_type: [
-                description: "Payload type of retransmission RTP stream"
-              ],
-              payload_type: [
+  def_options original_payload_type: [
                 description:
-                  "Payload type of original RTP stream that is retransmitted via this SSRC"
+                  "Payload type of original RTP stream that is retransmitted via the parsed RTX stream"
               ],
               repaired_rid_id: [
                 spec: RTP.Header.Extension.identifier_t(),
@@ -66,7 +67,7 @@ defmodule Membrane.RTP.RTXParser do
             buffer.metadata.rtp
             | extensions: extensions,
               sequence_number: original_seq_num,
-              payload_type: state.payload_type
+              payload_type: state.original_payload_type
           }
         }
     }

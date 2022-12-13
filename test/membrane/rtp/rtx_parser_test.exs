@@ -6,7 +6,7 @@ defmodule Membrane.RTP.RTXParserTest do
   alias Membrane.RTP.RTXParser
 
   defp init_state(opts \\ []) do
-    [rtx_payload_type: 97, payload_type: 96]
+    [original_payload_type: 96]
     |> Keyword.merge(opts)
     |> then(&struct!(RTXParser, &1))
     |> RTXParser.handle_init()
@@ -17,7 +17,7 @@ defmodule Membrane.RTP.RTXParserTest do
     test "RTX buffer" do
       state = init_state()
 
-      <<original_seq_num::16>> = <<87, 134>>
+      original_seq_num = 22_406
 
       packet = %Buffer{
         payload: <<original_seq_num::16, 1, 2, 3, 4>>,
@@ -93,7 +93,7 @@ defmodule Membrane.RTP.RTXParserTest do
           rtp: %{
             csrcs: [],
             extensions: [
-              %Extension{identifier: 9, data: "0"},
+              %Extension{identifier: 9, data: <<48>>},
               %Extension{identifier: 11, data: "l"}
             ],
             marker: true,
@@ -109,6 +109,7 @@ defmodule Membrane.RTP.RTXParserTest do
 
       assert {{:ok, actions}, ^state} = RTXParser.handle_process(:input, packet, %{}, state)
       assert {:output, buffer} = Keyword.fetch!(actions, :buffer)
+      assert %Extension{identifier: 9, data: <<48>>} in buffer.metadata.rtp.extensions
       assert %Extension{identifier: 10, data: "l"} in buffer.metadata.rtp.extensions
     end
   end

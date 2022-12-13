@@ -1,7 +1,7 @@
 defmodule Membrane.RTP.SSRCRouter.RequireExtensions do
   @moduledoc """
-  A struct sent as a message to `Membrane.RTP.SSRCRouter` adding new extensions
-  to the lists of required extensions for provided payload type
+  A struct sent as a message to `Membrane.RTP.SSRCRouter` adding new extension ids
+  to the sets of required extensions for each payload type.
 
   This can be used to delay reporting a new rtp stream
   until the packet with all the required extensions appear.
