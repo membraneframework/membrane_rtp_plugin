@@ -217,7 +217,7 @@ defmodule Membrane.RTP.SSRCRouter do
         MapSet.union(set, ext_ids)
       end)
 
-    {:ok, %{state | required_extensions: required_extensions}}
+    {[], %{state | required_extensions: required_extensions}}
   end
 
   defp maybe_handle_new_stream(pad, ssrc, payload_type, extensions, state) do
