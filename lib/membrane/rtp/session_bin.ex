@@ -606,7 +606,11 @@ defmodule Membrane.RTP.SessionBin do
       when name in [:input, :rtp_output] do
     children =
       for {child_name, child} <-
-            Map.take(ctx.children, [{:stream_send_bin, ssrc}, {:srtp_encryptor, ssrc}]),
+            Map.take(ctx.children, [
+              {:stream_send_bin, ssrc},
+              {:srtp_encryptor, ssrc},
+              {:srtcp_sender_encryptor, ssrc}
+            ]),
           !child.terminating?,
           into: [] do
         child_name
