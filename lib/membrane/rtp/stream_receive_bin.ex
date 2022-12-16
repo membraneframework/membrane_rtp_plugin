@@ -8,7 +8,7 @@ defmodule Membrane.RTP.StreamReceiveBin do
 
   use Membrane.Bin
 
-  alias Membrane.{ParentSpec, RTCP, RTP, SRTP}
+  alias Membrane.{ParentSpec, RTP, SRTP}
 
   def_options srtp_policies: [
                 spec: [ExLibSRTP.Policy.t()],
@@ -55,13 +55,16 @@ defmodule Membrane.RTP.StreamReceiveBin do
     links = [
       link_bin_input()
       |> to_extensions(opts.extensions)
-      |> to(:rtcp_receiver, %RTCP.Receiver{
+      # |> to(:rtcp_receiver, %RTCP.Receiver{
+      #   local_ssrc: opts.local_ssrc,
+      #   remote_ssrc: opts.remote_ssrc,
+      #   report_interval: opts.rtcp_report_interval,
+      #   telemetry_label: opts.telemetry_label
+      # })
+      |> to(:packet_tracker, %RTP.InboundPacketTracker{
         local_ssrc: opts.local_ssrc,
         remote_ssrc: opts.remote_ssrc,
-        report_interval: opts.rtcp_report_interval,
-        telemetry_label: opts.telemetry_label
-      })
-      |> to(:packet_tracker, %RTP.InboundPacketTracker{
+        rtcp_report_interval: opts.rtcp_report_interval,
         clock_rate: opts.clock_rate,
         repair_sequence_numbers?: true
       })
