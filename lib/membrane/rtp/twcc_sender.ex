@@ -94,7 +94,8 @@ defmodule Membrane.RTP.TWCCSender do
 
     sequence_numbers = Enum.map(base_seq_num..max_seq_num, &rem(&1, @seq_number_limit))
 
-    send_timestamps = Enum.map(sequence_numbers, &Map.fetch!(state.seq_to_timestamp, &1))
+    {feedback_seq_to_ts, rem_seq_to_ts} = Map.split(state.seq_to_timestamp, sequence_numbers)
+    send_timestamps = Enum.map(sequence_numbers, &Map.fetch!(state.feedback_seq_to_ts, &1))
 
     timestamp_before_base = Map.get(state.seq_to_timestamp, base_seq_num - 1, hd(send_timestamps))
 
@@ -106,7 +107,8 @@ defmodule Membrane.RTP.TWCCSender do
       end)
       |> elem(0)
 
-    packet_sizes = Enum.map(sequence_numbers, &Map.fetch!(state.seq_to_size, &1))
+    {feedback_seq_to_size, rem_seq_to_size} = Map.split(state.seq_to_size, sequence_numbers)
+    packet_sizes = Enum.map(sequence_numbers, &Map.fetch!(state.feedback_seq_to_size, &1))
 
     cc =
       CongestionControl.update(
@@ -118,7 +120,7 @@ defmodule Membrane.RTP.TWCCSender do
         rtt
       )
 
-    {[], %{state | cc: cc}}
+    {[], %{state | cc: cc, seq_to_size: rem_seq_to_size, seq_to_timestamp: rem_seq_to_ts}}
   end
 
   @impl true
