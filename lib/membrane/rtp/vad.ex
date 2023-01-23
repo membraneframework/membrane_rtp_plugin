@@ -137,7 +137,7 @@ defmodule Membrane.RTP.VAD do
     audio_levels_vad = get_audio_levels_vad(state)
     actions = [buffer: {:output, buffer}] ++ maybe_send_event(audio_levels_vad, state)
     state = update_vad_state(audio_levels_vad, state)
-    {{:ok, actions}, state}
+    {actions, state}
   end
 
   defp filter_old_audio_levels(state) do

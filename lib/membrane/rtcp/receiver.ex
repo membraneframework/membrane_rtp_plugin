@@ -6,8 +6,14 @@ defmodule Membrane.RTCP.Receiver do
 
   require Membrane.Logger
   require Membrane.TelemetryMetrics
-  alias Membrane.RTCP.ReceiverReport
-  alias Membrane.RTCP.{FeedbackPacket, SenderReportPacket}
+
+  alias Membrane.RTCP.{
+    FeedbackPacket,
+    ReceiverReport,
+    SenderReportPacket,
+    TransportFeedbackPacket
+  }
+
   alias Membrane.RTCPEvent
   alias Membrane.Time
   alias Membrane.{RTCP, RTP}
@@ -104,6 +110,21 @@ defmodule Membrane.RTCP.Receiver do
   @impl true
   def handle_event(:output, %Membrane.KeyframeRequestEvent{}, _ctx, state) do
     send_fir(state)
+  end
+
+  @impl true
+  def handle_event(:output, %RTP.RetransmissionRequestEvent{packet_ids: ids}, _ctx, state) do
+    rtcp = %TransportFeedbackPacket{
+      media_ssrc: state.remote_ssrc,
+      sender_ssrc: state.local_ssrc,
+      payload: %TransportFeedbackPacket.NACK{
+        lost_packet_ids: ids
+      }
+    }
+
+    event = %RTCPEvent{rtcp: rtcp}
+    Membrane.Logger.debug("Sending NACK to #{state.remote_ssrc} with ids #{inspect(ids)}")
+    {[event: {:input, event}], state}
   end
 
   @impl true

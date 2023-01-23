@@ -10,9 +10,9 @@ defmodule Membrane.RTP.InboundPacketTracker do
 
   require Bitwise
   alias Membrane.RTCP.ReceiverReport
+  alias Membrane.RTP.{RetransmissionRequestEvent, SequenceNumberTracker}
   alias Membrane.{Buffer, RTP, Time}
 
-  @max_dropout 3000
   @max_unordered 3000
 
   @max_seq_num Bitwise.bsl(1, 16) - 1
@@ -37,11 +37,11 @@ defmodule Membrane.RTP.InboundPacketTracker do
     @type t :: %__MODULE__{
             clock_rate: non_neg_integer(),
             repair_sequence_numbers?: boolean(),
+            seq_num_tracker: SequenceNumberTracker.t(),
             jitter: float(),
             transit: non_neg_integer() | nil,
             received: non_neg_integer(),
             discarded: non_neg_integer(),
-            cycles: non_neg_integer(),
             base_seq: non_neg_integer(),
             max_seq: non_neg_integer(),
             received_prior: non_neg_integer(),
@@ -53,11 +53,11 @@ defmodule Membrane.RTP.InboundPacketTracker do
     @enforce_keys [:clock_rate, :repair_sequence_numbers?]
     defstruct @enforce_keys ++
                 [
+                  seq_num_tracker: SequenceNumberTracker.new(),
                   jitter: 0.0,
                   transit: nil,
                   received: 0,
                   discarded: 0,
-                  cycles: 0,
                   base_seq: nil,
                   max_seq: nil,
                   received_prior: 0,
@@ -74,35 +74,29 @@ defmodule Membrane.RTP.InboundPacketTracker do
   end
 
   @impl true
-  def handle_process(:input, buffer, _ctx, %State{cycles: cycles, max_seq: max_seq} = state) do
+  def handle_process(:input, buffer, _ctx, %State{} = state) do
     seq_num = buffer.metadata.rtp.sequence_number
-    max_seq = max_seq || seq_num - 1
 
-    delta = rem(seq_num - max_seq + @max_seq_num + 1, @max_seq_num + 1)
+    {delta, packet_index, tracker} = SequenceNumberTracker.track(state.seq_num_tracker, seq_num)
 
-    cond do
-      # greater sequence number but within dropout to ensure that it is not from previous cycle
-      delta < @max_dropout ->
-        state =
-          state
-          |> update_sequence_counters(seq_num, max_seq, cycles)
-          |> update_received()
-          |> update_jitter(buffer)
+    state =
+      %State{state | base_seq: state.base_seq || packet_index, seq_num_tracker: tracker}
+      |> update_received()
 
-        {[buffer: {:output, repair_sequence_number(buffer, state)}], state}
+    lost_ids = Enum.to_list((packet_index - (delta - 1))..(packet_index - 1)//1)
 
-      # the packets is either too old or too new
-      delta <= @max_seq_num - @max_unordered ->
-        {[], update_received(state)}
+    if abs(delta) > @max_unordered do
+      # Ignore packet
+      {[], state}
+    else
+      actions = [buffer: {:output, repair_sequence_number(buffer, state)}]
+      state = update_jitter(state, buffer)
 
-      # packet is old but within dropout threshold
-      true ->
-        state =
-          state
-          |> update_received()
-          |> update_jitter(buffer)
-
-        {[buffer: {:output, repair_sequence_number(buffer, state)}], update_received(state)}
+      if Enum.empty?(lost_ids) do
+        {actions, state}
+      else
+        {actions ++ [event: {:input, %RetransmissionRequestEvent{packet_ids: lost_ids}}], state}
+      end
     end
   end
 
@@ -112,9 +106,8 @@ defmodule Membrane.RTP.InboundPacketTracker do
       received: received,
       received_prior: received_prior,
       expected_prior: expected_prior,
-      cycles: cycles,
-      max_seq: max_seq,
-      jitter: jitter
+      jitter: jitter,
+      seq_num_tracker: %SequenceNumberTracker{highest_seen_index: highest_seq_num}
     } = state
 
     expected = expected_packets(state)
@@ -151,7 +144,7 @@ defmodule Membrane.RTP.InboundPacketTracker do
     stats = %ReceiverReport.Stats{
       fraction_lost: fraction_lost,
       total_lost: total_lost,
-      highest_seq_num: max_seq + cycles,
+      highest_seq_num: highest_seq_num,
       interarrival_jitter: jitter
     }
 
@@ -171,23 +164,15 @@ defmodule Membrane.RTP.InboundPacketTracker do
   @impl true
   def handle_event(direction, event, ctx, state), do: super(direction, event, ctx, state)
 
-  defp update_sequence_counters(state, seq_num, max_seq, cycles) do
-    {max_seq_num, cycles} =
-      if seq_num < max_seq do
-        {seq_num, cycles + @max_seq_num}
-      else
-        {seq_num, cycles}
-      end
-
-    %State{state | max_seq: max_seq_num, cycles: cycles, base_seq: state.base_seq || seq_num}
-  end
-
   defp update_received(%State{received: received} = state) do
     %State{state | received: received + 1}
   end
 
-  defp expected_packets(%State{cycles: cycles, max_seq: max_seq, base_seq: base_seq}) do
-    cycles + max_seq - base_seq + 1
+  defp expected_packets(%State{
+         base_seq: base_seq,
+         seq_num_tracker: %SequenceNumberTracker{highest_seen_index: max_idx}
+       }) do
+    max_idx - base_seq + 1
   end
 
   defp update_jitter(state, %Buffer{metadata: metadata}) do
