@@ -9,9 +9,9 @@ defmodule Membrane.RTP.OutboundTrackingSerializer do
   use Membrane.Filter
 
   require Membrane.Logger
+  alias Membrane.{Buffer, Payload, RemoteStream, RTCP, RTCPEvent, RTP, Time}
   alias Membrane.RTCP.FeedbackPacket.{FIR, PLI}
   alias Membrane.RTP.Session.SenderReport
-  alias Membrane.{Buffer, Payload, RemoteStream, RTCPEvent, RTP, Time}
 
   def_input_pad :input, accepted_format: RTP, demand_mode: :auto
 
