@@ -12,8 +12,8 @@ defmodule Membrane.RTCP.Receiver do
   alias Membrane.Time
   alias Membrane.{RTCP, RTP}
 
-  def_input_pad :input, caps: :any, demand_mode: :auto
-  def_output_pad :output, caps: :any, demand_mode: :auto
+  def_input_pad :input, accepted_format: _any, demand_mode: :auto
+  def_output_pad :output, accepted_format: _any, demand_mode: :auto
 
   def_options local_ssrc: [spec: RTP.ssrc_t()],
               remote_ssrc: [spec: RTP.ssrc_t()],
@@ -30,7 +30,7 @@ defmodule Membrane.RTCP.Receiver do
   @fir_telemetry_event [Membrane.RTP, :rtcp, :fir, :sent]
 
   @impl true
-  def handle_init(opts) do
+  def handle_init(_ctx, opts) do
     Membrane.TelemetryMetrics.register(@fir_telemetry_event, opts.telemetry_label)
 
     state =
@@ -38,28 +38,22 @@ defmodule Membrane.RTCP.Receiver do
       |> Map.from_struct()
       |> Map.merge(%{fir_seq_num: 0, last_fir_timestamp: 0, sr_info: %{}})
 
-    {:ok, state}
+    {[], state}
   end
 
   @impl true
-  def handle_prepared_to_playing(_ctx, state) do
+  def handle_playing(_ctx, state) do
     report_timer =
       if state.report_interval,
         do: [start_timer: {:report_timer, state.report_interval}],
         else: []
 
-    {{:ok, report_timer}, state}
-  end
-
-  @impl true
-  def handle_playing_to_prepared(_ctx, state) do
-    report_timer = if state.report_interval, do: [stop_timer: :report_timer], else: []
-    {{:ok, report_timer}, state}
+    {report_timer, state}
   end
 
   @impl true
   def handle_tick(:report_timer, _ctx, state) do
-    {{:ok, event: {:output, %ReceiverReport.StatsRequestEvent{}}}, state}
+    {[event: {:output, %ReceiverReport.StatsRequestEvent{}}], state}
   end
 
   @impl true
@@ -73,18 +67,18 @@ defmodule Membrane.RTCP.Receiver do
       arrival_ts: event.arrival_timestamp
     }
 
-    {:ok, %{state | sr_info: sr_info}}
+    {[], %{state | sr_info: sr_info}}
   end
 
   @impl true
   def handle_event(:input, %RTCPEvent{} = event, _ctx, state) do
     Membrane.Logger.error("Unexpected RTCPEvent: #{inspect(event)}")
-    {:ok, state}
+    {[], state}
   end
 
   @impl true
   def handle_event(:output, %ReceiverReport.StatsEvent{stats: :no_stats}, _ctx, state) do
-    {:ok, state}
+    {[], state}
   end
 
   @impl true
@@ -100,11 +94,11 @@ defmodule Membrane.RTCP.Receiver do
       interarrival_jitter: trunc(stats.interarrival_jitter),
       last_sr_timestamp: Map.get(state.sr_info, :cut_wallclock_ts, 0),
       # delay_since_sr is expressed in 1/65536 seconds, see https://tools.ietf.org/html/rfc3550#section-6.4.1
-      delay_since_sr: Time.to_seconds(65_536 * delay_since_sr)
+      delay_since_sr: Time.round_to_seconds(65_536 * delay_since_sr)
     }
 
     packet = %RTCP.ReceiverReportPacket{ssrc: state.local_ssrc, reports: [report_block]}
-    {{:ok, event: {:input, %RTCPEvent{rtcp: packet}}}, state}
+    {[event: {:input, %RTCPEvent{rtcp: packet}}], state}
   end
 
   @impl true
@@ -117,7 +111,7 @@ defmodule Membrane.RTCP.Receiver do
 
   @impl true
   def handle_process(:input, buffer, _ctx, state) do
-    {{:ok, buffer: {:output, buffer}}, state}
+    {[buffer: {:output, buffer}], state}
   end
 
   defp send_fir(state) do
@@ -137,10 +131,10 @@ defmodule Membrane.RTCP.Receiver do
       event = %RTCPEvent{rtcp: rtcp}
       state = %{state | fir_seq_num: state.fir_seq_num + 1, last_fir_timestamp: now}
       Membrane.Logger.info("Sending FIR to #{state.remote_ssrc}")
-      {{:ok, event: {:input, event}}, state}
+      {[event: {:input, event}], state}
     else
       Membrane.Logger.debug("Not sending FIR to #{state.remote_ssrc} due to throttling")
-      {:ok, state}
+      {[], state}
     end
   end
 end

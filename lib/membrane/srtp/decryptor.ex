@@ -21,8 +21,8 @@ if Code.ensure_loaded?(ExLibSRTP) do
     alias Membrane.RTP.Utils
     alias Membrane.SRTP
 
-    def_input_pad :input, caps: :any, demand_mode: :auto
-    def_output_pad :output, caps: :any, demand_mode: :auto
+    def_input_pad :input, accepted_format: _any, demand_mode: :auto
+    def_output_pad :output, accepted_format: _any, demand_mode: :auto
 
     def_options policies: [
                   spec: [ExLibSRTP.Policy.t()],
@@ -33,29 +33,24 @@ if Code.ensure_loaded?(ExLibSRTP) do
                 ]
 
     @impl true
-    def handle_init(%__MODULE__{policies: policies}) do
+    def handle_init(_ctx, %__MODULE__{policies: policies}) do
       state = %{
         policies: policies,
         srtp: nil
       }
 
-      {:ok, state}
+      {[], state}
     end
 
     @impl true
-    def handle_stopped_to_prepared(_ctx, state) do
+    def handle_setup(_ctx, state) do
       srtp = ExLibSRTP.new()
 
       state.policies
       |> Bunch.listify()
       |> Enum.each(&ExLibSRTP.add_stream(srtp, &1))
 
-      {:ok, %{state | srtp: srtp}}
-    end
-
-    @impl true
-    def handle_prepared_to_stopped(_ctx, state) do
-      {:ok, %{state | srtp: nil, policies: []}}
+      {[], %{state | srtp: srtp}}
     end
 
     @impl true
@@ -73,13 +68,13 @@ if Code.ensure_loaded?(ExLibSRTP) do
       }
 
       :ok = ExLibSRTP.add_stream(state.srtp, policy)
-      {:ok, Map.put(state, :policies, [policy])}
+      {[], Map.put(state, :policies, [policy])}
     end
 
     @impl true
     def handle_event(_pad, %SRTP.KeyingMaterialEvent{}, _ctx, state) do
       Membrane.Logger.warn("Got unexpected SRTP.KeyingMaterialEvent. Ignoring.")
-      {:ok, state}
+      {[], state}
     end
 
     @impl true
@@ -106,16 +101,16 @@ if Code.ensure_loaded?(ExLibSRTP) do
           metadata = put_in(buffer.metadata, [:rtp, :padding_size], padding_size)
           buffer = %Buffer{buffer | metadata: metadata, payload: payload}
 
-          {{:ok, buffer: {:output, buffer}}, state}
+          {[buffer: {:output, buffer}], state}
 
-        {:error, reason} when reason in [:replay_fail, :replay_old] ->
+        {:error, :reply_fail} ->
           Membrane.Logger.debug("""
           Couldn't unprotect srtp packet:
           #{inspect(payload, limit: :infinity)}
-          Reason: #{inspect(reason)}. Ignoring packet.
+          Reason: :reply_fail. Ignoring packet.
           """)
 
-          {:ok, state}
+          {[], state}
 
         {:error, reason} ->
           raise "Couldn't unprotect SRTP packet due to #{inspect(reason)}"

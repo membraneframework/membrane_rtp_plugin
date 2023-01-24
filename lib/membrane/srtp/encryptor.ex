@@ -11,12 +11,8 @@ if Code.ensure_loaded?(ExLibSRTP) do
 
     alias Membrane.{Buffer, RTP, SRTP}
 
-    defguardp is_protection_error_fatal(type, reason)
-              when type == :rtcp or
-                     (type == :rtp and reason not in [:replay_fail, :replay_old])
-
-    def_input_pad :input, caps: :any, demand_mode: :auto
-    def_output_pad :output, caps: :any, demand_mode: :auto
+    def_input_pad :input, accepted_format: _any, demand_mode: :auto
+    def_output_pad :output, accepted_format: _any, demand_mode: :auto
 
     def_options policies: [
                   spec: [ExLibSRTP.Policy.t()],
@@ -28,49 +24,44 @@ if Code.ensure_loaded?(ExLibSRTP) do
                 ]
 
     @impl true
-    def handle_init(%__MODULE__{policies: policies}) do
+    def handle_init(_ctx, %__MODULE__{policies: policies}) do
       state = %{
         policies: policies,
         srtp: nil,
         queue: []
       }
 
-      {:ok, state}
+      {[], state}
     end
 
     @impl true
-    def handle_stopped_to_prepared(_ctx, state) do
+    def handle_setup(_ctx, state) do
       srtp = ExLibSRTP.new()
 
       state.policies
       |> Bunch.listify()
       |> Enum.each(&ExLibSRTP.add_stream(srtp, &1))
 
-      {:ok, %{state | srtp: srtp}}
+      {[], %{state | srtp: srtp}}
     end
 
     @impl true
     def handle_start_of_stream(:input, _ctx, state) do
       if state.policies == [] do
         # TODO: remove when dynamic switching between automatic and manual demands will be supported
-        {{:ok, start_timer: {:policy_timer, Membrane.Time.seconds(5)}}, state}
+        {[start_timer: {:policy_timer, Membrane.Time.seconds(5)}], state}
       else
-        {:ok, state}
+        {[], state}
       end
     end
 
     @impl true
     def handle_tick(:policy_timer, ctx, state) do
       if state.policies != [] or ctx.pads.input.end_of_stream? do
-        {{:ok, stop_timer: :policy_timer}, state}
+        {[stop_timer: :policy_timer], state}
       else
         raise "No SRTP policies arrived in 5 seconds"
       end
-    end
-
-    @impl true
-    def handle_prepared_to_stopped(_ctx, state) do
-      {:ok, %{state | srtp: nil, policies: []}}
     end
 
     @impl true
@@ -89,13 +80,13 @@ if Code.ensure_loaded?(ExLibSRTP) do
 
       :ok = ExLibSRTP.add_stream(state.srtp, policy)
       buffers = state.queue |> Enum.reverse() |> Enum.flat_map(&protect_buffer(&1, state.srtp))
-      {{:ok, buffer: {:output, buffers}}, %{Map.put(state, :policies, [policy]) | queue: []}}
+      {[buffer: {:output, buffers}], %{Map.put(state, :policies, [policy]) | queue: []}}
     end
 
     @impl true
     def handle_event(_pad, %SRTP.KeyingMaterialEvent{}, _ctx, state) do
       Membrane.Logger.warn("Got unexpected SRTP.KeyingMaterialEvent. Ignoring.")
-      {:ok, state}
+      {[], state}
     end
 
     @impl true
@@ -103,35 +94,25 @@ if Code.ensure_loaded?(ExLibSRTP) do
 
     @impl true
     def handle_process(:input, buffer, _ctx, %{policies: []} = state) do
-      {:ok, Map.update!(state, :queue, &[buffer | &1])}
+      {[], Map.update!(state, :queue, &[buffer | &1])}
     end
 
     @impl true
     def handle_process(:input, buffer, _ctx, state) do
-      {{:ok, buffer: {:output, protect_buffer(buffer, state.srtp)}}, state}
+      {[buffer: {:output, protect_buffer(buffer, state.srtp)}], state}
     end
 
     defp protect_buffer(buffer, srtp) do
       %Buffer{payload: payload} = buffer
       packet_type = RTP.Packet.identify(payload)
 
-      protection_result =
+      {:ok, payload} =
         case packet_type do
           :rtp -> ExLibSRTP.protect(srtp, payload)
           :rtcp -> ExLibSRTP.protect_rtcp(srtp, payload)
         end
 
-      case protection_result do
-        {:ok, payload} ->
-          [%Buffer{buffer | payload: payload}]
-
-        {:error, reason} when is_protection_error_fatal(packet_type, reason) ->
-          raise "Failed to protect #{inspect(packet_type)} due to unhandled error #{reason}"
-
-        {:error, reason} ->
-          Membrane.Logger.warn("Ignoring #{inspect(packet_type)} packet due to `#{reason}`")
-          []
-      end
+      [%Buffer{buffer | payload: payload}]
     end
   end
 end

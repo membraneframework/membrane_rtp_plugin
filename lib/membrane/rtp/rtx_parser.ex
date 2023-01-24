@@ -16,8 +16,8 @@ defmodule Membrane.RTP.RTXParser do
 
   alias Membrane.{Buffer, RTP}
 
-  def_input_pad :input, caps: RTP, demand_mode: :auto
-  def_output_pad :output, caps: RTP, demand_mode: :auto
+  def_input_pad :input, accepted_format: RTP, demand_mode: :auto
+  def_output_pad :output, accepted_format: RTP, demand_mode: :auto
 
   def_options original_payload_type: [
                 description:
@@ -37,13 +37,13 @@ defmodule Membrane.RTP.RTXParser do
               ]
 
   @impl true
-  def handle_init(opts) do
-    {:ok, Map.from_struct(opts)}
+  def handle_init(_ctx, opts) do
+    {[], Map.from_struct(opts)}
   end
 
   @impl true
-  def handle_caps(:input, rtp_caps, _ctx, state) do
-    {{:ok, forward: rtp_caps}, state}
+  def handle_stream_format(:input, rtp_format, _ctx, state) do
+    {[forward: rtp_format], state}
   end
 
   @impl true
@@ -72,7 +72,7 @@ defmodule Membrane.RTP.RTXParser do
         }
     }
 
-    {{:ok, buffer: {:output, recreated_buffer}}, state}
+    {[buffer: {:output, recreated_buffer}], state}
   end
 
   @impl true
@@ -84,7 +84,7 @@ defmodule Membrane.RTP.RTXParser do
       )
     end
 
-    {:ok, state}
+    {[], state}
   end
 
   defp maybe_rewrite_rid_ext_id(extensions, %{repaired_rid_id: rrid, rid_id: rid})

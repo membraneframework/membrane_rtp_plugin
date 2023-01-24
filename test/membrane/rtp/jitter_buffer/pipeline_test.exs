@@ -15,14 +15,14 @@ defmodule Membrane.RTP.JitterBuffer.PipelineTest do
 
     @seq_number_limit 65_536
 
-    def_output_pad :output, caps: :any, mode: :push
+    def_output_pad :output, accepted_format: _any, mode: :push
 
-    def_options buffer_num: [type: :number],
-                buffer_delay_ms: [type: :number],
-                max_latency: [type: :number]
+    def_options buffer_num: [spec: non_neg_integer()],
+                buffer_delay_ms: [spec: non_neg_integer()],
+                max_latency: [spec: non_neg_integer()]
 
     @impl true
-    def handle_prepared_to_playing(
+    def handle_playing(
           _ctx,
           %{
             buffer_delay_ms: delay_ms,
@@ -49,14 +49,13 @@ defmodule Membrane.RTP.JitterBuffer.PipelineTest do
         end
       end)
 
-      {{:ok, caps: {:output, %Membrane.RTP{}}}, state}
+      {[stream_format: {:output, %Membrane.RTP{}}], state}
     end
 
     @impl true
-    def handle_other({:push_buffer, n}, _ctx, state) do
+    def handle_info({:push_buffer, n}, _ctx, state) do
       actions = [action_from_number(n)]
-
-      {{:ok, actions}, state}
+      {actions, state}
     end
 
     defp action_from_number(element),
@@ -78,35 +77,24 @@ defmodule Membrane.RTP.JitterBuffer.PipelineTest do
   end
 
   defp test_pipeline(buffers, buffer_delay_ms, latency) do
-    import Membrane.ParentSpec
+    import Membrane.ChildrenSpec
 
-    latency_ms = latency |> Membrane.Time.to_milliseconds()
+    latency_ms = latency |> Membrane.Time.round_to_milliseconds()
 
-    elements = [
-      source: %PushTestingSrc{
+    structure =
+      child(:source, %PushTestingSrc{
         buffer_num: buffers,
         buffer_delay_ms: buffer_delay_ms,
         max_latency: latency_ms
-      },
-      buffer: %RTPJitterBuffer{latency: latency, clock_rate: 8000},
-      sink: %Testing.Sink{}
-    ]
-
-    links = [
-      link(:source)
-      |> via_in(:input, target_queue_size: 50)
-      |> to(:buffer)
-      |> to(:sink)
-    ]
-
-    {:ok, pipeline} =
-      Testing.Pipeline.start_link(%Testing.Pipeline.Options{
-        elements: elements,
-        links: links
       })
+      |> via_in(:input, target_queue_size: 50)
+      |> child(:buffer, %RTPJitterBuffer{latency: latency, clock_rate: 8000})
+      |> child(:sink, Testing.Sink)
 
-    assert_pipeline_playback_changed(pipeline, _, :prepared)
-    assert_pipeline_playback_changed(pipeline, _, :playing)
+    pipeline = Testing.Pipeline.start_link_supervised!(structure: structure)
+
+    assert_pipeline_setup(pipeline)
+    assert_pipeline_play(pipeline)
 
     timeout = latency_ms + buffer_delay_ms + 200
     assert_start_of_stream(pipeline, :buffer, :input, 5000)

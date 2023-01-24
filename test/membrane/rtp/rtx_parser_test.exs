@@ -9,7 +9,7 @@ defmodule Membrane.RTP.RTXParserTest do
     [original_payload_type: 96]
     |> Keyword.merge(opts)
     |> then(&struct!(RTXParser, &1))
-    |> RTXParser.handle_init()
+    |> then(&RTXParser.handle_init(%{}, &1))
     |> then(&elem(&1, 1))
   end
 
@@ -38,7 +38,7 @@ defmodule Membrane.RTP.RTXParserTest do
         }
       }
 
-      assert {{:ok, actions}, ^state} = RTXParser.handle_process(:input, packet, %{}, state)
+      assert {actions, ^state} = RTXParser.handle_process(:input, packet, %{}, state)
       assert {:output, buffer} = Keyword.fetch!(actions, :buffer)
       assert buffer.payload == <<1, 2, 3, 4>>
       assert meta = buffer.metadata.rtp
@@ -79,7 +79,7 @@ defmodule Membrane.RTP.RTXParserTest do
         }
       }
 
-      assert RTXParser.handle_process(:input, padding_packet, %{}, state) == {:ok, state}
+      assert RTXParser.handle_process(:input, padding_packet, %{}, state) == {[], state}
     end
 
     test "rewrite rid extension" do
@@ -107,7 +107,7 @@ defmodule Membrane.RTP.RTXParserTest do
         }
       }
 
-      assert {{:ok, actions}, ^state} = RTXParser.handle_process(:input, packet, %{}, state)
+      assert {actions, ^state} = RTXParser.handle_process(:input, packet, %{}, state)
       assert {:output, buffer} = Keyword.fetch!(actions, :buffer)
       assert %Extension{identifier: 9, data: <<48>>} in buffer.metadata.rtp.extensions
       assert %Extension{identifier: 10, data: "l"} in buffer.metadata.rtp.extensions

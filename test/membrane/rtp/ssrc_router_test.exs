@@ -1,7 +1,7 @@
 defmodule Membrane.RTP.SSRCRouterTest do
   use ExUnit.Case, async: true
 
-  import Membrane.ParentSpec
+  import Membrane.ChildrenSpec
   import Membrane.Testing.Assertions
 
   alias Membrane.Buffer
@@ -84,15 +84,14 @@ defmodule Membrane.RTP.SSRCRouterTest do
   end
 
   defp init_pipeline() do
-    {:ok, pipeline} =
-      Pipeline.start_link(
-        links: [
-          link(:source, %TestSource{output: [], caps: %Membrane.RTP{}})
-          |> to(:ssrc_router, SSRCRouter)
-        ]
+    pipeline =
+      Pipeline.start_link_supervised!(
+        structure:
+          child(:source, %TestSource{output: [], stream_format: %Membrane.RTP{}})
+          |> child(:ssrc_router, SSRCRouter)
       )
 
-    assert_pipeline_playback_changed(pipeline, :prepared, :playing)
+    assert_pipeline_play(pipeline)
     pipeline
   end
 
@@ -100,11 +99,11 @@ defmodule Membrane.RTP.SSRCRouterTest do
     buffer = %Buffer{payload: "", metadata: %{rtp: metadata}}
 
     Pipeline.execute_actions(pipeline,
-      forward: {:source, {:execute_actions, [buffer: {:output, buffer}]}}
+      notify_child: {:source, {:execute_actions, [buffer: {:output, buffer}]}}
     )
   end
 
   defp send_router_message(pipeline, msg) do
-    Pipeline.execute_actions(pipeline, forward: {:ssrc_router, msg})
+    Pipeline.execute_actions(pipeline, notify_child: {:ssrc_router, msg})
   end
 end
