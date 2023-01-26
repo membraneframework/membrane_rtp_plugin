@@ -1,10 +1,10 @@
 defmodule Membrane.RTP.OutboundRtxController do
   use Membrane.Filter
 
-  alias Membrane.RTP.RetransmissionRequest
-  alias Membrane.RTP.JitterBuffer.BufferStore
-
   require Membrane.Logger
+
+  alias Membrane.RTP.JitterBuffer.BufferStore
+  alias Membrane.RTP.RetransmissionRequest
 
   def_input_pad :input,
     availability: :always,
@@ -22,8 +22,10 @@ defmodule Membrane.RTP.OutboundRtxController do
   @impl true
   def handle_init(_opts), do: {:ok, %{store: BufferStore.new(), last_rtx_times: %{}}}
 
+  # Ignores padding packets
+  # TODO: Should it?
   @impl true
-  def handle_process(:input, buffer, _ctx, state) when not buffer.metadata.is_padding? do
+  def handle_process(:input, buffer, _ctx, state) when byte_size(buffer.payload) > 0 do
     state
     |> Map.update!(:store, fn store ->
       case BufferStore.insert_buffer(store, buffer) do
@@ -47,28 +49,28 @@ defmodule Membrane.RTP.OutboundRtxController do
         _ctx,
         state
       ) do
+    now = System.monotonic_time(:millisecond)
+
     buffers_to_retransmit =
       sequence_numbers
       |> Stream.map(fn seq_num -> BufferStore.get_buffer(state.store, seq_num) end)
       |> Stream.filter(fn
         {:ok, buffer} ->
           seq_num = buffer.metadata.rtp.sequence_number
+          last_rtx_time = Map.get(state.last_rtx_times, seq_num, now - @min_rtx_interval)
 
-          not Map.has_key?(state.last_rtx_times, seq_num) or
-            Map.fetch!(state.last_rtx_times, seq_num) > @min_rtx_interval
+          now - last_rtx_time >= @min_rtx_interval
 
         {:error, :not_found} ->
           false
       end)
       |> Enum.map(fn {:ok, buffer} -> buffer end)
 
-    time = System.monotonic_time(:millisecond)
-
     state =
       Map.update!(state, :last_rtx_times, fn times ->
         updates =
           Map.new(buffers_to_retransmit, fn buffer ->
-            {buffer.metadata.rtp.sequence_number, time}
+            {buffer.metadata.rtp.sequence_number, now}
           end)
 
         Map.merge(times, updates)
