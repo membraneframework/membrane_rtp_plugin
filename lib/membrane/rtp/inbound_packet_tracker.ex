@@ -9,11 +9,13 @@ defmodule Membrane.RTP.InboundPacketTracker do
   use Membrane.Filter
 
   require Bitwise
+  require Membrane.Logger
+
   alias Membrane.RTCP.ReceiverReport
   alias Membrane.RTP.{RetransmissionRequestEvent, SequenceNumberTracker}
   alias Membrane.{Buffer, RTP, Time}
 
-  @max_unordered 3000
+  @max_diff 9000
 
   @max_seq_num Bitwise.bsl(1, 16) - 1
   @max_s24_val Bitwise.bsl(1, 23) - 1
@@ -43,7 +45,6 @@ defmodule Membrane.RTP.InboundPacketTracker do
             received: non_neg_integer(),
             discarded: non_neg_integer(),
             base_seq: non_neg_integer(),
-            max_seq: non_neg_integer(),
             received_prior: non_neg_integer(),
             expected_prior: non_neg_integer(),
             lost: non_neg_integer(),
@@ -59,7 +60,6 @@ defmodule Membrane.RTP.InboundPacketTracker do
                   received: 0,
                   discarded: 0,
                   base_seq: nil,
-                  max_seq: nil,
                   received_prior: 0,
                   expected_prior: 0,
                   lost: 0,
@@ -79,16 +79,22 @@ defmodule Membrane.RTP.InboundPacketTracker do
 
     {delta, packet_index, tracker} = SequenceNumberTracker.track(state.seq_num_tracker, seq_num)
 
-    state =
-      %State{state | base_seq: state.base_seq || packet_index, seq_num_tracker: tracker}
-      |> update_received()
+    if abs(delta) > @max_diff do
+      # The gap is too big, we consider this packet to be malformed
+      # Ignore it
+      Membrane.Logger.warn(
+        "Dropping packet #{seq_num} with big sequence number difference (#{delta})"
+      )
 
-    lost_ids = Enum.to_list((packet_index - (delta - 1))..(packet_index - 1)//1)
-
-    if abs(delta) > @max_unordered do
-      # Ignore packet
+      # Do not update state, malformed packet could corrupt it
       {[], state}
     else
+      state =
+        %State{state | base_seq: state.base_seq || packet_index, seq_num_tracker: tracker}
+        |> update_received()
+
+      lost_ids = Enum.to_list((packet_index - (delta - 1))..(packet_index - 1)//1)
+
       actions = [buffer: {:output, repair_sequence_number(buffer, state)}]
       state = update_jitter(state, buffer)
 

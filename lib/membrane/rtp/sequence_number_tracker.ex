@@ -1,6 +1,6 @@
 defmodule Membrane.RTP.SequenceNumberTracker do
   @moduledoc """
-  A module used to map 16-bit sequence number a continuous index without rollovers.
+  A module used to map 16-bit sequence number to a continuous index without rollovers.
   It also detectes repeated and lost packets
   """
 
@@ -48,7 +48,7 @@ defmodule Membrane.RTP.SequenceNumberTracker do
 
     incoming_index = seq_num + Bitwise.bsl(incoming_roc, @seq_num_bits)
 
-    diff = incoming_index - tracker.highest_seen_index
+    diff = incoming_index - reference_index
 
     tracker =
       if diff > 0 do
