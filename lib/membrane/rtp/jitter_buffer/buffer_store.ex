@@ -51,6 +51,14 @@ defmodule Membrane.RTP.JitterBuffer.BufferStore do
   @type get_buffer_error :: :not_present
 
   @doc """
+  Returns the number of buffers kept in the store
+  """
+  @spec size(t()) :: non_neg_integer()
+  def size(%__MODULE__{set: set}) do
+    MapSet.size(set)
+  end
+
+  @doc """
   Inserts buffer into the Store.
 
   Every subsequent buffer must have sequence number Bigger than the previously returned
@@ -96,6 +104,20 @@ defmodule Membrane.RTP.JitterBuffer.BufferStore do
       {:ok, add_record(store, record, rollover)}
     else
       {:error, :late_packet}
+    end
+  end
+
+  @doc """
+  Get a strored buffer by a sequence_number
+  """
+  @spec get_buffer(t(), RTP.Header.sequence_number_t()) ::
+          {:ok, Buffer.t()} | {:error, :not_found}
+  def get_buffer(%__MODULE__{heap: heap}, seq_num) do
+    heap
+    |> Enum.find(&(rem(&1.index, @seq_number_limit) == seq_num))
+    |> case do
+      nil -> {:error, :not_found}
+      record -> {:ok, record.buffer}
     end
   end
 
