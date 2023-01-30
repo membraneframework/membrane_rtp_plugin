@@ -543,6 +543,7 @@ defmodule Membrane.RTP.SessionBin do
           rtp_extension_mapping: rtp_extension_mapping || %{}
         })
         |> then(if state.secure?, do: add_srtp_encryptor, else: & &1)
+        |> child({:outbound_rtx_controller, ssrc}, Membrane.RTP.OutboundRtxController)
         |> bin_output(output_pad)
       ]
 
