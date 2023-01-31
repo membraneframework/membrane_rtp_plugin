@@ -39,9 +39,6 @@ defmodule Membrane.RTP.TWCCSender do
   end
 
   @impl true
-  def handle_pad_removed(_pad, _ctx, state), do: {:ok, state}
-
-  @impl true
   def handle_caps(Pad.ref(:input, id), caps, ctx, state) do
     out_pad = Pad.ref(:output, id)
     [caps: {out_pad, caps}] |> send_when_pad_connected(out_pad, ctx, state)
