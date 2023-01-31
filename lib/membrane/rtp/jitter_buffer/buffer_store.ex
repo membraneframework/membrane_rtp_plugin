@@ -51,11 +51,16 @@ defmodule Membrane.RTP.JitterBuffer.BufferStore do
   @type get_buffer_error :: :not_present
 
   @doc """
-  Returns the number of buffers kept in the store
+  Returns the number of slots the BufferStore is keeping, i.e. buffers and gaps in which the late packets can be placed
   """
   @spec size(t()) :: non_neg_integer()
-  def size(%__MODULE__{set: set}) do
-    MapSet.size(set)
+  def size(%__MODULE__{flush_index: low, highest_incoming_index: high})
+      when is_integer(low) and is_integer(high) do
+    high - low
+  end
+
+  def size(%__MODULE__{flush_index: nil}) do
+    0
   end
 
   @doc """
