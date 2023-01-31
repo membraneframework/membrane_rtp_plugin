@@ -35,12 +35,8 @@ defmodule Membrane.RTP.TWCCSender do
   def handle_pad_added(pad, _ctx, state) do
     {queued_actions, other_actions} = Map.pop(state.buffered_actions, pad, [])
 
-    {{:ok, Enum.to_list(queued_actions)},
-     %{state | cc: %CongestionControl{}, buffered_actions: other_actions}}
+    {{:ok, Enum.to_list(queued_actions)}, %{state | buffered_actions: other_actions}}
   end
-
-  @impl true
-  def handle_pad_removed(_pad, _ctx, state), do: {:ok, %{state | cc: %CongestionControl{}}}
 
   @impl true
   def handle_caps(Pad.ref(:input, id), caps, ctx, state) do
