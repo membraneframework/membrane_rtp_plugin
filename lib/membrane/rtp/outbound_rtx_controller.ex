@@ -85,9 +85,9 @@ defmodule Membrane.RTP.OutboundRtxController do
   def handle_event(pad, event, ctx, state), do: super(pad, event, ctx, state)
 
   defp maintain_store_size(store) do
-    if BufferStore.size(store) > @max_store_size do
+    if BufferStore.buffers_num(store) > @max_store_size do
       {_entry, store} = BufferStore.flush_one(store)
-      store
+      maintain_store_size(store)
     else
       store
     end

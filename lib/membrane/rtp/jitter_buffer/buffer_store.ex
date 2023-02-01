@@ -64,6 +64,14 @@ defmodule Membrane.RTP.JitterBuffer.BufferStore do
   end
 
   @doc """
+  Returns the number of buffers actually stored in the BufferStore
+  """
+  @spec buffers_num(t()) :: non_neg_integer()
+  def buffers_num(%__MODULE__{set: set}) do
+    MapSet.size(set)
+  end
+
+  @doc """
   Inserts buffer into the Store.
 
   Every subsequent buffer must have sequence number Bigger than the previously returned
