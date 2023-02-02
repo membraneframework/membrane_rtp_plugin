@@ -38,8 +38,7 @@ defmodule Membrane.RTP.TWCCSender do
     has_other_input_pads? =
       ctx.pads
       |> Map.values()
-      |> Enum.count(&(&1.ref != pad && &1.direction == :input))
-      |> then(&(&1 != 0))
+      |> Enum.any?(&(&1.ref != pad and &1.direction == :input))
 
     # TWCC should be reset when adding the first pad
     # This is especially helpful when we're deling with situation in which pads existed before
