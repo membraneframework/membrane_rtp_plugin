@@ -91,7 +91,7 @@ defmodule Membrane.RTP.OutboundRtxController do
   defp maintain_store_size(store) do
     if Enum.count(store) > @max_store_size do
       {_entry, store} = BufferStore.flush_one(store)
-      store
+      maintain_store_size(store)
     else
       store
     end
