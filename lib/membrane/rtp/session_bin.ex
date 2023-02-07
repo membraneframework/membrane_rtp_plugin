@@ -608,10 +608,9 @@ defmodule Membrane.RTP.SessionBin do
   def handle_pad_removed(Pad.ref(name, ssrc), ctx, state)
       when name in [:input, :rtp_output] do
     children =
-      for {child_name, child} <-
-            Map.take(ctx.children, [{:stream_send_bin, ssrc}, {:srtp_encryptor, ssrc}]),
-          !child.terminating?,
-          into: [] do
+      for {{atom, ^ssrc} = child_name, child} <- ctx.children,
+          atom in [:stream_send_bin, :srtp_encryptor, :outbound_rtx_controller],
+          not child.terminating? do
         child_name
       end
 
