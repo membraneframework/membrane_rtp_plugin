@@ -207,6 +207,10 @@ defmodule Membrane.RTP.SessionBin do
 
         * `{:twcc, Mebrane.RTP.TWCCSender}`
         """
+      ],
+      telemetry_label: [
+        spec: Membrane.TelemetryMetrics.label(),
+        default: []
       ]
     ]
 
@@ -214,7 +218,13 @@ defmodule Membrane.RTP.SessionBin do
     demand_unit: :buffers,
     accepted_format:
       %RemoteStream{type: :packetized, content_format: cf} when cf in [RTP, RTCP, nil],
-    availability: :on_request
+    availability: :on_request,
+    options: [
+      telemetry_label: [
+        spec: Membrane.TelemetryMetrics.label(),
+        default: []
+      ]
+    ]
 
   def_output_pad :output,
     demand_unit: :buffers,
@@ -376,6 +386,8 @@ defmodule Membrane.RTP.SessionBin do
     rtcp_receiver_output = Pad.ref(:rtcp_receiver_output, ref)
     rtcp? = Map.has_key?(ctx.pads, rtcp_receiver_output)
 
+    %{telemetry_label: telemetry_label} = ctx.pads[pad].options
+
     add_srtcp_decryptor =
       &child(
         &1,
@@ -403,7 +415,7 @@ defmodule Membrane.RTP.SessionBin do
             get_child({:rtp_parser, ref})
             |> via_out(:rtcp_output)
             |> then(if secure?, do: add_srtcp_decryptor, else: & &1)
-            |> child({:rtcp_parser, ref}, RTCP.Parser)
+            |> child({:rtcp_parser, ref}, %RTCP.Parser{telemetry_label: telemetry_label})
             |> via_out(:receiver_report_output)
             |> then(if secure?, do: add_srtcp_encryptor, else: & &1)
             |> bin_output(rtcp_receiver_output),
@@ -541,7 +553,8 @@ defmodule Membrane.RTP.SessionBin do
           payloader: payloader,
           clock_rate: clock_rate,
           rtcp_report_interval: state.rtcp_sender_report_interval,
-          rtp_extension_mapping: rtp_extension_mapping || %{}
+          rtp_extension_mapping: rtp_extension_mapping || %{},
+          telemetry_label: ctx.pads[input_pad].options.telemetry_label
         })
         |> then(if state.secure?, do: add_srtp_encryptor, else: & &1)
         |> bin_output(output_pad)

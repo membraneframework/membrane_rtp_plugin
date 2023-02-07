@@ -6,12 +6,19 @@ defmodule Membrane.RTCP.Parser do
   use Membrane.Filter
 
   require Membrane.Logger
+  require Membrane.TelemetryMetrics
   alias Membrane.Buffer
   alias Membrane.{RemoteStream, RTCP, RTCPEvent}
 
   def_input_pad :input,
     accepted_format: %RemoteStream{type: :packetized, content_format: cf} when cf in [nil, RTCP],
-    demand_mode: :auto
+    demand_mode: :auto,
+    options: [
+      telemetry_label: [
+        spec: Membrane.TelemetryMetrics.label(),
+        default: []
+      ]
+    ]
 
   def_output_pad :output, accepted_format: RTCP, demand_mode: :auto
 
@@ -19,9 +26,17 @@ defmodule Membrane.RTCP.Parser do
     mode: :push,
     accepted_format: %RemoteStream{type: :packetized, content_format: RTCP}
 
+  def_options telemetry_label: [spec: Membrane.TelemetryMetrics.label(), default: []]
+
+  @rtcp_received_telemetry_event [Membrane.RTP, :rtcp, :arrival]
+  @rtcp_sent_telemetry_event [Membrane.RTP, :rtcp, :sent]
+
   @impl true
-  def handle_init(_ctx, _opts) do
-    {[], %{}}
+  def handle_init(_ctx, opts) do
+    Membrane.TelemetryMetrics.register(@rtcp_received_telemetry_event, opts.telemetry_label)
+    Membrane.TelemetryMetrics.register(@rtcp_sent_telemetry_event, opts.telemetry_label)
+
+    {[], Map.from_struct(opts)}
   end
 
   @impl true
@@ -37,6 +52,13 @@ defmodule Membrane.RTCP.Parser do
 
   @impl true
   def handle_process(:input, %Buffer{payload: payload, metadata: metadata}, _ctx, state) do
+    Membrane.TelemetryMetrics.execute(
+      @rtcp_received_telemetry_event,
+      %{bytes: byte_size(payload)},
+      %{},
+      state.telemetry_label
+    )
+
     payload
     |> RTCP.Packet.parse()
     |> case do
@@ -58,6 +80,14 @@ defmodule Membrane.RTCP.Parser do
   @impl true
   def handle_event(:output, %RTCPEvent{} = event, _ctx, state) do
     buffer = %Buffer{payload: RTCP.Packet.serialize(event.rtcp)}
+
+    Membrane.TelemetryMetrics.execute(
+      @rtcp_sent_telemetry_event,
+      %{bytes: byte_size(buffer.payload)},
+      %{},
+      state.telemetry_label
+    )
+
     {[buffer: {:receiver_report_output, buffer}], state}
   end
 

@@ -34,10 +34,12 @@ defmodule Membrane.RTCP.Receiver do
                          |> Membrane.Time.milliseconds()
 
   @fir_telemetry_event [Membrane.RTP, :rtcp, :fir, :sent]
+  @nack_telemetry_event [Membrane.RTP, :rtcp, :nack, :sent]
 
   @impl true
   def handle_init(_ctx, opts) do
     Membrane.TelemetryMetrics.register(@fir_telemetry_event, opts.telemetry_label)
+    Membrane.TelemetryMetrics.register(@nack_telemetry_event, opts.telemetry_label)
 
     state =
       opts
@@ -121,6 +123,8 @@ defmodule Membrane.RTCP.Receiver do
         lost_packet_ids: ids
       }
     }
+
+    Membrane.TelemetryMetrics.execute(@nack_telemetry_event, %{}, %{}, state.telemetry_label)
 
     event = %RTCPEvent{rtcp: rtcp}
     Membrane.Logger.debug("Sending NACK to #{state.remote_ssrc} with ids #{inspect(ids)}")

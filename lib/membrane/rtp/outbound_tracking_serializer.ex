@@ -9,6 +9,7 @@ defmodule Membrane.RTP.OutboundTrackingSerializer do
   use Membrane.Filter
 
   require Membrane.Logger
+  require Membrane.TelemetryMetrics
   alias Membrane.{Buffer, Payload, RemoteStream, RTCP, RTCPEvent, RTP, Time}
   alias Membrane.RTCP.FeedbackPacket.{FIR, PLI}
   alias Membrane.RTP.Session.SenderReport
@@ -32,7 +33,13 @@ defmodule Membrane.RTP.OutboundTrackingSerializer do
   def_options ssrc: [spec: RTP.ssrc_t()],
               payload_type: [spec: RTP.payload_type_t()],
               clock_rate: [spec: RTP.clock_rate_t()],
-              extension_mapping: [spec: RTP.SessionBin.rtp_extension_mapping_t()]
+              extension_mapping: [spec: RTP.SessionBin.rtp_extension_mapping_t()],
+              telemetry_label: [
+                spec: Membrane.TelemetryMetrics.label(),
+                default: []
+              ]
+
+  @frame_sent_telemetry_event [Membrane.RTP, :rtp, :frame_sent]
 
   defmodule State do
     @moduledoc false
@@ -65,6 +72,8 @@ defmodule Membrane.RTP.OutboundTrackingSerializer do
 
   @impl true
   def handle_init(_ctx, options) do
+    Membrane.TelemetryMetrics.register(@frame_sent_telemetry_event, options.telemetry_label)
+
     state =
       %State{}
       |> put_in([:stats_acc, :clock_rate], options.clock_rate)
@@ -160,6 +169,15 @@ defmodule Membrane.RTP.OutboundTrackingSerializer do
           payload_type: state.payload_type,
           extensions: extensions
       })
+
+    if header.marker do
+      Membrane.TelemetryMetrics.execute(
+        @frame_sent_telemetry_event,
+        %{},
+        %{},
+        state.telemetry_label
+      )
+    end
 
     padding_size = Map.get(rtp_metadata, :padding_size, 0)
 
