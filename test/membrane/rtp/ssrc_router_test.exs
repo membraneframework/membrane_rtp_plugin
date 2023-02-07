@@ -51,8 +51,8 @@ defmodule Membrane.RTP.SSRCRouterTest do
 
     pipeline = init_pipeline()
 
-    send_router_message(pipeline, %SSRCRouter.RequireExtensions{
-      pt_to_ext_id: %{payload_type => [9, 10]}
+    send_router_message(pipeline, %SSRCRouter.StreamsInfo{
+      require_extensions: %{payload_type => [9, 10]}
     })
 
     src_send_meta_buffer(pipeline, metadata)
