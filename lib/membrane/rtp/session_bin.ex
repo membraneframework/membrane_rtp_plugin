@@ -599,27 +599,34 @@ defmodule Membrane.RTP.SessionBin do
   def handle_pad_removed(Pad.ref(:output, ssrc), ctx, state) do
     # TODO: parent may not know when to unlink, we need to timout SSRCs and notify about that and BYE packets over RTCP
     state = %{state | ssrcs: Map.delete(state.ssrcs, ssrc)}
-    stream_receive_bin = Map.get(ctx.children, {:stream_receive_bin, ssrc})
 
-    if stream_receive_bin != nil and !stream_receive_bin.terminating? do
-      {[remove_child: {:stream_receive_bin, ssrc}], state}
-    else
-      {[], state}
-    end
+    to_remove =
+      [
+        {:rtx_funnel, ssrc},
+        {:rtx, ssrc},
+        {:rtx_decryptor, ssrc},
+        {:stream_receive_bin, ssrc}
+      ]
+      |> Enum.filter(fn name ->
+        child = Map.get(ctx.children, name, false)
+        child && not child.terminating?
+      end)
+
+    {[remove_child: to_remove], state}
   end
 
   @impl true
   def handle_pad_removed(Pad.ref(name, ssrc), ctx, state)
       when name in [:input, :rtp_output] do
     children =
-      for {child_name, child} <-
-            Map.take(ctx.children, [
-              {:stream_send_bin, ssrc},
-              {:srtp_encryptor, ssrc},
-              {:srtcp_sender_encryptor, ssrc}
-            ]),
-          !child.terminating?,
-          into: [] do
+      for {{atom, ^ssrc} = child_name, child} <- ctx.children,
+          atom in [
+            :stream_send_bin,
+            :srtp_encryptor,
+            :srtcp_sender_encryptor,
+            :outbound_rtx_controller
+          ],
+          !child.terminating? do
         child_name
       end
 
@@ -674,7 +681,7 @@ defmodule Membrane.RTP.SessionBin do
     link_decryptor =
       &child(
         &1,
-        {:decryptor, ssrc},
+        {:rtx_decryptor, msg.original_ssrc},
         struct(Membrane.SRTP.Decryptor, %{policies: state.srtp_policies})
       )
 
@@ -685,7 +692,7 @@ defmodule Membrane.RTP.SessionBin do
         # TODO: Fix TWCCReceiver not noticing packets dropped by SSRCRouter
         |> then(&link_twcc_receiver_if(twcc?, &1, ssrc))
         |> then(if(state.secure?, do: link_decryptor, else: & &1))
-        |> child({:rtx, ssrc}, rtx_parser_opts)
+        |> child({:rtx, msg.original_ssrc}, rtx_parser_opts)
         |> via_in(Pad.ref(:input, ssrc))
         |> get_child({:rtx_funnel, msg.original_ssrc})
       ]
