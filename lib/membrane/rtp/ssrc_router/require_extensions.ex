@@ -11,8 +11,9 @@ defmodule Membrane.RTP.SSRCRouter.RequireExtensions do
   alias Membrane.RTP
 
   @type t() :: %__MODULE__{
-          pt_to_ext_id: %{RTP.payload_type_t() => [RTP.Header.Extension.identifier_t()]}
+          pt_to_ext_id: %{RTP.payload_type_t() => [RTP.Header.Extension.identifier_t()]},
+          ignored_ssrcs: [integer()]
         }
   @enforce_keys [:pt_to_ext_id]
-  defstruct @enforce_keys
+  defstruct @enforce_keys ++ [ignored_ssrcs: []]
 end

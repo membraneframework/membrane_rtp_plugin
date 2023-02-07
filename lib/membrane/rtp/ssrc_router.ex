@@ -60,6 +60,7 @@ defmodule Membrane.RTP.SSRCRouter do
     defstruct input_pads: %{},
               buffered_actions: %{},
               required_extensions: %{},
+              ignored_ssrcs: [],
               srtp_keying_material_event: nil
   end
 
@@ -209,15 +210,20 @@ defmodule Membrane.RTP.SSRCRouter do
   end
 
   @impl true
-  def handle_parent_notification(%RequireExtensions{pt_to_ext_id: pt_to_ext_id}, _ctx, state) do
+  def handle_parent_notification(
+        %RequireExtensions{pt_to_ext_id: pt_to_ext_id, ignored_ssrcs: ignored_ssrcs},
+        _ctx,
+        state
+      ) do
     pt_to_ext_id = Map.new(pt_to_ext_id, fn {pt, ids} -> {pt, MapSet.new(ids)} end)
+    ignored_ssrcs = ignored_ssrcs
 
     required_extensions =
       Map.merge(state.required_extensions, pt_to_ext_id, fn _pt, set, ext_ids ->
         MapSet.union(set, ext_ids)
       end)
 
-    {[], %{state | required_extensions: required_extensions}}
+    {[], %{state | required_extensions: required_extensions, ignored_ssrcs: ignored_ssrcs}}
   end
 
   defp maybe_handle_new_stream(pad, ssrc, payload_type, extensions, state) do
@@ -228,9 +234,10 @@ defmodule Membrane.RTP.SSRCRouter do
         {[], state}
 
       Map.has_key?(state.required_extensions, payload_type) and
-          not MapSet.subset?(required_extensions, MapSet.new(extensions, & &1.identifier)) ->
+        not MapSet.subset?(required_extensions, MapSet.new(extensions, & &1.identifier)) and
+          ssrc not in state.ignored_ssrcs ->
         Membrane.Logger.debug("""
-        Dropping packet of SSRC #{ssrc} without required extension(s).
+        Dropping packet of SSRC #{ssrc} and payload type #{payload_type} without required extension(s).
         Required: #{inspect(required_extensions)}, present: #{inspect(extensions)}
         """)
 
