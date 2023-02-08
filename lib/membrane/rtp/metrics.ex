@@ -59,6 +59,10 @@ defmodule Membrane.RTP.Metrics do
       Metrics.counter(
         "outbound-rtp.frames",
         event_name: [Membrane.RTP, :rtp, :frame_sent]
+      ),
+      Metrics.counter(
+        "inbound-rtp.frames",
+        event_name: [Membrane.RTP, :rtp, :frame_received]
       )
     ]
   end

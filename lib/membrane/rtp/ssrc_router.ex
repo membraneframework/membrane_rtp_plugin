@@ -17,10 +17,11 @@ defmodule Membrane.RTP.SSRCRouter do
   require Membrane.TelemetryMetrics
 
   alias __MODULE__.RequireExtensions
-  alias Membrane.{RTCP, RTCPEvent, RTP, SRTP}
+  alias Membrane.{Buffer, RTCP, RTCPEvent, RTP, SRTP}
 
   @packet_arrival_event [Membrane.RTP, :packet, :arrival]
   @new_inbound_track_event [Membrane.RTP, :inbound_track, :new]
+  @frame_received_telemetry_event [Membrane.RTP, :rtp, :frame_received]
 
   def_input_pad :input,
     accepted_format: any_of(RTCP, RTP),
@@ -99,6 +100,9 @@ defmodule Membrane.RTP.SSRCRouter do
     register_new_inbound_track_event(pad, ctx)
     emit_new_inbound_track_event(ssrc, pad, ctx)
 
+    register_inbound_frame_event(pad, ctx)
+    emit_inbound_frame_event(buffered_actions, ctx)
+
     events =
       if state.srtp_keying_material_event do
         [{:event, {pad, state.srtp_keying_material_event}}]
@@ -138,9 +142,12 @@ defmodule Membrane.RTP.SSRCRouter do
     {new_stream_actions, state} =
       maybe_handle_new_stream(pad, ssrc, payload_type, extensions, state)
 
-    action = {:buffer, {Pad.ref(:output, ssrc), buffer}}
+    output_pad = Pad.ref(:output, ssrc)
+
+    action = {:buffer, {output_pad, buffer}}
     {actions, state} = maybe_buffer_action(action, ssrc, ctx, state)
     emit_packet_arrival_events(actions, ctx)
+    emit_inbound_frame_event([action], ctx)
 
     {new_stream_actions ++ actions, state}
   end
@@ -277,6 +284,13 @@ defmodule Membrane.RTP.SSRCRouter do
     )
   end
 
+  defp register_inbound_frame_event(pad, ctx) do
+    Membrane.TelemetryMetrics.register(
+      @frame_received_telemetry_event,
+      ctx.pads[pad].options.telemetry_label
+    )
+  end
+
   defp emit_packet_arrival_event(payload, pad, ctx) do
     Membrane.TelemetryMetrics.execute(
       @packet_arrival_event,
@@ -293,6 +307,19 @@ defmodule Membrane.RTP.SSRCRouter do
       %{},
       ctx.pads[pad].options.telemetry_label
     )
+  end
+
+  defp emit_inbound_frame_event(actions, ctx) do
+    for {:buffer, {pad, %Buffer{} = buffer}} <- actions,
+        buffer.metadata.rtp.marker,
+        Map.has_key?(ctx.pads, pad) do
+      Membrane.TelemetryMetrics.execute(
+        @frame_received_telemetry_event,
+        %{},
+        %{},
+        ctx.pads[pad].options.telemetry_label
+      )
+    end
   end
 
   defp maybe_add_encoding(measurements, pad, ctx) do
