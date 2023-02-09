@@ -66,7 +66,7 @@ defmodule Membrane.RTP.SessionBin do
   require Membrane.Logger
   alias Membrane.RTP.{PayloadFormat, Session}
   alias Membrane.RTP.SessionBin.RTXInfo
-  alias Membrane.RTP.SSRCRouter.RequireExtensions
+  alias Membrane.RTP.SSRCRouter.StreamsInfo
   alias Membrane.{RemoteStream, RTCP, RTP, SRTP}
 
   @type new_stream_notification_t :: Membrane.RTP.SSRCRouter.new_stream_notification_t()
@@ -390,7 +390,7 @@ defmodule Membrane.RTP.SessionBin do
         struct(Membrane.SRTP.Encryptor, %{policies: state.receiver_srtp_policies})
       )
 
-    structure = [
+    structure =
       [
         bin_input(pad)
         |> via_in(:input, @rtp_input_params)
@@ -414,7 +414,6 @@ defmodule Membrane.RTP.SessionBin do
         else
           []
         end
-    ]
 
     {[spec: structure], state}
   end
@@ -659,7 +658,7 @@ defmodule Membrane.RTP.SessionBin do
   end
 
   @impl true
-  def handle_parent_notification(%RequireExtensions{} = msg, _ctx, state) do
+  def handle_parent_notification(%StreamsInfo{} = msg, _ctx, state) do
     {[notify_child: {:ssrc_router, msg}], state}
   end
 

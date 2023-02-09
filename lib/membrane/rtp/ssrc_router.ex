@@ -16,7 +16,7 @@ defmodule Membrane.RTP.SSRCRouter do
   require Membrane.Logger
   require Membrane.TelemetryMetrics
 
-  alias __MODULE__.RequireExtensions
+  alias __MODULE__.StreamsInfo
   alias Membrane.{RTCP, RTCPEvent, RTP, SRTP}
 
   @packet_arrival_event [Membrane.RTP, :packet, :arrival]
@@ -58,6 +58,7 @@ defmodule Membrane.RTP.SSRCRouter do
           }
 
     defstruct input_pads: %{},
+              known_ssrcs: %MapSet{},
               buffered_actions: %{},
               required_extensions: %{},
               srtp_keying_material_event: nil
@@ -119,7 +120,7 @@ defmodule Membrane.RTP.SSRCRouter do
     new_pads =
       state.input_pads
       |> Enum.filter(fn {_ssrc, p} -> p != pad end)
-      |> Enum.into(%{})
+      |> Map.new()
 
     {[], %State{state | input_pads: new_pads}}
   end
@@ -209,7 +210,11 @@ defmodule Membrane.RTP.SSRCRouter do
   end
 
   @impl true
-  def handle_parent_notification(%RequireExtensions{pt_to_ext_id: pt_to_ext_id}, _ctx, state) do
+  def handle_parent_notification(
+        %StreamsInfo{accept_ssrcs: ssrcs, require_extensions: pt_to_ext_id},
+        _ctx,
+        state
+      ) do
     pt_to_ext_id = Map.new(pt_to_ext_id, fn {pt, ids} -> {pt, MapSet.new(ids)} end)
 
     required_extensions =
@@ -217,7 +222,9 @@ defmodule Membrane.RTP.SSRCRouter do
         MapSet.union(set, ext_ids)
       end)
 
-    {[], %{state | required_extensions: required_extensions}}
+    known_ssrcs = MapSet.union(state.known_ssrcs, MapSet.new(ssrcs))
+
+    {[], %{state | required_extensions: required_extensions, known_ssrcs: known_ssrcs}}
   end
 
   defp maybe_handle_new_stream(pad, ssrc, payload_type, extensions, state) do
@@ -227,7 +234,7 @@ defmodule Membrane.RTP.SSRCRouter do
       Map.has_key?(state.input_pads, ssrc) ->
         {[], state}
 
-      Map.has_key?(state.required_extensions, payload_type) and
+      ssrc not in state.known_ssrcs and Map.has_key?(state.required_extensions, payload_type) and
           not MapSet.subset?(required_extensions, MapSet.new(extensions, & &1.identifier)) ->
         Membrane.Logger.debug("""
         Dropping packet of SSRC #{ssrc} without required extension(s).
@@ -237,6 +244,8 @@ defmodule Membrane.RTP.SSRCRouter do
         {[], state}
 
       true ->
+        Membrane.Logger.debug("New RTP stream notification: #{inspect({ssrc, payload_type})}")
+
         state =
           state
           |> put_in([:input_pads, ssrc], pad)
