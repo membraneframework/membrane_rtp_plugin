@@ -601,11 +601,12 @@ defmodule Membrane.RTP.SessionBin do
 
     to_remove =
       [
-        {:rtx_funnel, ssrc},
-        {:rtx, ssrc},
-        {:rtx_decryptor, ssrc},
-        {:stream_receive_bin, ssrc}
+        :rtx_funnel,
+        :rtx,
+        :rtx_decryptor,
+        :stream_receive_bin
       ]
+      |> Enum.map(&{&1, ssrc})
       |> Enum.filter(fn name ->
         child = Map.get(ctx.children, name, false)
         child && not child.terminating?
@@ -617,19 +618,20 @@ defmodule Membrane.RTP.SessionBin do
   @impl true
   def handle_pad_removed(Pad.ref(name, ssrc), ctx, state)
       when name in [:input, :rtp_output] do
-    children =
-      for {{atom, ^ssrc} = child_name, child} <- ctx.children,
-          atom in [
-            :stream_send_bin,
-            :srtp_encryptor,
-            :srtcp_sender_encryptor,
-            :outbound_rtx_controller
-          ],
-          !child.terminating? do
-        child_name
-      end
+    to_remove =
+      [
+        :stream_send_bin,
+        :srtp_encryptor,
+        :srtcp_sender_encryptor,
+        :outbound_rtx_controller
+      ]
+      |> Enum.map(&{&1, ssrc})
+      |> Enum.filter(fn name ->
+        child = Map.get(ctx.children, name, false)
+        child && not child.terminating?
+      end)
 
-    {[remove_child: children], state}
+    {[remove_child: to_remove], state}
   end
 
   @impl true
