@@ -32,8 +32,24 @@ defmodule Membrane.RTP.TWCCSender do
   end
 
   @impl true
-  def handle_pad_added(pad, _ctx, state) do
+  def handle_pad_added(Pad.ref(direction, _ref) = pad, ctx, state) do
     {queued_actions, other_actions} = Map.pop(state.buffered_actions, pad, [])
+
+    has_other_input_pads? =
+      Enum.any?(ctx.pads, fn
+        {ref, %{direction: :input}} -> ref != pad
+        _else -> false
+      end)
+
+    # TWCC should be reset when adding the first input pad
+    # This is especially helpful when we're deling with situation in which pads existed before
+    # Otherwise, estimation will start from basically 0, and we want to start from the normal starting point
+    state =
+      if direction == :input and not has_other_input_pads? do
+        %{state | cc: %CongestionControl{}}
+      else
+        state
+      end
 
     {Enum.to_list(queued_actions), %{state | buffered_actions: other_actions}}
   end
