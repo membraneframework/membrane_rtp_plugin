@@ -19,7 +19,7 @@ defmodule Membrane.RTP.OutboundRtxController do
   @min_rtx_interval 10
 
   @impl true
-  def handle_init(_opts), do: {:ok, %{store: %{}, last_rtx_times: %{}}}
+  def handle_init(_opts), do: {:ok, %{store: %{}}}
 
   # Ignores padding packets
   # TODO: Should it?
