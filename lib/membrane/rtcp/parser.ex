@@ -28,8 +28,8 @@ defmodule Membrane.RTCP.Parser do
 
   def_options telemetry_label: [spec: Membrane.TelemetryMetrics.label(), default: []]
 
-  @rtcp_received_telemetry_event [Membrane.RTP, :rtcp, :arrival]
-  @rtcp_sent_telemetry_event [Membrane.RTP, :rtcp, :sent]
+  @rtcp_received_telemetry_event [Membrane.RTP, :inbound, :rtcp, :arrival]
+  @rtcp_sent_telemetry_event [Membrane.RTP, :inbound, :rtcp, :sent]
 
   @impl true
   def handle_init(_ctx, opts) do

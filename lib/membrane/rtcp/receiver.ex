@@ -33,8 +33,8 @@ defmodule Membrane.RTCP.Receiver do
                          )
                          |> Membrane.Time.milliseconds()
 
-  @fir_telemetry_event [Membrane.RTP, :rtcp, :fir, :sent]
-  @nack_telemetry_event [Membrane.RTP, :rtcp, :nack, :sent]
+  @fir_telemetry_event [Membrane.RTP, :inbound, :rtcp, :fir, :sent]
+  @nack_telemetry_event [Membrane.RTP, :inbound, :rtcp, :nack, :sent]
 
   @impl true
   def handle_init(_ctx, opts) do

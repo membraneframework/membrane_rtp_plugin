@@ -13,7 +13,7 @@ defmodule Membrane.RTP.Metrics do
     [
       Metrics.counter(
         "inbound-rtp.keyframe_request_sent",
-        event_name: [Membrane.RTP, :rtcp, :fir, :sent]
+        event_name: [Membrane.RTP, :inbound, :rtcp, :fir, :sent]
       ),
       Metrics.counter(
         "inbound-rtp.packets",
@@ -36,33 +36,37 @@ defmodule Membrane.RTP.Metrics do
       ),
       Metrics.counter(
         "inbound-rtp.nack",
-        event_name: [Membrane.RTP, :rtcp, :nack, :sent]
+        event_name: [Membrane.RTP, :inbound, :rtcp, :nack, :sent]
       ),
       Metrics.counter(
-        "inbound-rtcp.packets",
-        event_name: [Membrane.RTP, :rtcp, :arrival]
+        "inbound-rtp.rtcp_packets_received",
+        event_name: [Membrane.RTP, :inbound, :rtcp, :arrival]
       ),
       Metrics.sum(
-        "inbound-rtcp.bytes_received",
-        event_name: [Membrane.RTP, :rtcp, :arrival],
+        "inbound-rtp.rtcp_bytes_received",
+        event_name: [Membrane.RTP, :inbound, :rtcp, :arrival],
         measurement: :bytes
       ),
       Metrics.counter(
-        "outbound-rtcp.packets",
-        event_name: [Membrane.RTP, :rtcp, :sent]
+        "inbound-rtp.rtcp_packets_sent",
+        event_name: [Membrane.RTP, :inbound, :rtcp, :sent]
       ),
       Metrics.sum(
-        "outbound-rtcp.bytes_sent",
-        event_name: [Membrane.RTP, :rtcp, :sent],
+        "inbound-rtp.rtcp_bytes_sent",
+        event_name: [Membrane.RTP, :inbound, :rtcp, :sent],
         measurement: :bytes
+      ),
+      Metrics.counter(
+        "inbound-rtp.frames",
+        event_name: [Membrane.RTP, :rtp, :frame_received]
       ),
       Metrics.counter(
         "outbound-rtp.frames",
         event_name: [Membrane.RTP, :rtp, :frame_sent]
       ),
       Metrics.counter(
-        "inbound-rtp.frames",
-        event_name: [Membrane.RTP, :rtp, :frame_received]
+        "outbound-rtp.sender_reports",
+        event_name: [Membrane.RTP, :outbound, :sender_report, :sent]
       )
     ]
   end

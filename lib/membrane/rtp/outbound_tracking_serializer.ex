@@ -40,6 +40,7 @@ defmodule Membrane.RTP.OutboundTrackingSerializer do
               ]
 
   @frame_sent_telemetry_event [Membrane.RTP, :rtp, :frame_sent]
+  @sender_report_sent_telemetry_event [Membrane.RTP, :outbound, :sender_report, :sent]
 
   defmodule State do
     @moduledoc false
@@ -73,6 +74,11 @@ defmodule Membrane.RTP.OutboundTrackingSerializer do
   @impl true
   def handle_init(_ctx, options) do
     Membrane.TelemetryMetrics.register(@frame_sent_telemetry_event, options.telemetry_label)
+
+    Membrane.TelemetryMetrics.register(
+      @sender_report_sent_telemetry_event,
+      options.telemetry_label
+    )
 
     state =
       %State{}
@@ -203,6 +209,15 @@ defmodule Membrane.RTP.OutboundTrackingSerializer do
         |> SenderReport.generate_report()
         |> Enum.map(&Membrane.RTCP.Packet.serialize(&1))
         |> Enum.map(&{:buffer, {rtcp_output, %Membrane.Buffer{payload: &1}}})
+
+      for _buffer_action <- actions do
+        Membrane.TelemetryMetrics.execute(
+          @sender_report_sent_telemetry_event,
+          %{},
+          %{},
+          state.telemetry_label
+        )
+      end
 
       {actions, %{state | any_buffer_sent?: false}}
     else
