@@ -609,7 +609,7 @@ defmodule Membrane.RTP.SessionBin do
       ]
       |> Enum.map(&{&1, ssrc})
       |> Enum.filter(fn name ->
-        child = Map.get(ctx.children, name, false)
+        child = Map.get(ctx.children, name)
         child && not child.terminating?
       end)
 
@@ -628,7 +628,7 @@ defmodule Membrane.RTP.SessionBin do
       ]
       |> Enum.map(&{&1, ssrc})
       |> Enum.filter(fn name ->
-        child = Map.get(ctx.children, name, false)
+        child = Map.get(ctx.children, name)
         child && not child.terminating?
       end)
 

@@ -27,7 +27,7 @@ defmodule Membrane.RTP.OutboundRtxController do
 
   @impl true
   def handle_process(:input, buffer, _ctx, state) when byte_size(buffer.payload) > 0 do
-    idx = sn_to_index(buffer.metadata.rtp.sequence_number)
+    idx = seq_num_to_index(buffer.metadata.rtp.sequence_number)
 
     state = put_in(state, [:store, idx], {nil, buffer})
 
@@ -69,14 +69,14 @@ defmodule Membrane.RTP.OutboundRtxController do
   @impl true
   def handle_event(pad, event, ctx, state), do: super(pad, event, ctx, state)
 
-  defp sn_to_index(seq_num), do: rem(seq_num, @max_store_size)
+  defp seq_num_to_index(seq_num), do: rem(seq_num, @max_store_size)
 
   defp maybe_retransmit(seq_num, now, store) do
     idx = rem(seq_num, @max_store_size)
     {last_rtx_time, buffer} = Map.get(store, idx, {nil, nil})
 
     if buffer != nil and buffer.metadata.rtp.sequence_number == seq_num and
-         time_elapsed?(last_rtx_time, now) do
+         min_rtx_interval_elapsed?(last_rtx_time, now) do
       store = Map.put(store, idx, {now, buffer})
       {buffer, store}
     else
@@ -84,6 +84,6 @@ defmodule Membrane.RTP.OutboundRtxController do
     end
   end
 
-  defp time_elapsed?(nil, _now), do: true
-  defp time_elapsed?(last_rtx_time, now), do: now - last_rtx_time >= @min_rtx_interval
+  defp min_rtx_interval_elapsed?(nil, _now), do: true
+  defp min_rtx_interval_elapsed?(last_rtx_time, now), do: now - last_rtx_time >= @min_rtx_interval
 end
