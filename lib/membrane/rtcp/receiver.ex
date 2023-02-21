@@ -33,13 +33,25 @@ defmodule Membrane.RTCP.Receiver do
                          )
                          |> Membrane.Time.milliseconds()
 
-  @fir_telemetry_event [Membrane.RTP, :inbound, :rtcp, :fir, :sent]
-  @nack_telemetry_event [Membrane.RTP, :inbound, :rtcp, :nack, :sent]
+  @fir_sent_telemetry_event [Membrane.RTP, :rtcp, :fir, :sent]
+  @nack_sent_telemetry_event [Membrane.RTP, :rtcp, :nack, :sent]
+  @sender_report_received_telemetry_event [Membrane.RTP, :rtcp, :sender_report, :arrival]
+  @receiver_report_sent_telemetry_event [Membrane.RTP, :rtcp, :receiver_report, :sent]
 
   @impl true
   def handle_init(_ctx, opts) do
-    Membrane.TelemetryMetrics.register(@fir_telemetry_event, opts.telemetry_label)
-    Membrane.TelemetryMetrics.register(@nack_telemetry_event, opts.telemetry_label)
+    Membrane.TelemetryMetrics.register(@fir_sent_telemetry_event, opts.telemetry_label)
+    Membrane.TelemetryMetrics.register(@nack_sent_telemetry_event, opts.telemetry_label)
+
+    Membrane.TelemetryMetrics.register(
+      @sender_report_received_telemetry_event,
+      opts.telemetry_label
+    )
+
+    Membrane.TelemetryMetrics.register(
+      @receiver_report_sent_telemetry_event,
+      opts.telemetry_label
+    )
 
     state =
       opts
@@ -66,6 +78,13 @@ defmodule Membrane.RTCP.Receiver do
 
   @impl true
   def handle_event(:input, %RTCPEvent{rtcp: %SenderReportPacket{} = rtcp} = event, _ctx, state) do
+    Membrane.TelemetryMetrics.execute(
+      @sender_report_received_telemetry_event,
+      %{},
+      %{},
+      state.telemetry_label
+    )
+
     <<_wallclock_ts_upper_16_bits::16, wallclock_ts_middle_32_bits::32,
       _wallclock_ts_lower_16_bits::16>> =
       Time.to_ntp_timestamp(rtcp.sender_info.wallclock_timestamp)
@@ -106,6 +125,14 @@ defmodule Membrane.RTCP.Receiver do
     }
 
     packet = %RTCP.ReceiverReportPacket{ssrc: state.local_ssrc, reports: [report_block]}
+
+    Membrane.TelemetryMetrics.execute(
+      @receiver_report_sent_telemetry_event,
+      %{},
+      %{},
+      state.telemetry_label
+    )
+
     {[event: {:input, %RTCPEvent{rtcp: packet}}], state}
   end
 
@@ -124,7 +151,7 @@ defmodule Membrane.RTCP.Receiver do
       }
     }
 
-    Membrane.TelemetryMetrics.execute(@nack_telemetry_event, %{}, %{}, state.telemetry_label)
+    Membrane.TelemetryMetrics.execute(@nack_sent_telemetry_event, %{}, %{}, state.telemetry_label)
 
     event = %RTCPEvent{rtcp: rtcp}
     Membrane.Logger.debug("Sending NACK to #{state.remote_ssrc} with ids #{inspect(ids)}")
@@ -151,7 +178,12 @@ defmodule Membrane.RTCP.Receiver do
         }
       }
 
-      Membrane.TelemetryMetrics.execute(@fir_telemetry_event, %{}, %{}, state.telemetry_label)
+      Membrane.TelemetryMetrics.execute(
+        @fir_sent_telemetry_event,
+        %{},
+        %{},
+        state.telemetry_label
+      )
 
       event = %RTCPEvent{rtcp: rtcp}
       state = %{state | fir_seq_num: state.fir_seq_num + 1, last_fir_timestamp: now}

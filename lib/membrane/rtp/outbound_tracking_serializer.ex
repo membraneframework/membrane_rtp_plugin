@@ -10,6 +10,7 @@ defmodule Membrane.RTP.OutboundTrackingSerializer do
 
   require Membrane.Logger
   require Membrane.TelemetryMetrics
+  alias Membrane.RTCP.TransportFeedbackPacket.NACK
   alias Membrane.{Buffer, Payload, RemoteStream, RTCP, RTCPEvent, RTP, Time}
   alias Membrane.RTCP.FeedbackPacket.{FIR, PLI}
   alias Membrane.RTP.Session.SenderReport
@@ -40,7 +41,11 @@ defmodule Membrane.RTP.OutboundTrackingSerializer do
               ]
 
   @frame_sent_telemetry_event [Membrane.RTP, :rtp, :frame_sent]
-  @sender_report_sent_telemetry_event [Membrane.RTP, :outbound, :sender_report, :sent]
+  @rtcp_sent_telemetry_event [Membrane.RTP, :rtcp, :sent]
+  @nack_received_telemetry_event [Membrane.RTP, :rtcp, :nack, :arrival]
+  @pli_received_telemetry_event [Membrane.RTP, :rtcp, :pli, :arrival]
+  @fir_received_telemetry_event [Membrane.RTP, :rtcp, :fir, :arrival]
+  @sender_report_sent_telemetry_event [Membrane.RTP, :rtcp, :sender_report, :sent]
 
   defmodule State do
     @moduledoc false
@@ -74,6 +79,10 @@ defmodule Membrane.RTP.OutboundTrackingSerializer do
   @impl true
   def handle_init(_ctx, options) do
     Membrane.TelemetryMetrics.register(@frame_sent_telemetry_event, options.telemetry_label)
+    Membrane.TelemetryMetrics.register(@rtcp_sent_telemetry_event, options.telemetry_label)
+    Membrane.TelemetryMetrics.register(@nack_received_telemetry_event, options.telemetry_label)
+    Membrane.TelemetryMetrics.register(@fir_received_telemetry_event, options.telemetry_label)
+    Membrane.TelemetryMetrics.register(@pli_received_telemetry_event, options.telemetry_label)
 
     Membrane.TelemetryMetrics.register(
       @sender_report_sent_telemetry_event,
@@ -127,15 +136,55 @@ defmodule Membrane.RTP.OutboundTrackingSerializer do
   @impl true
   def handle_event(
         Pad.ref(:rtcp_input, _id),
-        %RTCPEvent{rtcp: %{payload: %keyframe_request{}}},
+        %RTCPEvent{rtcp: %{payload: %PLI{}}},
         _ctx,
         state
-      )
-      when keyframe_request in [PLI, FIR] do
+      ) do
+    Membrane.TelemetryMetrics.execute(
+      @pli_received_telemetry_event,
+      %{},
+      %{},
+      state.telemetry_label
+    )
+
     # PLI or FIR reaching OutboundTrackingSerializer means the receiving peer sent it
     # We need to pass it to the sending peer's RTCP.Receiver (in StreamReceiveBin) to get translated again into FIR/PLI with proper SSRCs
     # and then sent to the sender. So the KeyframeRequestEvent, like salmon, starts an upstream journey here trying to reach that peer.
     {[event: {:input, %Membrane.KeyframeRequestEvent{}}], state}
+  end
+
+  @impl true
+  def handle_event(
+        Pad.ref(:rtcp_input, _id),
+        %RTCPEvent{rtcp: %{payload: %FIR{}}},
+        _ctx,
+        state
+      ) do
+    Membrane.TelemetryMetrics.execute(
+      @fir_received_telemetry_event,
+      %{},
+      %{},
+      state.telemetry_label
+    )
+
+    {[event: {:input, %Membrane.KeyframeRequestEvent{}}], state}
+  end
+
+  @impl true
+  def handle_event(
+        Pad.ref(:rtcp_input, _id) = pad,
+        %RTCPEvent{rtcp: %{payload: %NACK{}}} = event,
+        ctx,
+        state
+      ) do
+    Membrane.TelemetryMetrics.execute(
+      @nack_received_telemetry_event,
+      %{},
+      %{},
+      state.telemetry_label
+    )
+
+    super(pad, event, ctx, state)
   end
 
   @impl true
@@ -211,6 +260,13 @@ defmodule Membrane.RTP.OutboundTrackingSerializer do
         |> Enum.map(&{:buffer, {rtcp_output, %Membrane.Buffer{payload: &1}}})
 
       for _buffer_action <- actions do
+        Membrane.TelemetryMetrics.execute(
+          @rtcp_sent_telemetry_event,
+          %{},
+          %{},
+          state.telemetry_label
+        )
+
         Membrane.TelemetryMetrics.execute(
           @sender_report_sent_telemetry_event,
           %{},

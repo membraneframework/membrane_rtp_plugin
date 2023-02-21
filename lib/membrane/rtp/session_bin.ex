@@ -532,6 +532,7 @@ defmodule Membrane.RTP.SessionBin do
 
       payload_type = get_output_payload_type!(ctx, ssrc)
       clock_rate = clock_rate || get_from_register!(:clock_rate, payload_type, state)
+      telemetry_label = ctx.pads[input_pad].options.telemetry_label
 
       add_srtp_encryptor =
         &child(
@@ -554,7 +555,7 @@ defmodule Membrane.RTP.SessionBin do
           clock_rate: clock_rate,
           rtcp_report_interval: state.rtcp_sender_report_interval,
           rtp_extension_mapping: rtp_extension_mapping || %{},
-          telemetry_label: ctx.pads[input_pad].options.telemetry_label
+          telemetry_label: telemetry_label
         })
         |> then(if state.secure?, do: add_srtp_encryptor, else: & &1)
         |> bin_output(output_pad)
@@ -578,7 +579,7 @@ defmodule Membrane.RTP.SessionBin do
             |> then(if state.secure?, do: link_srtcp_encryptor, else: & &1)
             |> bin_output(rtcp_sender_output),
             get_child(:ssrc_router)
-            |> via_out(Pad.ref(:output, ssrc))
+            |> via_out(Pad.ref(:output, ssrc), options: [telemetry_label: telemetry_label])
             |> via_in(:rtcp_input)
             |> get_child({:stream_send_bin, ssrc})
           ]

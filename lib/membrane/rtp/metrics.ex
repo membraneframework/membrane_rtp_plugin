@@ -39,24 +39,6 @@ defmodule Membrane.RTP.Metrics do
         event_name: [Membrane.RTP, :inbound, :rtcp, :nack, :sent]
       ),
       Metrics.counter(
-        "inbound-rtp.rtcp_packets_received",
-        event_name: [Membrane.RTP, :inbound, :rtcp, :arrival]
-      ),
-      Metrics.sum(
-        "inbound-rtp.rtcp_bytes_received",
-        event_name: [Membrane.RTP, :inbound, :rtcp, :arrival],
-        measurement: :bytes
-      ),
-      Metrics.counter(
-        "inbound-rtp.rtcp_packets_sent",
-        event_name: [Membrane.RTP, :inbound, :rtcp, :sent]
-      ),
-      Metrics.sum(
-        "inbound-rtp.rtcp_bytes_sent",
-        event_name: [Membrane.RTP, :inbound, :rtcp, :sent],
-        measurement: :bytes
-      ),
-      Metrics.counter(
         "inbound-rtp.frames",
         event_name: [Membrane.RTP, :rtp, :frame_received]
       ),
@@ -67,6 +49,50 @@ defmodule Membrane.RTP.Metrics do
       Metrics.counter(
         "outbound-rtp.sender_reports",
         event_name: [Membrane.RTP, :outbound, :sender_report, :sent]
+      ),
+      Metrics.counter(
+        "rtcp.total_packets_received",
+        event_name: [Membrane.RTP, :rtcp, :arrival]
+      ),
+      Metrics.counter(
+        "rtcp.total_packets_sent",
+        event_name: [Membrane.RTP, :rtcp, :sent]
+      ),
+      Metrics.counter(
+        "rtcp.nack_sent",
+        event_name: [Membrane.RTP, :rtcp, :nack, :sent]
+      ),
+      Metrics.counter(
+        "rtcp.fir_sent",
+        event_name: [Membrane.RTP, :rtcp, :fir, :sent]
+      ),
+      Metrics.counter(
+        "rtcp.sender_report_sent",
+        event_name: [Membrane.RTP, :rtcp, :sender_report, :sent]
+      ),
+      Metrics.counter(
+        "rtcp.receiver_report_sent",
+        event_name: [Membrane.RTP, :rtcp, :receiver_report, :sent]
+      ),
+      Metrics.counter(
+        "rtcp.nack_received",
+        event_name: [Membrane.RTP, :rtcp, :nack, :arrival]
+      ),
+      Metrics.counter(
+        "rtcp.fir_received",
+        event_name: [Membrane.RTP, :rtcp, :fir, :arrival]
+      ),
+      Metrics.counter(
+        "rtcp.pli_received",
+        event_name: [Membrane.RTP, :rtcp, :pli, :arrival]
+      ),
+      Metrics.counter(
+        "rtcp.sender_report_received",
+        event_name: [Membrane.RTP, :rtcp, :sender_report, :arrival]
+      ),
+      Metrics.counter(
+        "rtcp.receiver_report_received",
+        event_name: [Membrane.RTP, :rtcp, :receiver_report, :arrival]
       )
     ]
   end

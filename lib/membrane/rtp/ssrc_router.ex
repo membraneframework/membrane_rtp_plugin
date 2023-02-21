@@ -22,6 +22,8 @@ defmodule Membrane.RTP.SSRCRouter do
   @packet_arrival_event [Membrane.RTP, :packet, :arrival]
   @new_inbound_track_event [Membrane.RTP, :inbound_track, :new]
   @frame_received_telemetry_event [Membrane.RTP, :rtp, :frame_received]
+  @rtcp_arrival_event [Membrane.RTP, :rtcp, :arrival]
+  @rtcp_sent_event [Membrane.RTP, :rtcp, :sent]
 
   def_input_pad :input,
     accepted_format: any_of(RTCP, RTP),
@@ -103,6 +105,8 @@ defmodule Membrane.RTP.SSRCRouter do
     register_inbound_frame_event(pad, ctx)
     emit_inbound_frame_event(buffered_actions, ctx)
 
+    register_rtcp_events(pad, ctx)
+
     events =
       if state.srtp_keying_material_event do
         [{:event, {pad, state.srtp_keying_material_event}}]
@@ -160,6 +164,7 @@ defmodule Membrane.RTP.SSRCRouter do
         target_pad = Pad.ref(:output, ssrc)
 
         if Map.has_key?(ctx.pads, target_pad) do
+          emit_rtcp_arrival_event(target_pad, ctx)
           [event: {target_pad, event}]
         else
           # TODO: This should most likely be a warning, however it appears on every join and leave,
@@ -195,10 +200,11 @@ defmodule Membrane.RTP.SSRCRouter do
   end
 
   @impl true
-  def handle_event(Pad.ref(:output, ssrc), %RTCPEvent{} = event, ctx, state) do
+  def handle_event(Pad.ref(:output, ssrc) = pad, %RTCPEvent{} = event, ctx, state) do
     with {:ok, Pad.ref(:input, id)} <- Map.fetch(state.input_pads, ssrc),
          rtcp_pad = Pad.ref(:input, {:rtcp, id}),
          true <- Map.has_key?(ctx.pads, rtcp_pad) do
+      emit_rtcp_sent_event(pad, ctx)
       {[event: {rtcp_pad, event}], state}
     else
       :error ->
@@ -262,12 +268,10 @@ defmodule Membrane.RTP.SSRCRouter do
     end
   end
 
-  defp emit_packet_arrival_events(actions, ctx) do
-    for action <- actions do
-      with {:buffer, {pad, buffer}} <- action do
-        emit_packet_arrival_event(buffer.payload, pad, ctx)
-      end
-    end
+  defp register_rtcp_events(pad, ctx) do
+    label = ctx.pads[pad].options.telemetry_label
+    Membrane.TelemetryMetrics.register(@rtcp_arrival_event, label)
+    Membrane.TelemetryMetrics.register(@rtcp_sent_event, label)
   end
 
   defp register_packet_arrival_event(pad, ctx) do
@@ -289,6 +293,32 @@ defmodule Membrane.RTP.SSRCRouter do
       @frame_received_telemetry_event,
       ctx.pads[pad].options.telemetry_label
     )
+  end
+
+  defp emit_rtcp_arrival_event(destination, ctx) do
+    Membrane.TelemetryMetrics.execute(
+      @rtcp_arrival_event,
+      %{},
+      %{},
+      ctx.pads[destination].options.telemetry_label
+    )
+  end
+
+  defp emit_rtcp_sent_event(destination, ctx) do
+    Membrane.TelemetryMetrics.execute(
+      @rtcp_sent_event,
+      %{},
+      %{},
+      ctx.pads[destination].options.telemetry_label
+    )
+  end
+
+  defp emit_packet_arrival_events(actions, ctx) do
+    for action <- actions do
+      with {:buffer, {pad, buffer}} <- action do
+        emit_packet_arrival_event(buffer.payload, pad, ctx)
+      end
+    end
   end
 
   defp emit_packet_arrival_event(payload, pad, ctx) do
