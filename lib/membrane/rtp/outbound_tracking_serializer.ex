@@ -40,7 +40,7 @@ defmodule Membrane.RTP.OutboundTrackingSerializer do
                 default: []
               ]
 
-  @frame_sent_telemetry_event [Membrane.RTP, :rtp, :frame_sent]
+  @marker_sent_telemetry_event [Membrane.RTP, :rtp, :marker_sent]
   @rtcp_sent_telemetry_event [Membrane.RTP, :rtcp, :sent]
   @nack_received_telemetry_event [Membrane.RTP, :rtcp, :nack, :arrival]
   @pli_received_telemetry_event [Membrane.RTP, :rtcp, :pli, :arrival]
@@ -78,7 +78,7 @@ defmodule Membrane.RTP.OutboundTrackingSerializer do
 
   @impl true
   def handle_init(_ctx, options) do
-    Membrane.TelemetryMetrics.register(@frame_sent_telemetry_event, options.telemetry_label)
+    Membrane.TelemetryMetrics.register(@marker_sent_telemetry_event, options.telemetry_label)
     Membrane.TelemetryMetrics.register(@rtcp_sent_telemetry_event, options.telemetry_label)
     Membrane.TelemetryMetrics.register(@nack_received_telemetry_event, options.telemetry_label)
     Membrane.TelemetryMetrics.register(@fir_received_telemetry_event, options.telemetry_label)
@@ -227,7 +227,7 @@ defmodule Membrane.RTP.OutboundTrackingSerializer do
 
     if header.marker do
       Membrane.TelemetryMetrics.execute(
-        @frame_sent_telemetry_event,
+        @marker_sent_telemetry_event,
         %{},
         %{},
         state.telemetry_label

@@ -21,7 +21,7 @@ defmodule Membrane.RTP.SSRCRouter do
 
   @packet_arrival_event [Membrane.RTP, :packet, :arrival]
   @new_inbound_track_event [Membrane.RTP, :inbound_track, :new]
-  @frame_received_telemetry_event [Membrane.RTP, :rtp, :frame_received]
+  @marker_received_telemetry_event [Membrane.RTP, :rtp, :marker_received]
   @rtcp_arrival_event [Membrane.RTP, :rtcp, :arrival]
   @rtcp_sent_event [Membrane.RTP, :rtcp, :sent]
 
@@ -290,7 +290,7 @@ defmodule Membrane.RTP.SSRCRouter do
 
   defp register_inbound_frame_event(pad, ctx) do
     Membrane.TelemetryMetrics.register(
-      @frame_received_telemetry_event,
+      @marker_received_telemetry_event,
       ctx.pads[pad].options.telemetry_label
     )
   end
@@ -344,7 +344,7 @@ defmodule Membrane.RTP.SSRCRouter do
         buffer.metadata.rtp.marker,
         Map.has_key?(ctx.pads, pad) do
       Membrane.TelemetryMetrics.execute(
-        @frame_received_telemetry_event,
+        @marker_received_telemetry_event,
         %{},
         %{},
         ctx.pads[pad].options.telemetry_label
