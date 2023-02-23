@@ -42,12 +42,12 @@ defmodule Membrane.RTP.VAD do
               ],
               time_window: [
                 spec: pos_integer(),
-                default: 2_000,
+                default: 750,
                 description: "Time window (in `ms`) in which avg audio level is measured."
               ],
               min_packet_num: [
                 spec: pos_integer(),
-                default: 50,
+                default: 25,
                 description: """
                 Minimal number of packets to count avg audio level from.
                 Speech won't be detected until there are enough packets.
@@ -55,7 +55,7 @@ defmodule Membrane.RTP.VAD do
               ],
               vad_threshold: [
                 spec: -127..0,
-                default: -50,
+                default: -57,
                 description: """
                 Audio level in dBov representing vad threshold.
                 Values above are considered to represent voice activity.
@@ -64,7 +64,7 @@ defmodule Membrane.RTP.VAD do
               ],
               vad_silence_time: [
                 spec: pos_integer(),
-                default: 300,
+                default: 500,
                 description: """
                 Time to wait before emitting `Membrane.RTP.VadEvent` after audio track is
                 no longer considered to represent speech.
