@@ -1,4 +1,5 @@
 # Membrane RTP plugin
+
 [![Hex.pm](https://img.shields.io/hexpm/v/membrane_rtp_plugin.svg)](https://hex.pm/packages/membrane_rtp_plugin)
 [![API Docs](https://img.shields.io/badge/api-docs-yellow.svg?style=flat)](https://hexdocs.pm/membrane_rtp_plugin/)
 [![CircleCI](https://circleci.com/gh/membraneframework/membrane_rtp_plugin.svg?style=svg)](https://circleci.com/gh/membraneframework/membrane_rtp_plugin)
@@ -14,17 +15,20 @@ The package can be installed by adding `membrane_rtp_plugin` to your list of dep
 ```elixir
 def deps do
   [
-    {:membrane_rtp_plugin, "~> 0.19.1"},
+    {:membrane_rtp_plugin, "~> 0.20.0"},
     {:ex_libsrtp, "~> 0.6.0"} # required only if SRTP/SRTCP support is needed
   ]
 end
 ```
 
-If SRTP/SRTCP support is needed, one has to install `libsrtp` to their system. 
-### MacOS 
+If SRTP/SRTCP support is needed, one has to install `libsrtp` to their system.
+
+### MacOS
+
 Run `brew install srtp`
 
 ### Ubuntu
+
 Run `apt install libsrtp2-dev`
 
 ### Other
