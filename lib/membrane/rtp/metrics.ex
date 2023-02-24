@@ -35,10 +35,6 @@ defmodule Membrane.RTP.Metrics do
         measurement: :ssrc
       ),
       Metrics.counter(
-        "inbound-rtp.nack_sent",
-        event_name: [Membrane.RTP, :inbound, :rtcp, :nack, :sent]
-      ),
-      Metrics.counter(
         "inbound-rtp.markers_received",
         event_name: [Membrane.RTP, :rtp, :maker_received]
       ),
