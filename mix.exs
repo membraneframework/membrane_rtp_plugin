@@ -37,7 +37,7 @@ defmodule Membrane.RTP.Plugin.MixProject do
   defp deps do
     [
       {:membrane_core, "~> 0.11.2"},
-      {:membrane_rtp_format, "~> 0.6.0"},
+      {:membrane_rtp_format, "~> 0.6.0", override: true},
       {:membrane_funnel_plugin, "~> 0.6"},
       {:membrane_telemetry_metrics, "~> 0.1.0"},
       {:ex_libsrtp, "~> 0.6.0", optional: true},
