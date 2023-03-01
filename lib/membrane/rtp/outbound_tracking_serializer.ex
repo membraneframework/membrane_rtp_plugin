@@ -178,12 +178,13 @@ defmodule Membrane.RTP.OutboundTrackingSerializer do
         _ctx,
         state
       ) do
-   Membrane.TelemetryMetrics.execute(
+    Membrane.TelemetryMetrics.execute(
       @nack_received_telemetry_event,
       %{},
       %{},
       state.telemetry_label
     )
+
     # The OutboundRetransmissionController is behind encryptor, so we need to send the event downstream to reach it
     {[event: {:output, %Membrane.RTP.RetransmissionRequestEvent{packet_ids: ids}}], state}
   end
