@@ -51,8 +51,8 @@ defmodule Membrane.RTP.SSRCRouterTest do
 
     pipeline = init_pipeline()
 
-    send_router_message(pipeline, %SSRCRouter.RequireExtensions{
-      pt_to_ext_id: %{payload_type => [9, 10]}
+    send_router_message(pipeline, %SSRCRouter.StreamsInfo{
+      require_extensions: %{payload_type => [9, 10]}
     })
 
     src_send_meta_buffer(pipeline, metadata)
@@ -80,6 +80,37 @@ defmodule Membrane.RTP.SSRCRouterTest do
     # Ensure the first package was dropped
     refute_pipeline_notified(pipeline, :ssrc_router, {:new_rtp_stream, 1, _pt, _extensions}, 200)
 
+    Pipeline.terminate(pipeline, blocking?: true)
+  end
+
+  test "Waiting for extensions doesn't break non-simulcast" do
+    payload_type = 96
+
+    metadata = %{
+      @rtp_metadata_template
+      | payload_type: payload_type,
+        extensions: [
+          %Extension{identifier: 4, data: <<0, 2>>},
+          %Extension{identifier: 9, data: "0"}
+        ]
+    }
+
+    pipeline = init_pipeline()
+
+    send_router_message(pipeline, %SSRCRouter.StreamsInfo{
+      require_extensions: %{payload_type => [9, 10]},
+      accept_ssrcs: [1]
+    })
+
+    src_send_meta_buffer(pipeline, metadata)
+
+    assert_pipeline_notified(
+      pipeline,
+      :ssrc_router,
+      {:new_rtp_stream, 1, ^payload_type, extensions}
+    )
+
+    assert extensions == metadata.extensions
     Pipeline.terminate(pipeline, blocking?: true)
   end
 

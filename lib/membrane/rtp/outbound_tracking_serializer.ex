@@ -13,6 +13,7 @@ defmodule Membrane.RTP.OutboundTrackingSerializer do
   alias Membrane.RTCP.TransportFeedbackPacket.NACK
   alias Membrane.{Buffer, Payload, RemoteStream, RTCP, RTCPEvent, RTP, Time}
   alias Membrane.RTCP.FeedbackPacket.{FIR, PLI}
+  alias Membrane.RTCP.TransportFeedbackPacket.NACK
   alias Membrane.RTP.Session.SenderReport
 
   def_input_pad :input, accepted_format: RTP, demand_mode: :auto
@@ -172,19 +173,19 @@ defmodule Membrane.RTP.OutboundTrackingSerializer do
 
   @impl true
   def handle_event(
-        Pad.ref(:rtcp_input, _id) = pad,
-        %RTCPEvent{rtcp: %{payload: %NACK{}}} = event,
-        ctx,
+        Pad.ref(:rtcp_input, _id),
+        %RTCPEvent{rtcp: %{payload: %NACK{lost_packet_ids: ids}}},
+        _ctx,
         state
       ) do
-    Membrane.TelemetryMetrics.execute(
+   Membrane.TelemetryMetrics.execute(
       @nack_received_telemetry_event,
       %{},
       %{},
       state.telemetry_label
     )
-
-    super(pad, event, ctx, state)
+    # The OutboundRetransmissionController is behind encryptor, so we need to send the event downstream to reach it
+    {[event: {:output, %Membrane.RTP.RetransmissionRequestEvent{packet_ids: ids}}], state}
   end
 
   @impl true
@@ -206,7 +207,7 @@ defmodule Membrane.RTP.OutboundTrackingSerializer do
   def handle_process(:input, %Buffer{} = buffer, _ctx, state) do
     state = update_stats(buffer, state)
 
-    {rtp_metadata, metadata} = Map.pop(buffer.metadata, :rtp, %{})
+    %{rtp: rtp_metadata} = buffer.metadata
 
     supported_extensions = Map.keys(state.extension_mapping)
 
@@ -241,7 +242,7 @@ defmodule Membrane.RTP.OutboundTrackingSerializer do
         padding_size: padding_size
       )
 
-    buffer = %Buffer{buffer | payload: payload, metadata: metadata}
+    buffer = %Buffer{buffer | payload: payload}
 
     {[buffer: {:output, buffer}], %{state | any_buffer_sent?: true}}
   end

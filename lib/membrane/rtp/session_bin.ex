@@ -66,7 +66,7 @@ defmodule Membrane.RTP.SessionBin do
   require Membrane.Logger
   alias Membrane.RTP.{PayloadFormat, Session}
   alias Membrane.RTP.SessionBin.RTXInfo
-  alias Membrane.RTP.SSRCRouter.RequireExtensions
+  alias Membrane.RTP.SSRCRouter.StreamsInfo
   alias Membrane.{RemoteStream, RTCP, RTP, SRTP}
 
   @type new_stream_notification_t :: Membrane.RTP.SSRCRouter.new_stream_notification_t()
@@ -394,7 +394,7 @@ defmodule Membrane.RTP.SessionBin do
         struct(Membrane.SRTP.Encryptor, %{policies: state.receiver_srtp_policies})
       )
 
-    structure = [
+    structure =
       [
         bin_input(pad)
         |> via_in(:input, @rtp_input_params)
@@ -418,7 +418,6 @@ defmodule Membrane.RTP.SessionBin do
         else
           []
         end
-    ]
 
     {[spec: structure], state}
   end
@@ -550,6 +549,7 @@ defmodule Membrane.RTP.SessionBin do
           telemetry_label: telemetry_label
         })
         |> then(if state.secure?, do: add_srtp_encryptor, else: & &1)
+        |> child({:outbound_rtx_controller, ssrc}, Membrane.RTP.OutboundRtxController)
         |> bin_output(output_pad)
       ]
 
@@ -605,31 +605,40 @@ defmodule Membrane.RTP.SessionBin do
   def handle_pad_removed(Pad.ref(:output, ssrc), ctx, state) do
     # TODO: parent may not know when to unlink, we need to timout SSRCs and notify about that and BYE packets over RTCP
     state = %{state | ssrcs: Map.delete(state.ssrcs, ssrc)}
-    stream_receive_bin = Map.get(ctx.children, {:stream_receive_bin, ssrc})
 
-    if stream_receive_bin != nil and !stream_receive_bin.terminating? do
-      {[remove_child: {:stream_receive_bin, ssrc}], state}
-    else
-      {[], state}
-    end
+    to_remove =
+      [
+        :rtx_funnel,
+        :rtx,
+        :rtx_decryptor,
+        :stream_receive_bin
+      ]
+      |> Enum.map(&{&1, ssrc})
+      |> Enum.filter(fn name ->
+        child = Map.get(ctx.children, name)
+        child && not child.terminating?
+      end)
+
+    {[remove_child: to_remove], state}
   end
 
   @impl true
   def handle_pad_removed(Pad.ref(name, ssrc), ctx, state)
       when name in [:input, :rtp_output] do
-    children =
-      for {child_name, child} <-
-            Map.take(ctx.children, [
-              {:stream_send_bin, ssrc},
-              {:srtp_encryptor, ssrc},
-              {:srtcp_sender_encryptor, ssrc}
-            ]),
-          !child.terminating?,
-          into: [] do
-        child_name
-      end
+    to_remove =
+      [
+        :stream_send_bin,
+        :srtp_encryptor,
+        :srtcp_sender_encryptor,
+        :outbound_rtx_controller
+      ]
+      |> Enum.map(&{&1, ssrc})
+      |> Enum.filter(fn name ->
+        child = Map.get(ctx.children, name)
+        child && not child.terminating?
+      end)
 
-    {[remove_child: children], state}
+    {[remove_child: to_remove], state}
   end
 
   @impl true
@@ -665,7 +674,7 @@ defmodule Membrane.RTP.SessionBin do
   end
 
   @impl true
-  def handle_parent_notification(%RequireExtensions{} = msg, _ctx, state) do
+  def handle_parent_notification(%StreamsInfo{} = msg, _ctx, state) do
     {[notify_child: {:ssrc_router, msg}], state}
   end
 
@@ -680,7 +689,7 @@ defmodule Membrane.RTP.SessionBin do
     link_decryptor =
       &child(
         &1,
-        {:decryptor, ssrc},
+        {:rtx_decryptor, msg.original_ssrc},
         struct(Membrane.SRTP.Decryptor, %{policies: state.srtp_policies})
       )
 
@@ -691,7 +700,7 @@ defmodule Membrane.RTP.SessionBin do
         # TODO: Fix TWCCReceiver not noticing packets dropped by SSRCRouter
         |> then(&link_twcc_receiver_if(twcc?, &1, ssrc))
         |> then(if(state.secure?, do: link_decryptor, else: & &1))
-        |> child({:rtx, ssrc}, rtx_parser_opts)
+        |> child({:rtx, msg.original_ssrc}, rtx_parser_opts)
         |> via_in(Pad.ref(:input, ssrc))
         |> get_child({:rtx_funnel, msg.original_ssrc})
       ]

@@ -6,7 +6,6 @@ defmodule Membrane.RTP.DepayloaderBin do
 
   use Membrane.Bin
 
-  alias Membrane.RemoteStream
   alias Membrane.RTP
   alias Membrane.RTP.JitterBuffer
 
@@ -23,7 +22,7 @@ defmodule Membrane.RTP.DepayloaderBin do
     demand_unit: :buffers
 
   def_output_pad :output,
-    accepted_format: RemoteStream,
+    accepted_format: _any,
     demand_unit: :buffers
 
   @impl true
