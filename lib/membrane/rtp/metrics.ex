@@ -12,10 +12,6 @@ defmodule Membrane.RTP.Metrics do
   def metrics() do
     [
       Metrics.counter(
-        "inbound-rtp.keyframe_request_sent",
-        event_name: [Membrane.RTP, :inbound, :rtcp, :fir, :sent]
-      ),
-      Metrics.counter(
         "inbound-rtp.packets",
         event_name: [Membrane.RTP, :packet, :arrival]
       ),
@@ -36,15 +32,11 @@ defmodule Membrane.RTP.Metrics do
       ),
       Metrics.counter(
         "inbound-rtp.markers_received",
-        event_name: [Membrane.RTP, :rtp, :maker_received]
+        event_name: [Membrane.RTP, :rtp, :marker_received]
       ),
       Metrics.counter(
         "outbound-rtp.markers_sent",
         event_name: [Membrane.RTP, :rtp, :marker_sent]
-      ),
-      Metrics.counter(
-        "outbound-rtp.sender_reports",
-        event_name: [Membrane.RTP, :outbound, :sender_report, :sent]
       ),
       Metrics.counter(
         "rtcp.total_packets_received",

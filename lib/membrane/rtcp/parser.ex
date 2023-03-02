@@ -6,7 +6,6 @@ defmodule Membrane.RTCP.Parser do
   use Membrane.Filter
 
   require Membrane.Logger
-  require Membrane.TelemetryMetrics
   alias Membrane.Buffer
   alias Membrane.{RemoteStream, RTCP, RTCPEvent}
 
