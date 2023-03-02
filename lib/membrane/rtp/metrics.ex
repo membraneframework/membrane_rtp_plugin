@@ -81,6 +81,11 @@ defmodule Membrane.RTP.Metrics do
       Metrics.counter(
         "rtcp.receiver_reports_received",
         event_name: [Membrane.RTP, :rtcp, :receiver_report, :arrival]
+      ),
+      Metrics.sum(
+        "outbound-rtp.rtx_sent",
+        event_name: [Membrane.RTP, :rtx, :sent],
+        measurement: :amount
       )
     ]
   end

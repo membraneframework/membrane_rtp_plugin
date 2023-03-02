@@ -549,7 +549,9 @@ defmodule Membrane.RTP.SessionBin do
           telemetry_label: telemetry_label
         })
         |> then(if state.secure?, do: add_srtp_encryptor, else: & &1)
-        |> child({:outbound_rtx_controller, ssrc}, Membrane.RTP.OutboundRtxController)
+        |> child({:outbound_rtx_controller, ssrc}, %Membrane.RTP.OutboundRtxController{
+          telemetry_label: telemetry_label
+        })
         |> bin_output(output_pad)
       ]
 
