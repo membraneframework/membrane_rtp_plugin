@@ -67,15 +67,16 @@ defmodule Membrane.RTP.OutboundRtxController do
       end)
 
     buffers_to_retransmit = Enum.reject(buffers, &is_nil/1)
+    retransmissions_count = length(buffers_to_retransmit)
 
-    unless buffers_to_retransmit == [] do
+    unless retransmissions_count == 0 do
       Membrane.Logger.debug(
-        "Retransmitting #{length(buffers_to_retransmit)} buffer(s): #{inspect(Enum.map(buffers_to_retransmit, & &1.metadata.rtp.sequence_number))}"
+        "Retransmitting #{retransmissions_count} buffer(s): #{inspect(Enum.map(buffers_to_retransmit, & &1.metadata.rtp.sequence_number))}"
       )
 
       Membrane.TelemetryMetrics.execute(
         @retransmission_telemetry_event,
-        %{amount: length(buffers_to_retransmit)},
+        %{amount: retransmissions_count},
         %{},
         state.telemetry_label
       )

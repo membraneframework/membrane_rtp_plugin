@@ -41,12 +41,23 @@ defmodule Membrane.RTP.OutboundTrackingSerializer do
                 default: []
               ]
 
+  @packet_sent_telemetry_event [Membrane.RTP, :packet, :sent]
   @marker_sent_telemetry_event [Membrane.RTP, :rtp, :marker_sent]
   @rtcp_sent_telemetry_event [Membrane.RTP, :rtcp, :sent]
   @nack_received_telemetry_event [Membrane.RTP, :rtcp, :nack, :arrival]
   @pli_received_telemetry_event [Membrane.RTP, :rtcp, :pli, :arrival]
   @fir_received_telemetry_event [Membrane.RTP, :rtcp, :fir, :arrival]
   @sender_report_sent_telemetry_event [Membrane.RTP, :rtcp, :sender_report, :sent]
+
+  @telemetry_events [
+    @packet_sent_telemetry_event,
+    @marker_sent_telemetry_event,
+    @rtcp_sent_telemetry_event,
+    @nack_received_telemetry_event,
+    @pli_received_telemetry_event,
+    @fir_received_telemetry_event,
+    @sender_report_sent_telemetry_event
+  ]
 
   defmodule State do
     @moduledoc false
@@ -79,16 +90,9 @@ defmodule Membrane.RTP.OutboundTrackingSerializer do
 
   @impl true
   def handle_init(_ctx, options) do
-    Membrane.TelemetryMetrics.register(@marker_sent_telemetry_event, options.telemetry_label)
-    Membrane.TelemetryMetrics.register(@rtcp_sent_telemetry_event, options.telemetry_label)
-    Membrane.TelemetryMetrics.register(@nack_received_telemetry_event, options.telemetry_label)
-    Membrane.TelemetryMetrics.register(@fir_received_telemetry_event, options.telemetry_label)
-    Membrane.TelemetryMetrics.register(@pli_received_telemetry_event, options.telemetry_label)
-
-    Membrane.TelemetryMetrics.register(
-      @sender_report_sent_telemetry_event,
-      options.telemetry_label
-    )
+    for event <- @telemetry_events do
+      Membrane.TelemetryMetrics.register(event, options.telemetry_label)
+    end
 
     state =
       %State{}

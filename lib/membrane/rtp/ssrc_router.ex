@@ -20,6 +20,7 @@ defmodule Membrane.RTP.SSRCRouter do
   alias Membrane.{Buffer, RTCP, RTCPEvent, RTP, SRTP}
 
   @packet_arrival_event [Membrane.RTP, :packet, :arrival]
+  @padding_packet_arrival_event [Membrane.RTP, :padding_packet, :arrival]
   @new_inbound_track_event [Membrane.RTP, :inbound_track, :new]
   @marker_received_telemetry_event [Membrane.RTP, :rtp, :marker_received]
   @rtcp_arrival_event [Membrane.RTP, :rtcp, :arrival]
@@ -97,7 +98,7 @@ defmodule Membrane.RTP.SSRCRouter do
     {buffered_actions, state} = pop_in(state, [:buffered_actions, ssrc])
     buffered_actions = Enum.reverse(buffered_actions || [])
 
-    register_packet_arrival_event(pad, ctx)
+    register_packet_arrival_events(pad, ctx)
     emit_packet_arrival_events(buffered_actions, ctx)
 
     register_new_inbound_track_event(pad, ctx)
@@ -283,10 +284,17 @@ defmodule Membrane.RTP.SSRCRouter do
     Membrane.TelemetryMetrics.register(@rtcp_sent_event, label)
   end
 
-  defp register_packet_arrival_event(pad, ctx) do
+  defp register_packet_arrival_events(pad, ctx) do
+    label = ctx.pads[pad].options.telemetry_label
+
     Membrane.TelemetryMetrics.register(
       @packet_arrival_event,
-      ctx.pads[pad].options.telemetry_label
+      label
+    )
+
+    Membrane.TelemetryMetrics.register(
+      @padding_packet_arrival_event,
+      label
     )
   end
 
@@ -325,18 +333,28 @@ defmodule Membrane.RTP.SSRCRouter do
   defp emit_packet_arrival_events(actions, ctx) do
     for action <- actions do
       with {:buffer, {pad, buffer}} <- action do
-        emit_packet_arrival_event(buffer.payload, pad, ctx)
+        emit_packet_arrival_event(buffer, pad, ctx)
       end
     end
   end
 
-  defp emit_packet_arrival_event(payload, pad, ctx) do
+  defp emit_packet_arrival_event(%Buffer{} = buffer, pad, ctx) do
+    packet_size = byte_size(buffer.payload)
+
+    rtp_payload_size =
+      packet_size - buffer.metadata.rtp.padding_size - buffer.metadata.rtp.total_header_size
+
+    label = ctx.pads[pad].options.telemetry_label
+
     Membrane.TelemetryMetrics.execute(
       @packet_arrival_event,
-      %{bytes: byte_size(payload)},
+      %{bytes: byte_size(buffer.payload)},
       %{},
-      ctx.pads[pad].options.telemetry_label
+      label
     )
+
+    if rtp_payload_size == 0,
+      do: Membrane.TelemetryMetrics.execute(@padding_packet_arrival_event, %{}, %{}, label)
   end
 
   defp emit_new_inbound_track_event(ssrc, pad, ctx) do
