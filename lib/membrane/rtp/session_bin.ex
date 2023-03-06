@@ -695,10 +695,16 @@ defmodule Membrane.RTP.SessionBin do
         struct(Membrane.SRTP.Decryptor, %{policies: state.srtp_policies})
       )
 
+    ssrc_router_pad_options = [
+      encoding: :rtx,
+      telemetry_label:
+        ctx.pads[Pad.ref(:output, msg.original_ssrc)].options.telemetry_label ++ [:rtx_stream]
+    ]
+
     links_generator = fn twcc? ->
       [
         get_child(:ssrc_router)
-        |> via_out(Pad.ref(:output, ssrc))
+        |> via_out(Pad.ref(:output, ssrc), options: ssrc_router_pad_options)
         # TODO: Fix TWCCReceiver not noticing packets dropped by SSRCRouter
         |> then(&link_twcc_receiver_if(twcc?, &1, ssrc))
         |> then(if(state.secure?, do: link_decryptor, else: & &1))
