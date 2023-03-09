@@ -476,11 +476,11 @@ defmodule Membrane.RTP.SessionBin do
       |> bin_output(pad)
 
     {rtx_links_generator, awaiting_rtx_links} =
-      Map.pop(state.awaiting_rtx_links, ssrc, fn _twcc -> [] end)
+      Map.pop(state.awaiting_rtx_links, ssrc, fn _twcc, _ctx -> [] end)
 
     state = %State{state | awaiting_rtx_links: awaiting_rtx_links}
 
-    structure = List.flatten([twcc_children, router_link, rtx_links_generator.(use_twcc?)])
+    structure = List.flatten([twcc_children, router_link, rtx_links_generator.(use_twcc?, ctx)])
     {[spec: structure], state}
   end
 
@@ -695,13 +695,13 @@ defmodule Membrane.RTP.SessionBin do
         struct(Membrane.SRTP.Decryptor, %{policies: state.srtp_policies})
       )
 
-    ssrc_router_pad_options = [
-      encoding: :rtx,
-      telemetry_label:
-        ctx.pads[Pad.ref(:output, msg.original_ssrc)].options.telemetry_label ++ [:rtx_stream]
-    ]
+    links_generator = fn twcc?, ctx ->
+      ssrc_router_pad_options = [
+        encoding: :rtx,
+        telemetry_label:
+          ctx.pads[Pad.ref(:output, msg.original_ssrc)].options.telemetry_label ++ [:rtx_stream]
+      ]
 
-    links_generator = fn twcc? ->
       [
         get_child(:ssrc_router)
         |> via_out(Pad.ref(:output, ssrc), options: ssrc_router_pad_options)
@@ -717,7 +717,7 @@ defmodule Membrane.RTP.SessionBin do
     # Always link RTX after the original pad
     if Map.has_key?(ctx.pads, Pad.ref(:output, msg.original_ssrc)) do
       twcc? = ctx.children[:twcc_receiver] != nil
-      {[spec: links_generator.(twcc?)], state}
+      {[spec: links_generator.(twcc?, ctx)], state}
     else
       awaiting_rtx_links = Map.put(state.awaiting_rtx_links, msg.original_ssrc, links_generator)
       {[], %{state | awaiting_rtx_links: awaiting_rtx_links}}
