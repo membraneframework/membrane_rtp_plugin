@@ -11,10 +11,25 @@ defmodule Membrane.RTP.VadUtils.IsSpeakingEstimator do
   @c1 1
   @c2 1
   @c3 1
-  @db_threshold 50
+  # @db_threshold 50
+
+  # @max_level 127
+  # @min_level 0
+
+
+  defp binomial_coefficient(n, k) when k < 0 or k > n, do: 0
+  defp binomial_coefficient(n, k) when k == 0 or n == k , do: 1
+
+  defp binomial_coefficient(n, k) do
+    k = min(k, n - k)
+    Enum.to_list(1..k) |>
+    Enum.reduce(1, fn i, acc -> (div(acc*(n-i+1), i)) end)
+  end
 
   @spec estimate_is_speaking(list(integer)) :: (:speech | :silence)
   def estimate_is_speaking(levels) do
+    IO.inspect(binomial_coefficient(5, 5))
+    IO.inspect(binomial_coefficient(5, 2))
     IO.inspect(levels)
     IO.inspect("#{@n1}, #{@n2}, #{@n3}, #{@c1}, #{@c2}, #{@c3}")
     if :true ,do: :speech, else: :silence
