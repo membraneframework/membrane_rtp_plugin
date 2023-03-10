@@ -341,19 +341,16 @@ defmodule Membrane.RTP.SSRCRouter do
   defp emit_packet_arrival_event(%Buffer{} = buffer, pad, ctx) do
     packet_size = byte_size(buffer.payload)
 
-    rtp_payload_size =
-      packet_size - buffer.metadata.rtp.padding_size - buffer.metadata.rtp.total_header_size
-
     label = ctx.pads[pad].options.telemetry_label
 
     Membrane.TelemetryMetrics.execute(
       @packet_arrival_event,
-      %{bytes: byte_size(buffer.payload)},
+      %{bytes: packet_size},
       %{},
       label
     )
 
-    if rtp_payload_size == 0,
+    if packet_size == 254,
       do: Membrane.TelemetryMetrics.execute(@padding_packet_arrival_event, %{}, %{}, label)
   end
 

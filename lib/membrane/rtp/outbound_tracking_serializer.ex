@@ -249,6 +249,13 @@ defmodule Membrane.RTP.OutboundTrackingSerializer do
 
     buffer = %Buffer{buffer | payload: payload}
 
+    Membrane.TelemetryMetrics.execute(
+      @packet_sent_telemetry_event,
+      %{bytes: byte_size(buffer.payload)},
+      %{},
+      state.telemetry_label
+    )
+
     {[buffer: {:output, buffer}], %{state | any_buffer_sent?: true}}
   end
 
