@@ -3,7 +3,7 @@ defmodule Membrane.RTP.VadUtils.IsSpeakingEstimatorTest do
 
   alias Membrane.RTP.VadUtils.IsSpeakingEstimator
 
-  @mock_levels [4, 5, 6, 6]
+  @mock_levels 40..60
 
   describe "find speech" do
     test "returns :speech" do
