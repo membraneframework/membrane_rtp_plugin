@@ -331,11 +331,11 @@ defmodule Membrane.RTP.SSRCRouter do
   end
 
   defp emit_packet_arrival_events(actions, ctx) do
-    for action <- actions do
-      with {:buffer, {pad, buffer}} <- action do
-        emit_packet_arrival_event(buffer, pad, ctx)
-      end
+    for {:buffer, {pad, buffer}} <- actions do
+      emit_packet_arrival_event(buffer, pad, ctx)
     end
+    
+    :ok
   end
 
   defp emit_packet_arrival_event(%Buffer{} = buffer, pad, ctx) do

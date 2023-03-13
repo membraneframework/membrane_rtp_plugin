@@ -40,18 +40,15 @@ defmodule Membrane.RTCP.Receiver do
 
   @impl true
   def handle_init(_ctx, opts) do
-    Membrane.TelemetryMetrics.register(@fir_sent_telemetry_event, opts.telemetry_label)
-    Membrane.TelemetryMetrics.register(@nack_sent_telemetry_event, opts.telemetry_label)
-
-    Membrane.TelemetryMetrics.register(
+    [
+      @fir_sent_telemetry_event,
+      @nack_sent_telemetry_event, 
       @sender_report_received_telemetry_event,
-      opts.telemetry_label
-    )
-
-    Membrane.TelemetryMetrics.register(
-      @receiver_report_sent_telemetry_event,
-      opts.telemetry_label
-    )
+      @receiver_report_sent_telemetry_event
+    ]
+    |> Enum.each(fn event ->
+      Membrane.TelemetryMetrics.register(event, opts.telemetry_label)
+    end)
 
     state =
       opts
