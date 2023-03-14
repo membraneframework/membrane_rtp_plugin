@@ -20,10 +20,6 @@ defmodule Membrane.RTP.Metrics do
         event_name: [Membrane.RTP, :packet, :arrival],
         measurement: :bytes
       ),
-      Metrics.counter(
-        "inbound-rtp.paddings_received",
-        event_name: [Membrane.RTP, :padding_packet, :arrival]
-      ),
       Metrics.last_value(
         "inbound-rtp.encoding",
         event_name: [Membrane.RTP, :inbound_track, :new],

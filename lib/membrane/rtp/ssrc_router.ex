@@ -20,7 +20,6 @@ defmodule Membrane.RTP.SSRCRouter do
   alias Membrane.{Buffer, RTCP, RTCPEvent, RTP, SRTP}
 
   @packet_arrival_event [Membrane.RTP, :packet, :arrival]
-  @padding_packet_arrival_event [Membrane.RTP, :padding_packet, :arrival]
   @new_inbound_track_event [Membrane.RTP, :inbound_track, :new]
   @marker_received_telemetry_event [Membrane.RTP, :rtp, :marker_received]
   @rtcp_arrival_event [Membrane.RTP, :rtcp, :arrival]
@@ -102,7 +101,6 @@ defmodule Membrane.RTP.SSRCRouter do
 
     [
       @packet_arrival_event,
-      @padding_packet_arrival_event,
       @new_inbound_track_event,
       @marker_received_telemetry_event,
       @rtcp_arrival_event,
@@ -320,9 +318,6 @@ defmodule Membrane.RTP.SSRCRouter do
       %{},
       label
     )
-
-    if packet_size == 254,
-      do: Membrane.TelemetryMetrics.execute(@padding_packet_arrival_event, %{}, %{}, label)
   end
 
   defp emit_new_inbound_track_event(ssrc, pad, ctx) do
