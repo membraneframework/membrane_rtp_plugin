@@ -98,16 +98,21 @@ defmodule Membrane.RTP.SSRCRouter do
     {buffered_actions, state} = pop_in(state, [:buffered_actions, ssrc])
     buffered_actions = Enum.reverse(buffered_actions || [])
 
-    register_packet_arrival_events(pad, ctx)
+    telemetry_label = ctx.pads[pad].options.telemetry_label
+
+    [
+      @packet_arrival_event,
+      @padding_packet_arrival_event,
+      @new_inbound_track_event,
+      @marker_received_telemetry_event,
+      @rtcp_arrival_event,
+      @rtcp_sent_event
+    ]
+    |> Enum.each(&Membrane.TelemetryMetrics.register(&1, telemetry_label))
+
     emit_packet_arrival_events(buffered_actions, ctx)
-
-    register_new_inbound_track_event(pad, ctx)
     emit_new_inbound_track_event(ssrc, pad, ctx)
-
-    register_inbound_frame_event(pad, ctx)
     emit_inbound_frame_event(buffered_actions, ctx)
-
-    register_rtcp_events(pad, ctx)
 
     events =
       if state.srtp_keying_material_event do
@@ -278,40 +283,6 @@ defmodule Membrane.RTP.SSRCRouter do
     end
   end
 
-  defp register_rtcp_events(pad, ctx) do
-    label = ctx.pads[pad].options.telemetry_label
-    Membrane.TelemetryMetrics.register(@rtcp_arrival_event, label)
-    Membrane.TelemetryMetrics.register(@rtcp_sent_event, label)
-  end
-
-  defp register_packet_arrival_events(pad, ctx) do
-    label = ctx.pads[pad].options.telemetry_label
-
-    Membrane.TelemetryMetrics.register(
-      @packet_arrival_event,
-      label
-    )
-
-    Membrane.TelemetryMetrics.register(
-      @padding_packet_arrival_event,
-      label
-    )
-  end
-
-  defp register_new_inbound_track_event(pad, ctx) do
-    Membrane.TelemetryMetrics.register(
-      @new_inbound_track_event,
-      ctx.pads[pad].options.telemetry_label
-    )
-  end
-
-  defp register_inbound_frame_event(pad, ctx) do
-    Membrane.TelemetryMetrics.register(
-      @marker_received_telemetry_event,
-      ctx.pads[pad].options.telemetry_label
-    )
-  end
-
   defp emit_rtcp_arrival_event(destination, ctx) do
     Membrane.TelemetryMetrics.execute(
       @rtcp_arrival_event,
@@ -334,7 +305,7 @@ defmodule Membrane.RTP.SSRCRouter do
     for {:buffer, {pad, buffer}} <- actions do
       emit_packet_arrival_event(buffer, pad, ctx)
     end
-    
+
     :ok
   end
 

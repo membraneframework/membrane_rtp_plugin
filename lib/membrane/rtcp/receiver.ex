@@ -42,7 +42,7 @@ defmodule Membrane.RTCP.Receiver do
   def handle_init(_ctx, opts) do
     [
       @fir_sent_telemetry_event,
-      @nack_sent_telemetry_event, 
+      @nack_sent_telemetry_event,
       @sender_report_received_telemetry_event,
       @receiver_report_sent_telemetry_event
     ]
@@ -75,12 +75,7 @@ defmodule Membrane.RTCP.Receiver do
 
   @impl true
   def handle_event(:input, %RTCPEvent{rtcp: %SenderReportPacket{} = rtcp} = event, _ctx, state) do
-    Membrane.TelemetryMetrics.execute(
-      @sender_report_received_telemetry_event,
-      %{},
-      %{},
-      state.telemetry_label
-    )
+    emit_sender_report_sent_telemetry_event(state)
 
     <<_wallclock_ts_upper_16_bits::16, wallclock_ts_middle_32_bits::32,
       _wallclock_ts_lower_16_bits::16>> =
@@ -123,12 +118,7 @@ defmodule Membrane.RTCP.Receiver do
 
     packet = %RTCP.ReceiverReportPacket{ssrc: state.local_ssrc, reports: [report_block]}
 
-    Membrane.TelemetryMetrics.execute(
-      @receiver_report_sent_telemetry_event,
-      %{},
-      %{},
-      state.telemetry_label
-    )
+    emit_receiver_report_sent_telemetry_event(state)
 
     {[event: {:input, %RTCPEvent{rtcp: packet}}], state}
   end
@@ -148,7 +138,7 @@ defmodule Membrane.RTCP.Receiver do
       }
     }
 
-    Membrane.TelemetryMetrics.execute(@nack_sent_telemetry_event, %{}, %{}, state.telemetry_label)
+    emit_nack_sent_telemetry_event(state)
 
     event = %RTCPEvent{rtcp: rtcp}
     Membrane.Logger.debug("Sending NACK to #{state.remote_ssrc} with ids #{inspect(ids)}")
@@ -175,12 +165,7 @@ defmodule Membrane.RTCP.Receiver do
         }
       }
 
-      Membrane.TelemetryMetrics.execute(
-        @fir_sent_telemetry_event,
-        %{},
-        %{},
-        state.telemetry_label
-      )
+      emit_fir_sent_telemetry_event(state)
 
       event = %RTCPEvent{rtcp: rtcp}
       state = %{state | fir_seq_num: state.fir_seq_num + 1, last_fir_timestamp: now}
@@ -191,4 +176,40 @@ defmodule Membrane.RTCP.Receiver do
       {[], state}
     end
   end
+
+  defp emit_fir_sent_telemetry_event(state),
+    do:
+      Membrane.TelemetryMetrics.execute(
+        @fir_sent_telemetry_event,
+        %{},
+        %{},
+        state.telemetry_label
+      )
+
+  defp emit_nack_sent_telemetry_event(state),
+    do:
+      Membrane.TelemetryMetrics.execute(
+        @nack_sent_telemetry_event,
+        %{},
+        %{},
+        state.telemetry_label
+      )
+
+  defp emit_receiver_report_sent_telemetry_event(state),
+    do:
+      Membrane.TelemetryMetrics.execute(
+        @receiver_report_sent_telemetry_event,
+        %{},
+        %{},
+        state.telemetry_label
+      )
+
+  defp emit_sender_report_sent_telemetry_event(state),
+    do:
+      Membrane.TelemetryMetrics.execute(
+        @sender_report_received_telemetry_event,
+        %{},
+        %{},
+        state.telemetry_label
+      )
 end
