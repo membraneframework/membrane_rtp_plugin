@@ -26,6 +26,7 @@ defmodule Membrane.RTP.VAD do
   use Membrane.Filter
 
   alias Membrane.RTP.{Header, Utils, VadEvent}
+  alias Membrane.RTP.VadUtils.IsSpeakingEstimator
 
   def_input_pad :input, availability: :always, caps: :any, demand_mode: :auto
 
@@ -132,9 +133,9 @@ defmodule Membrane.RTP.VAD do
 
   defp handle_vad(buffer, rtp_timestamp, level, state) do
     state = %{state | current_timestamp: rtp_timestamp}
-    state = filter_old_audio_levels(state)
     state = add_new_audio_level(state, level)
-    audio_levels_vad = get_audio_levels_vad(state)
+    {trimmed_queue, audio_levels_vad} = IsSpeakingEstimator.trim_queue_and_estimate_vad(state.audio_levels)
+    state = update_queue(trimmed_queue, state)
     actions = [buffer: {:output, buffer}] ++ maybe_send_event(audio_levels_vad, state)
     state = update_vad_state(audio_levels_vad, state)
     {{:ok, actions}, state}
@@ -161,7 +162,7 @@ defmodule Membrane.RTP.VAD do
   end
 
   defp add_new_audio_level(state, level) do
-    audio_levels = Qex.push(state.audio_levels, {-level, state.current_timestamp})
+    audio_levels = Qex.push_front(state.audio_levels, {-level, state.current_timestamp})
 
     %{
       state
@@ -171,13 +172,9 @@ defmodule Membrane.RTP.VAD do
     }
   end
 
-  defp get_audio_levels_vad(state) do
-    if state.audio_levels_count >= state.min_packet_num and avg(state) >= state.vad_threshold,
-      do: :speech,
-      else: :silence
-  end
-
   defp avg(state), do: state.audio_levels_sum / state.audio_levels_count
+
+  defp update_queue(new_queue, state), do: %{state | audio_levels: new_queue}
 
   defp maybe_send_event(audio_levels_vad, state) do
     if vad_silence?(audio_levels_vad, state) or vad_speech?(audio_levels_vad, state) do
