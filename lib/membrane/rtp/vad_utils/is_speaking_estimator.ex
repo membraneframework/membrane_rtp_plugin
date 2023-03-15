@@ -99,7 +99,6 @@ defmodule Membrane.RTP.VadUtils.IsSpeakingEstimator do
     estimation = trimmed_queue |>
        Enum.map(fn {level, _timestamp} -> 127 + level end) |>
        estimate_is_speaking()
-
     {trimmed_queue, estimation}
   end
 

@@ -1,27 +1,30 @@
 defmodule Membrane.RTP.VAD do
   @moduledoc """
-  Simple vad based on audio level sent in RTP header.
+  TODO change the module doc
 
-  To make this module work appropriate RTP header extension has to be set in SDP offer/answer.
 
-  If avg of audio level in packets in `time_window` exceeds `vad_threshold` it emits `Membrane.RTP.VadEvent`
-  on its output pad.
+  # Simple vad based on audio level sent in RTP header.
 
-  When avg falls below `vad_threshold` and doesn't exceed it in the next `vad_silence_timer`
-  it also emits the event.
+  # To make this module work appropriate RTP header extension has to be set in SDP offer/answer.
 
-  Buffers that are processed by this element may or may not have been processed by
-  a depayloader and passed through a jitter buffer. If they have not, then the only timestamp
-  available for time comparison is the RTP timestamp. The delta between RTP timestamps is
-  dependent on the clock rate used by the encoding. For `OPUS` the clock rate is `48kHz` and
-  packets are sent every `20ms`, so the RTP timestamp delta between sequential packets should
-  be `48000 / 1000 * 20`, or `960`.
+  # If avg of audio level in packets in `time_window` exceeds `vad_threshold` it emits `Membrane.RTP.VadEvent`
+  # on its output pad.
 
-  When calculating the epoch of the timestamp, we need to account for 32bit integer wrapping.
-  * `:current` - the difference between timestamps is low: the timestamp has not wrapped around.
-  * `:next` - the timestamp has wrapped around to 0. To simplify queue processing we reset the state.
-  * `:prev` - the timestamp has recently wrapped around. We might receive an out-of-order packet
-    from before the rollover, which we ignore.
+  # When avg falls below `vad_threshold` and doesn't exceed it in the next `vad_silence_timer`
+  # it also emits the event.
+
+  # Buffers that are processed by this element may or may not have been processed by
+  # a depayloader and passed through a jitter buffer. If they have not, then the only timestamp
+  # available for time comparison is the RTP timestamp. The delta between RTP timestamps is
+  # dependent on the clock rate used by the encoding. For `OPUS` the clock rate is `48kHz` and
+  # packets are sent every `20ms`, so the RTP timestamp delta between sequential packets should
+  # be `48000 / 1000 * 20`, or `960`.
+
+  # When calculating the epoch of the timestamp, we need to account for 32bit integer wrapping.
+  # * `:current` - the difference between timestamps is low: the timestamp has not wrapped around.
+  # * `:next` - the timestamp has wrapped around to 0. To simplify queue processing we reset the state.
+  # * `:prev` - the timestamp has recently wrapped around. We might receive an out-of-order packet
+  #   from before the rollover, which we ignore.
   """
   use Membrane.Filter
 
@@ -36,40 +39,13 @@ defmodule Membrane.RTP.VAD do
                 spec: 1..14,
                 description: "ID of VAD header extension."
               ],
-              clock_rate: [
-                spec: Membrane.RTP.clock_rate_t(),
-                default: 48_000,
-                description: "Clock rate (in `Hz`) for the encoding."
-              ],
-              time_window: [
-                spec: pos_integer(),
-                default: 2_000,
-                description: "Time window (in `ms`) in which avg audio level is measured."
-              ],
-              min_packet_num: [
-                spec: pos_integer(),
-                default: 50,
-                description: """
-                Minimal number of packets to count avg audio level from.
-                Speech won't be detected until there are enough packets.
-                """
-              ],
               vad_threshold: [
                 spec: -127..0,
-                default: -50,
+                default: -40,
                 description: """
                 Audio level in dBov representing vad threshold.
                 Values above are considered to represent voice activity.
                 Value -127 represents digital silence.
-                """
-              ],
-              vad_silence_time: [
-                spec: pos_integer(),
-                default: 300,
-                description: """
-                Time to wait before emitting `Membrane.RTP.VadEvent` after audio track is
-                no longer considered to represent speech.
-                If at this time audio track is considered to represent speech again the event will not be sent.
                 """
               ]
 
@@ -78,17 +54,9 @@ defmodule Membrane.RTP.VAD do
     state = %{
       vad_id: opts.vad_id,
       audio_levels: Qex.new(),
-      clock_rate: opts.clock_rate,
       vad: :silence,
-      vad_silence_timestamp: 0,
       current_timestamp: nil,
-      rtp_timestamp_increment: opts.time_window * opts.clock_rate / 1000,
-      min_packet_num: opts.min_packet_num,
-      time_window: opts.time_window,
-      vad_threshold: opts.vad_threshold,
-      vad_silence_time: opts.vad_silence_time,
-      audio_levels_sum: 0,
-      audio_levels_count: 0
+      vad_threshold: opts.vad_threshold
     }
 
     {[], state}
@@ -141,73 +109,24 @@ defmodule Membrane.RTP.VAD do
     {actions, state}
   end
 
-  defp filter_old_audio_levels(state) do
-    Enum.reduce_while(state.audio_levels, state, fn {level, timestamp}, state ->
-      if Ratio.sub(state.current_timestamp, timestamp)
-         |> Ratio.gt?(state.rtp_timestamp_increment) do
-        {_level, audio_levels} = Qex.pop(state.audio_levels)
-
-        state = %{
-          state
-          | audio_levels_sum: state.audio_levels_sum - level,
-            audio_levels_count: state.audio_levels_count - 1,
-            audio_levels: audio_levels
-        }
-
-        {:cont, state}
-      else
-        {:halt, state}
-      end
-    end)
-  end
-
   defp add_new_audio_level(state, level) do
     audio_levels = Qex.push_front(state.audio_levels, {-level, state.current_timestamp})
 
-    %{
-      state
-      | audio_levels: audio_levels,
-        audio_levels_sum: state.audio_levels_sum + -level,
-        audio_levels_count: state.audio_levels_count + 1
-    }
+    %{state | audio_levels: audio_levels}
   end
-
-  defp avg(state), do: state.audio_levels_sum / state.audio_levels_count
 
   defp update_queue(new_queue, state), do: %{state | audio_levels: new_queue}
 
   defp maybe_send_event(audio_levels_vad, state) do
-    if vad_silence?(audio_levels_vad, state) or vad_speech?(audio_levels_vad, state) do
+    if vad_state_has_changed( state.vad, audio_levels_vad) do
       [event: {:output, %VadEvent{vad: audio_levels_vad}}]
     else
       []
     end
   end
 
-  defp update_vad_state(audio_levels_vad, state) do
-    cond do
-      vad_maybe_silence?(audio_levels_vad, state) ->
-        Map.merge(state, %{vad: :maybe_silence, vad_silence_timestamp: state.current_timestamp})
+  defp update_vad_state(audio_levels_vad, state), do: %{state | vad: audio_levels_vad}
 
-      vad_silence?(audio_levels_vad, state) or vad_speech?(audio_levels_vad, state) ->
-        Map.merge(state, %{vad: audio_levels_vad})
+  defp vad_state_has_changed(old_value, new_value), do: old_value != new_value
 
-      true ->
-        state
-    end
-  end
-
-  defp vad_silence?(audio_levels_vad, state),
-    do: state.vad == :maybe_silence and audio_levels_vad == :silence and timer_expired?(state)
-
-  defp vad_speech?(audio_levels_vad, state) do
-    (state.vad == :maybe_silence and audio_levels_vad == :speech) or
-      (state.vad == :silence and audio_levels_vad == :speech)
-  end
-
-  defp vad_maybe_silence?(audio_levels_vad, state),
-    do: state.vad == :speech and audio_levels_vad == :silence
-
-  defp timer_expired?(state),
-    do: state.current_timestamp - state.vad_silence_timestamp > state.vad_silence_time
 end
