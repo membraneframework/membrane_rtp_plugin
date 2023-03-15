@@ -5,19 +5,20 @@ defmodule Membrane.RTP.VadUtils.IsSpeakingEstimator do
   by Ilana Volfin and Israel Cohen"
   """
 
-  @n1 1  # number of levels inside one immediate interval
-  @n2 1  # number of immediate intervals inside one medium interval
-  @n3 2  # number of medium intervals inside one long interval
 
-  @immediate_score_threshold 1
-  @medium_score_threshold 1
-  @long_score_threshold 1
+  @n1 1  # number of levels inside one immediate interval
+  @n2 5 # number of immediate intervals inside one medium interval
+  @n3 10  # number of medium intervals inside one long interval
+
+  @immediate_score_threshold 0
+  @medium_score_threshold 10
+  @long_score_threshold 20
 
   @min_levels_length @n1*@n2*@n3
 
   # @max_level 127
   # @min_level 0
-  @level_threshold 50
+  @level_threshold 90
   @medium_threshold 1
   @long_threshold 1
 
@@ -73,9 +74,9 @@ defmodule Membrane.RTP.VadUtils.IsSpeakingEstimator do
     mediums = compute_mediums(immediates)
     longs = compute_longs(mediums)
 
-    immediate_score = immediates |> hd() |> compute_activity_score(@n1, 1)
-    medium_score = mediums |> hd() |> compute_activity_score(@n2, 24)
-    long_score = longs |> hd() |> compute_activity_score(@n3, 47)
+    immediate_score = immediates |> hd() |> compute_activity_score(@n1, 1) |> IO.inspect(label: "i_score")
+    medium_score = mediums |> hd() |> compute_activity_score(@n2, 24) |> IO.inspect(label: "m_score")
+    long_score = longs |> hd() |> compute_activity_score(@n3, 47) |> IO.inspect(label: "l_score")
 
     if scores_above_threshold?(immediate_score, medium_score, long_score),
       do: :speech,
@@ -95,6 +96,7 @@ defmodule Membrane.RTP.VadUtils.IsSpeakingEstimator do
   @spec trim_queue_and_estimate_vad(Qex.t()) :: {Qex.t(), {:speech | :silence}}
   def trim_queue_and_estimate_vad(queue) do
     trimmed_queue = safe_trim_queue(queue, @min_levels_length)
+    IO.inspect(Enum.count(trimmed_queue), label: "queue length")
     estimation = trimmed_queue |>
        Enum.map(fn {level, _timestamp} -> 127 + level end) |>
        estimate_is_speaking()

@@ -132,7 +132,6 @@ defmodule Membrane.RTP.VAD do
   end
 
   defp handle_vad(buffer, rtp_timestamp, level, state) do
-    IO.inspect(level, label: "new level")
     state = %{state | current_timestamp: rtp_timestamp}
     state = add_new_audio_level(state, level)
     {trimmed_queue, audio_levels_vad} = IsSpeakingEstimator.trim_queue_and_estimate_vad(state.audio_levels)
@@ -140,7 +139,6 @@ defmodule Membrane.RTP.VAD do
     actions = [buffer: {:output, buffer}] ++ maybe_send_event(audio_levels_vad, state)
     state = update_vad_state(audio_levels_vad, state)
     IO.inspect(audio_levels_vad)
-    IO.inspect(Enum.count state.audio_levels, label: "Audio levels count after handling vad")
 
     {{:ok, actions}, state}
   end
