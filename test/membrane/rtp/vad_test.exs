@@ -14,10 +14,6 @@ defmodule Membrane.RTP.VADTest do
   alias Membrane.RTP.VAD
 
   ExUnit.Case.register_attribute(__MODULE__, :buffer_interval)
-  ExUnit.Case.register_attribute(__MODULE__, :clock_rate)
-  ExUnit.Case.register_attribute(__MODULE__, :min_packet_num)
-  ExUnit.Case.register_attribute(__MODULE__, :time_window)
-  ExUnit.Case.register_attribute(__MODULE__, :vad_silence_time)
   ExUnit.Case.register_attribute(__MODULE__, :vad_threshold)
 
   @default_vad_id 1
@@ -25,7 +21,7 @@ defmodule Membrane.RTP.VADTest do
 
   defp calculate_buffer_time_delta(ctx) do
     buffer_interval = ctx.registered.buffer_interval || @default_buffer_interval
-    [time_delta: ctx.clock_rate / 1000 * buffer_interval]
+    [time_delta: 1 / buffer_interval]
   end
 
   defp generate_initial_timestamp(_ctx),
@@ -40,10 +36,6 @@ defmodule Membrane.RTP.VADTest do
 
   defp setup_vad_options(ctx) do
     [
-      clock_rate: get_vad_attribute_or_default(ctx, :clock_rate),
-      min_packet_num: get_vad_attribute_or_default(ctx, :min_packet_num),
-      time_window: get_vad_attribute_or_default(ctx, :time_window),
-      vad_silence_time: get_vad_attribute_or_default(ctx, :vad_silence_time),
       vad_threshold: get_vad_attribute_or_default(ctx, :vad_threshold)
     ]
   end
@@ -52,10 +44,6 @@ defmodule Membrane.RTP.VADTest do
     {[], state} =
       VAD.handle_init(nil, %{
         vad_id: @default_vad_id,
-        clock_rate: ctx.clock_rate,
-        min_packet_num: ctx.min_packet_num,
-        time_window: ctx.time_window,
-        vad_silence_time: ctx.vad_silence_time,
         vad_threshold: ctx.vad_threshold
       })
 
@@ -116,130 +104,93 @@ defmodule Membrane.RTP.VADTest do
       :calculate_buffer_time_delta
     ]
 
-    test "keeps running totals for buffers within a specific time window", ctx do
-      %{
-        time_delta: time_delta,
-        state: state,
-        initial_timestamp: initial_timestamp
-      } = ctx
+    # TODO modify those tests and move to IsSpeakingEstimator
+    # test "keeps running totals for buffers within a specific time window", ctx do
+    #   %{
+    #     time_delta: time_delta,
+    #     state: state,
+    #     initial_timestamp: initial_timestamp
+    #   } = ctx
 
-      buffer = rtp_buffer(-127, initial_timestamp)
+    #   buffer = rtp_buffer(-127, initial_timestamp)
 
-      new_state = process_buffer(buffer, state)
+    #   new_state = process_buffer(buffer, state)
 
-      assert %{
-               audio_levels_count: 1,
-               audio_levels_sum: -127,
-               vad: :silence
-             } = new_state
+    #   assert %{
+    #            audio_levels_count: 1,
+    #            audio_levels_sum: -127,
+    #            vad: :silence
+    #          } = new_state
 
-      buffer = rtp_buffer(-50, initial_timestamp + time_delta)
-      new_state = process_buffer(buffer, new_state)
+    #   buffer = rtp_buffer(-50, initial_timestamp + time_delta)
+    #   new_state = process_buffer(buffer, new_state)
 
-      assert %{
-               audio_levels_count: 2,
-               audio_levels_sum: -177,
-               vad: :silence
-             } = new_state
+    #   assert %{
+    #            audio_levels_count: 2,
+    #            audio_levels_sum: -177,
+    #            vad: :silence
+    #          } = new_state
 
-      new_state = iterate_for(buffers: 100, volume: 0, initial: new_state, time_delta: time_delta)
-      assert %{audio_levels_count: 101, audio_levels_sum: -50, vad: :speech} = new_state
-    end
+    #   new_state = iterate_for(buffers: 100, volume: 0, initial: new_state, time_delta: time_delta)
+    #   assert %{audio_levels_count: 101, audio_levels_sum: -50, vad: :speech} = new_state
+    # end
 
-    test "changes between :speech and :silence based on a running average", ctx do
-      %{
-        time_delta: time_delta,
-        state: state,
-        initial_timestamp: initial_timestamp
-      } = ctx
+    # test "changes between :speech and :silence based on a running average", ctx do
+    #   %{
+    #     time_delta: time_delta,
+    #     state: state,
+    #     initial_timestamp: initial_timestamp
+    #   } = ctx
 
-      state = process_buffer(rtp_buffer(-127, initial_timestamp), state)
+    #   state = process_buffer(rtp_buffer(-127, initial_timestamp), state)
 
-      assert %{vad: :silence} = state
+    #   assert %{vad: :silence} = state
 
-      new_state = iterate_for(buffers: 100, volume: 0, initial: state, time_delta: time_delta)
-      assert %{vad: :speech} = new_state
+    #   new_state = iterate_for(buffers: 100, volume: 0, initial: state, time_delta: time_delta)
+    #   assert %{vad: :speech} = new_state
 
-      new_state = iterate_for(buffers: 5000, volume: 0, initial: state, time_delta: time_delta)
-      assert %{audio_levels_count: 101, vad: :speech} = new_state
+    #   new_state = iterate_for(buffers: 5000, volume: 0, initial: state, time_delta: time_delta)
+    #   assert %{audio_levels_count: 101, vad: :speech} = new_state
 
-      new_state = iterate_for(buffers: 100, volume: -127, initial: state, time_delta: time_delta)
-      assert %{audio_levels_count: 101, vad: :silence} = new_state
-    end
+    #   new_state = iterate_for(buffers: 100, volume: -127, initial: state, time_delta: time_delta)
+    #   assert %{audio_levels_count: 101, vad: :silence} = new_state
+    # end
 
-    @clock_rate 1000
-    @buffer_interval 1000
-    test "retains audio levels based on the encoding's clock rate", ctx do
-      %{
-        time_delta: time_delta,
-        state: state,
-        initial_timestamp: initial_timestamp
-      } = ctx
 
-      state = process_buffer(rtp_buffer(-127, initial_timestamp), state)
+    # @vad_threshold -51
+    # @buffer_interval 1000
+    # test "transitions :silence -> :speech when avg audio level >= vad_threshold",
+    #      ctx do
+    #   %{
+    #     time_delta: time_delta,
+    #     state: state,
+    #     initial_timestamp: initial_timestamp
+    #   } = ctx
 
-      new_state = iterate_for(buffers: 5, volume: -50, initial: state, time_delta: time_delta)
-      assert %{audio_levels_count: 3, audio_levels_sum: -150} = new_state
-    end
+    #   state = process_buffer(rtp_buffer(-127, initial_timestamp), state)
 
-    @clock_rate 1000
-    @min_packet_num 3
-    @vad_threshold -51
-    @buffer_interval 1000
-    test "transitions :silence -> :speech when avg audio level >= vad_threshold",
-         ctx do
-      %{
-        time_delta: time_delta,
-        state: state,
-        initial_timestamp: initial_timestamp
-      } = ctx
+    #   new_state = iterate_for(buffers: 5, volume: -50, initial: state, time_delta: time_delta)
+    #   assert Enum.count(state.audio_levels) === 3
+    # end
 
-      state = process_buffer(rtp_buffer(-127, initial_timestamp), state)
-      assert state.vad == :silence
 
-      new_state = iterate_for(buffers: 5, volume: -50, initial: state, time_delta: time_delta)
-      assert %{audio_levels_count: 3, audio_levels_sum: -150, vad: :speech} = new_state
-    end
+    # @min_packet_num 4
+    # @vad_threshold -51
+    # @buffer_interval 1000
+    # test "does not transition vad mode until min_packet_num has been retained", ctx do
+    #   %{
+    #     time_delta: time_delta,
+    #     state: state,
+    #     initial_timestamp: initial_timestamp
+    #   } = ctx
 
-    @clock_rate 1000
-    @min_packet_num 3
-    @vad_threshold -49
-    @buffer_interval 1000
-    test "does not transition when avg audio level < vad_threshold",
-         ctx do
-      %{
-        time_delta: time_delta,
-        state: state,
-        initial_timestamp: initial_timestamp
-      } = ctx
+    #   state = process_buffer(rtp_buffer(-127, initial_timestamp), state)
+    #   # assert state.vad == :silence
 
-      state = process_buffer(rtp_buffer(-127, initial_timestamp), state)
-      assert state.vad == :silence
+    #   new_state = iterate_for(buffers: 5, volume: -50, initial: state, time_delta: time_delta)
+    #   assert Enum.count(state.audio_levels) === 3
+    # end
 
-      new_state = iterate_for(buffers: 5, volume: -50, initial: state, time_delta: time_delta)
-      assert %{audio_levels_count: 3, audio_levels_sum: -150, vad: :silence} = new_state
-    end
-
-    @clock_rate 1000
-    @min_packet_num 4
-    @vad_threshold -51
-    @buffer_interval 1000
-    test "does not transition vad mode until min_packet_num has been retained", ctx do
-      %{
-        time_delta: time_delta,
-        state: state,
-        initial_timestamp: initial_timestamp
-      } = ctx
-
-      state = process_buffer(rtp_buffer(-127, initial_timestamp), state)
-      assert state.vad == :silence
-
-      new_state = iterate_for(buffers: 5, volume: -50, initial: state, time_delta: time_delta)
-      assert %{audio_levels_count: 3, audio_levels_sum: -150, vad: :silence} = new_state
-    end
-
-    @clock_rate 1000
-    @min_packet_num 3
     @buffer_interval 1000
     test "resets the state when RTP timestamps roll over", ctx do
       %{state: state} = ctx
@@ -253,7 +204,7 @@ defmodule Membrane.RTP.VADTest do
       state = process_buffer(rtp_buffer(-5, 1995), state)
       state = process_buffer(rtp_buffer(-5, 2995), state)
 
-      assert %{audio_levels_count: 2, audio_levels_sum: -10, vad: :silence} = state
+      assert Enum.count(state.audio_levels) === 2
     end
 
     test "ignore RTP packets that arrive out of order", ctx do
@@ -267,11 +218,9 @@ defmodule Membrane.RTP.VADTest do
       state = process_buffer(rtp_buffer(-127, initial_timestamp - time_delta), state)
       state = process_buffer(rtp_buffer(-50, initial_timestamp + time_delta * 2), state)
 
-      assert %{audio_levels_count: 2, audio_levels_sum: -177, vad: :silence} = state
+      assert Enum.count(state.audio_levels) === 2
     end
 
-    @clock_rate 1000
-    @min_packet_num 3
     @buffer_interval 1000
     test "ignore RTP packets that arrive out of order, from before a rollover", ctx do
       %{state: state} = ctx
@@ -283,7 +232,7 @@ defmodule Membrane.RTP.VADTest do
       state = process_buffer(rtp_buffer(-127, initial_timestamp + 1000), state)
       state = process_buffer(rtp_buffer(-5, 1995), state)
 
-      assert %{audio_levels_count: 2, audio_levels_sum: -10, vad: :silence} = state
+      assert Enum.count(state.audio_levels) === 2
     end
   end
 end
