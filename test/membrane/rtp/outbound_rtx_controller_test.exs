@@ -8,7 +8,7 @@ defmodule Membrane.RTP.OutboundRtxControllerTest do
   @max_store_size RTX.max_store_size()
 
   test "store size is limited" do
-    assert {[], state} = RTX.handle_init(%{}, %{})
+    assert {[], state} = RTX.handle_init(%{}, %RTX{})
 
     buffs = Enum.map(0..400, &BufferFactory.sample_buffer(@base_seq_number + &1))
 
@@ -62,7 +62,7 @@ defmodule Membrane.RTP.OutboundRtxControllerTest do
   end
 
   defp init(received_bufs \\ 100) do
-    {[], state} = RTX.handle_init(%{}, %{})
+    {[], state} = RTX.handle_init(%{}, %RTX{})
 
     buffs = Enum.map(0..received_bufs, &BufferFactory.sample_buffer(@base_seq_number + &1))
 

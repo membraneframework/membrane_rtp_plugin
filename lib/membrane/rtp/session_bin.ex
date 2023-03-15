@@ -207,6 +207,10 @@ defmodule Membrane.RTP.SessionBin do
 
         * `{:twcc, Mebrane.RTP.TWCCSender}`
         """
+      ],
+      telemetry_label: [
+        spec: Membrane.TelemetryMetrics.label(),
+        default: []
       ]
     ]
 
@@ -472,11 +476,11 @@ defmodule Membrane.RTP.SessionBin do
       |> bin_output(pad)
 
     {rtx_links_generator, awaiting_rtx_links} =
-      Map.pop(state.awaiting_rtx_links, ssrc, fn _twcc -> [] end)
+      Map.pop(state.awaiting_rtx_links, ssrc, fn _twcc, _ctx -> [] end)
 
     state = %State{state | awaiting_rtx_links: awaiting_rtx_links}
 
-    structure = List.flatten([twcc_children, router_link, rtx_links_generator.(use_twcc?)])
+    structure = List.flatten([twcc_children, router_link, rtx_links_generator.(use_twcc?, ctx)])
     {[spec: structure], state}
   end
 
@@ -519,6 +523,7 @@ defmodule Membrane.RTP.SessionBin do
 
       payload_type = get_output_payload_type!(ctx, ssrc)
       clock_rate = clock_rate || get_from_register!(:clock_rate, payload_type, state)
+      telemetry_label = ctx.pads[input_pad].options.telemetry_label
 
       add_srtp_encryptor =
         &child(
@@ -540,10 +545,13 @@ defmodule Membrane.RTP.SessionBin do
           payloader: payloader,
           clock_rate: clock_rate,
           rtcp_report_interval: state.rtcp_sender_report_interval,
-          rtp_extension_mapping: rtp_extension_mapping || %{}
+          rtp_extension_mapping: rtp_extension_mapping || %{},
+          telemetry_label: telemetry_label
         })
         |> then(if state.secure?, do: add_srtp_encryptor, else: & &1)
-        |> child({:outbound_rtx_controller, ssrc}, Membrane.RTP.OutboundRtxController)
+        |> child({:outbound_rtx_controller, ssrc}, %Membrane.RTP.OutboundRtxController{
+          telemetry_label: telemetry_label
+        })
         |> bin_output(output_pad)
       ]
 
@@ -565,7 +573,7 @@ defmodule Membrane.RTP.SessionBin do
             |> then(if state.secure?, do: link_srtcp_encryptor, else: & &1)
             |> bin_output(rtcp_sender_output),
             get_child(:ssrc_router)
-            |> via_out(Pad.ref(:output, ssrc))
+            |> via_out(Pad.ref(:output, ssrc), options: [telemetry_label: telemetry_label])
             |> via_in(:rtcp_input)
             |> get_child({:stream_send_bin, ssrc})
           ]
@@ -687,10 +695,16 @@ defmodule Membrane.RTP.SessionBin do
         struct(Membrane.SRTP.Decryptor, %{policies: state.srtp_policies})
       )
 
-    links_generator = fn twcc? ->
+    links_generator = fn twcc?, ctx ->
+      ssrc_router_pad_options = [
+        encoding: :rtx,
+        telemetry_label:
+          ctx.pads[Pad.ref(:output, msg.original_ssrc)].options.telemetry_label ++ [:rtx_stream]
+      ]
+
       [
         get_child(:ssrc_router)
-        |> via_out(Pad.ref(:output, ssrc))
+        |> via_out(Pad.ref(:output, ssrc), options: ssrc_router_pad_options)
         # TODO: Fix TWCCReceiver not noticing packets dropped by SSRCRouter
         |> then(&link_twcc_receiver_if(twcc?, &1, ssrc))
         |> then(if(state.secure?, do: link_decryptor, else: & &1))
@@ -703,7 +717,7 @@ defmodule Membrane.RTP.SessionBin do
     # Always link RTX after the original pad
     if Map.has_key?(ctx.pads, Pad.ref(:output, msg.original_ssrc)) do
       twcc? = ctx.children[:twcc_receiver] != nil
-      {[spec: links_generator.(twcc?)], state}
+      {[spec: links_generator.(twcc?, ctx)], state}
     else
       awaiting_rtx_links = Map.put(state.awaiting_rtx_links, msg.original_ssrc, links_generator)
       {[], %{state | awaiting_rtx_links: awaiting_rtx_links}}

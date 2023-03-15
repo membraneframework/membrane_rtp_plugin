@@ -2,8 +2,14 @@ defmodule Membrane.RTP.OutboundRtxController do
   use Membrane.Filter
 
   require Membrane.Logger
+  require Membrane.TelemetryMetrics
 
   alias Membrane.RTP.RetransmissionRequestEvent
+
+  def_options telemetry_label: [
+                spec: Membrane.TelemetryMetrics.label(),
+                default: []
+              ]
 
   def_input_pad :input,
     availability: :always,
@@ -18,12 +24,17 @@ defmodule Membrane.RTP.OutboundRtxController do
   @max_store_size 300
   @min_rtx_interval 10
 
+  @retransmission_telemetry_event [Membrane.RTP, :rtx, :sent]
+
   @doc false
   @spec max_store_size() :: pos_integer()
   def max_store_size(), do: @max_store_size
 
   @impl true
-  def handle_init(_ctx, _opts), do: {[], %{store: %{}}}
+  def handle_init(_ctx, opts) do
+    Membrane.TelemetryMetrics.register(@retransmission_telemetry_event, opts.telemetry_label)
+    {[], %{telemetry_label: opts.telemetry_label, store: %{}}}
+  end
 
   @impl true
   def handle_process(:input, buffer, _ctx, state) when byte_size(buffer.payload) > 0 do
@@ -56,10 +67,18 @@ defmodule Membrane.RTP.OutboundRtxController do
       end)
 
     buffers_to_retransmit = Enum.reject(buffers, &is_nil/1)
+    retransmissions_count = length(buffers_to_retransmit)
 
-    unless buffers_to_retransmit == [] do
+    unless retransmissions_count == 0 do
       Membrane.Logger.debug(
-        "Retransmitting #{length(buffers_to_retransmit)} buffer(s): #{inspect(Enum.map(buffers_to_retransmit, & &1.metadata.rtp.sequence_number))}"
+        "Retransmitting #{retransmissions_count} buffer(s): #{inspect(Enum.map(buffers_to_retransmit, & &1.metadata.rtp.sequence_number))}"
+      )
+
+      Membrane.TelemetryMetrics.execute(
+        @retransmission_telemetry_event,
+        %{amount: retransmissions_count},
+        %{},
+        state.telemetry_label
       )
     end
 

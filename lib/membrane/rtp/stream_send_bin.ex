@@ -27,6 +27,10 @@ defmodule Membrane.RTP.StreamSendBin do
               rtp_extension_mapping: [
                 default: nil,
                 spec: RTP.SessionBin.rtp_extension_mapping_t()
+              ],
+              telemetry_label: [
+                spec: Membrane.TelemetryMetrics.label(),
+                default: []
               ]
 
   @impl true
@@ -48,7 +52,8 @@ defmodule Membrane.RTP.StreamSendBin do
         ssrc: opts.ssrc,
         payload_type: opts.payload_type,
         clock_rate: opts.clock_rate,
-        extension_mapping: opts.rtp_extension_mapping || %{}
+        extension_mapping: opts.rtp_extension_mapping || %{},
+        telemetry_label: opts.telemetry_label
       })
       |> bin_output()
 

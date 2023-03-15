@@ -17,10 +17,13 @@ defmodule Membrane.RTP.SSRCRouter do
   require Membrane.TelemetryMetrics
 
   alias __MODULE__.StreamsInfo
-  alias Membrane.{RTCP, RTCPEvent, RTP, SRTP}
+  alias Membrane.{Buffer, RTCP, RTCPEvent, RTP, SRTP}
 
   @packet_arrival_event [Membrane.RTP, :packet, :arrival]
   @new_inbound_track_event [Membrane.RTP, :inbound_track, :new]
+  @marker_received_telemetry_event [Membrane.RTP, :rtp, :marker_received]
+  @rtcp_arrival_event [Membrane.RTP, :rtcp, :arrival]
+  @rtcp_sent_event [Membrane.RTP, :rtcp, :sent]
 
   def_input_pad :input,
     accepted_format: any_of(RTCP, RTP),
@@ -94,11 +97,20 @@ defmodule Membrane.RTP.SSRCRouter do
     {buffered_actions, state} = pop_in(state, [:buffered_actions, ssrc])
     buffered_actions = Enum.reverse(buffered_actions || [])
 
-    register_packet_arrival_event(pad, ctx)
-    emit_packet_arrival_events(buffered_actions, ctx)
+    telemetry_label = ctx.pads[pad].options.telemetry_label
 
-    register_new_inbound_track_event(pad, ctx)
+    [
+      @packet_arrival_event,
+      @new_inbound_track_event,
+      @marker_received_telemetry_event,
+      @rtcp_arrival_event,
+      @rtcp_sent_event
+    ]
+    |> Enum.each(&Membrane.TelemetryMetrics.register(&1, telemetry_label))
+
+    emit_packet_arrival_events(buffered_actions, ctx)
     emit_new_inbound_track_event(ssrc, pad, ctx)
+    emit_inbound_frame_event(buffered_actions, ctx)
 
     events =
       if state.srtp_keying_material_event do
@@ -139,9 +151,12 @@ defmodule Membrane.RTP.SSRCRouter do
     {new_stream_actions, state} =
       maybe_handle_new_stream(pad, ssrc, payload_type, extensions, state)
 
-    action = {:buffer, {Pad.ref(:output, ssrc), buffer}}
+    output_pad = Pad.ref(:output, ssrc)
+
+    action = {:buffer, {output_pad, buffer}}
     {actions, state} = maybe_buffer_action(action, ssrc, ctx, state)
     emit_packet_arrival_events(actions, ctx)
+    emit_inbound_frame_event([action], ctx)
 
     {new_stream_actions ++ actions, state}
   end
@@ -154,6 +169,7 @@ defmodule Membrane.RTP.SSRCRouter do
         target_pad = Pad.ref(:output, ssrc)
 
         if Map.has_key?(ctx.pads, target_pad) do
+          emit_rtcp_arrival_event(target_pad, ctx)
           [event: {target_pad, event}]
         else
           # TODO: This should most likely be a warning, however it appears on every join and leave,
@@ -189,10 +205,11 @@ defmodule Membrane.RTP.SSRCRouter do
   end
 
   @impl true
-  def handle_event(Pad.ref(:output, ssrc), %RTCPEvent{} = event, ctx, state) do
+  def handle_event(Pad.ref(:output, ssrc) = pad, %RTCPEvent{} = event, ctx, state) do
     with {:ok, Pad.ref(:input, id)} <- Map.fetch(state.input_pads, ssrc),
          rtcp_pad = Pad.ref(:input, {:rtcp, id}),
          true <- Map.has_key?(ctx.pads, rtcp_pad) do
+      emit_rtcp_sent_event(pad, ctx)
       {[event: {rtcp_pad, event}], state}
     else
       :error ->
@@ -264,34 +281,42 @@ defmodule Membrane.RTP.SSRCRouter do
     end
   end
 
+  defp emit_rtcp_arrival_event(destination, ctx) do
+    Membrane.TelemetryMetrics.execute(
+      @rtcp_arrival_event,
+      %{},
+      %{},
+      ctx.pads[destination].options.telemetry_label
+    )
+  end
+
+  defp emit_rtcp_sent_event(destination, ctx) do
+    Membrane.TelemetryMetrics.execute(
+      @rtcp_sent_event,
+      %{},
+      %{},
+      ctx.pads[destination].options.telemetry_label
+    )
+  end
+
   defp emit_packet_arrival_events(actions, ctx) do
-    for action <- actions do
-      with {:buffer, {pad, buffer}} <- action do
-        emit_packet_arrival_event(buffer.payload, pad, ctx)
-      end
+    for {:buffer, {pad, buffer}} <- actions do
+      emit_packet_arrival_event(buffer, pad, ctx)
     end
+
+    :ok
   end
 
-  defp register_packet_arrival_event(pad, ctx) do
-    Membrane.TelemetryMetrics.register(
-      @packet_arrival_event,
-      ctx.pads[pad].options.telemetry_label
-    )
-  end
+  defp emit_packet_arrival_event(%Buffer{} = buffer, pad, ctx) do
+    packet_size = byte_size(buffer.payload)
 
-  defp register_new_inbound_track_event(pad, ctx) do
-    Membrane.TelemetryMetrics.register(
-      @new_inbound_track_event,
-      ctx.pads[pad].options.telemetry_label
-    )
-  end
+    label = ctx.pads[pad].options.telemetry_label
 
-  defp emit_packet_arrival_event(payload, pad, ctx) do
     Membrane.TelemetryMetrics.execute(
       @packet_arrival_event,
-      %{bytes: byte_size(payload)},
+      %{bytes: packet_size},
       %{},
-      ctx.pads[pad].options.telemetry_label
+      label
     )
   end
 
@@ -302,6 +327,19 @@ defmodule Membrane.RTP.SSRCRouter do
       %{},
       ctx.pads[pad].options.telemetry_label
     )
+  end
+
+  defp emit_inbound_frame_event(actions, ctx) do
+    for {:buffer, {pad, %Buffer{} = buffer}} <- actions,
+        buffer.metadata.rtp.marker,
+        Map.has_key?(ctx.pads, pad) do
+      Membrane.TelemetryMetrics.execute(
+        @marker_received_telemetry_event,
+        %{},
+        %{},
+        ctx.pads[pad].options.telemetry_label
+      )
+    end
   end
 
   defp maybe_add_encoding(measurements, pad, ctx) do
