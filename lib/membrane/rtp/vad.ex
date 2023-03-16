@@ -102,7 +102,13 @@ defmodule Membrane.RTP.VAD do
   defp handle_vad(buffer, rtp_timestamp, level, state) do
     state = %{state | current_timestamp: rtp_timestamp}
     state = add_new_audio_level(state, level)
-    {trimmed_queue, audio_levels_vad} = IsSpeakingEstimator.trim_queue_and_estimate_vad(state.audio_levels, state.vad_threshold+127)
+
+    {trimmed_queue, audio_levels_vad} =
+      IsSpeakingEstimator.trim_queue_and_estimate_vad(
+        state.audio_levels,
+        state.vad_threshold + 127
+      )
+
     state = update_queue(trimmed_queue, state)
     actions = [buffer: {:output, buffer}] ++ maybe_send_event(audio_levels_vad, state)
     state = update_vad_state(audio_levels_vad, state)
@@ -118,7 +124,7 @@ defmodule Membrane.RTP.VAD do
   defp update_queue(new_queue, state), do: %{state | audio_levels: new_queue}
 
   defp maybe_send_event(audio_levels_vad, state) do
-    if vad_state_has_changed( state.vad, audio_levels_vad) do
+    if vad_state_has_changed(state.vad, audio_levels_vad) do
       [event: {:output, %VadEvent{vad: audio_levels_vad}}]
     else
       []
@@ -128,5 +134,4 @@ defmodule Membrane.RTP.VAD do
   defp update_vad_state(audio_levels_vad, state), do: %{state | vad: audio_levels_vad}
 
   defp vad_state_has_changed(old_value, new_value), do: old_value != new_value
-
 end

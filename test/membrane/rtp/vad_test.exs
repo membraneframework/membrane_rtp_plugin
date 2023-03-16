@@ -74,22 +74,22 @@ defmodule Membrane.RTP.VADTest do
     %Membrane.Buffer{metadata: %{rtp: rtp_metadata}, payload: <<>>}
   end
 
-  defp iterate_for(
-         buffers: buffer_count,
-         volume: volume,
-         initial: state,
-         time_delta: time_delta
-       ) do
-    original_timestamp = state.current_timestamp
+  # defp iterate_for(
+  #        buffers: buffer_count,
+  #        volume: volume,
+  #        initial: state,
+  #        time_delta: time_delta
+  #      ) do
+  #   original_timestamp = state.current_timestamp
 
-    Enum.reduce(1..buffer_count, state, fn index, state ->
-      new_timestamp = original_timestamp + time_delta * index
-      buffer = rtp_buffer(volume, new_timestamp)
+  #   Enum.reduce(1..buffer_count, state, fn index, state ->
+  #     new_timestamp = original_timestamp + time_delta * index
+  #     buffer = rtp_buffer(volume, new_timestamp)
 
-      {_actions, new_state} = VAD.handle_process(:input, buffer, %{}, state)
-      new_state
-    end)
-  end
+  #     {_actions, new_state} = VAD.handle_process(:input, buffer, %{}, state)
+  #     new_state
+  #   end)
+  # end
 
   defp process_buffer(buffer, state) do
     {_actions, new_state} = VAD.handle_process(:input, buffer, %{}, state)
@@ -156,7 +156,6 @@ defmodule Membrane.RTP.VADTest do
     #   assert %{audio_levels_count: 101, vad: :silence} = new_state
     # end
 
-
     # @vad_threshold -51
     # @buffer_interval 1000
     # test "transitions :silence -> :speech when avg audio level >= vad_threshold",
@@ -172,7 +171,6 @@ defmodule Membrane.RTP.VADTest do
     #   new_state = iterate_for(buffers: 5, volume: -50, initial: state, time_delta: time_delta)
     #   assert Enum.count(state.audio_levels) === 3
     # end
-
 
     # @min_packet_num 4
     # @vad_threshold -51
