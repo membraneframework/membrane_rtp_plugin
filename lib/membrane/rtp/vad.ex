@@ -41,7 +41,7 @@ defmodule Membrane.RTP.VAD do
               ],
               vad_threshold: [
                 spec: -127..0,
-                default: -40,
+                default: -32,
                 description: """
                 Audio level in dBov representing vad threshold.
                 Values above are considered to represent voice activity.
@@ -102,7 +102,7 @@ defmodule Membrane.RTP.VAD do
   defp handle_vad(buffer, rtp_timestamp, level, state) do
     state = %{state | current_timestamp: rtp_timestamp}
     state = add_new_audio_level(state, level)
-    {trimmed_queue, audio_levels_vad} = IsSpeakingEstimator.trim_queue_and_estimate_vad(state.audio_levels)
+    {trimmed_queue, audio_levels_vad} = IsSpeakingEstimator.trim_queue_and_estimate_vad(state.audio_levels, state.vad_threshold+127)
     state = update_queue(trimmed_queue, state)
     actions = [buffer: {:output, buffer}] ++ maybe_send_event(audio_levels_vad, state)
     state = update_vad_state(audio_levels_vad, state)
