@@ -189,6 +189,18 @@ defmodule Membrane.RTP.VADTest do
     #   assert Enum.count(state.audio_levels) === 3
     # end
 
+    test "keeps audio levels length" do
+      # TODO - implement me
+    end
+
+    test "audio levels between 0 and 127" do
+      # TODO - implement me
+    end
+
+    test "transitions between :speech and :silience" do
+      # TODO - implement me
+    end
+
     @buffer_interval 1000
     test "resets the state when RTP timestamps roll over", ctx do
       %{state: state} = ctx

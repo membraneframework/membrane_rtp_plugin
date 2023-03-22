@@ -6,10 +6,20 @@ defmodule Membrane.RTP.VadUtils.IsSpeakingEstimator do
   """
 
   @default_parameters [
-    n1: 1, n2: 10, n3: 7,
-    immediate_score_threshold: 0, medium_score_threshold: 20, long_score_threshold: 20,
-    medium_subunit_threshold: 1, long_subunit_threshold: 3]
-  @parameters Application.compile_env(:membrane_rtp_plugin, :vad_estimation_parameters, @default_parameters)
+    n1: 1,
+    n2: 10,
+    n3: 7,
+    immediate_score_threshold: 0,
+    medium_score_threshold: 20,
+    long_score_threshold: 20,
+    medium_subunit_threshold: 1,
+    long_subunit_threshold: 3
+  ]
+  @parameters Application.compile_env(
+                :membrane_rtp_plugin,
+                :vad_estimation_parameters,
+                @default_parameters
+              )
 
   # number of levels inside one immediate interval
   @n1 @parameters[:n1]
@@ -28,7 +38,6 @@ defmodule Membrane.RTP.VadUtils.IsSpeakingEstimator do
   @long_subunit_threshold @parameters[:long_subunit_threshold]
 
   @min_activity_score 1.0e-8
-
 
   @spec get_target_levels_length() :: integer
   def get_target_levels_length(), do: @target_levels_length

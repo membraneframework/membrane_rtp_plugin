@@ -6,11 +6,11 @@ config :membrane_rtp_plugin,
     n1: 1,
     n2: 10,
     n3: 7,
-
     immediate_score_threshold: 0,
     medium_score_threshold: 20,
     long_score_threshold: 20,
-
     medium_subunit_threshold: 1,
-    long_subunit_threshold: 3,
+    long_subunit_threshold: 3
   ]
+
+import_config "#{config_env()}.exs"
