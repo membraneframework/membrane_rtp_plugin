@@ -54,9 +54,10 @@ defmodule Membrane.RTP.VAD do
     state = %{
       vad_id: opts.vad_id,
       audio_levels: Qex.new(),
+      target_audio_levels_length: IsSpeakingEstimator.get_min_levels_length(),
       vad: :silence,
       current_timestamp: nil,
-      vad_threshold: opts.vad_threshold
+      vad_threshold: opts.vad_threshold + 127
     }
 
     {[], state}
@@ -104,24 +105,45 @@ defmodule Membrane.RTP.VAD do
     state = add_new_audio_level(state, level)
 
     {trimmed_queue, audio_levels_vad} =
-      IsSpeakingEstimator.trim_queue_and_estimate_vad(
+      trim_queue_and_estimate_vad(
         state.audio_levels,
-        state.vad_threshold + 127
+        state.vad_threshold,
+        state.target_audio_levels_length
       )
 
-    state = update_queue(trimmed_queue, state)
+    state = %{state | audio_levels: trimmed_queue}
     actions = [buffer: {:output, buffer}] ++ maybe_send_event(audio_levels_vad, state)
     state = update_vad_state(audio_levels_vad, state)
     {actions, state}
   end
 
   defp add_new_audio_level(state, level) do
-    audio_levels = Qex.push_front(state.audio_levels, {-level, state.current_timestamp})
+    audio_levels = Qex.push_front(state.audio_levels, {127 - level, state.current_timestamp})
 
     %{state | audio_levels: audio_levels}
   end
 
-  defp update_queue(new_queue, state), do: %{state | audio_levels: new_queue}
+  # Takes the queue from RTP VAD module and returns the queue of `target_audio_levels_length` length and the estimation
+  defp trim_queue_and_estimate_vad(queue, threshold, levels_length) do
+    trimmed_queue = safe_trim_queue(queue, levels_length)
+
+    estimation =
+      trimmed_queue
+      |> Enum.map(fn {level, _timestamp} -> level end)
+      |> IsSpeakingEstimator.estimate_is_speaking(threshold)
+
+    {trimmed_queue, estimation}
+  end
+
+  @spec safe_trim_queue(Qex.t(), integer) :: Qex.t()
+  defp safe_trim_queue(queue, n) do
+    if Enum.count(queue) > n do
+      {trimmed_queue, _rest} = Qex.split(queue, n)
+      trimmed_queue
+    else
+      queue
+    end
+  end
 
   defp maybe_send_event(audio_levels_vad, state) do
     if vad_state_has_changed(state.vad, audio_levels_vad) do

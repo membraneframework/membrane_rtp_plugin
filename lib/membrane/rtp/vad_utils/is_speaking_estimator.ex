@@ -10,7 +10,7 @@ defmodule Membrane.RTP.VadUtils.IsSpeakingEstimator do
   # number of immediate intervals inside one medium interval
   @n2 10
   # number of medium intervals inside one long interval
-  @n3 5
+  @n3 7
 
   @immediate_score_threshold 0
   @medium_score_threshold 20
@@ -18,60 +18,13 @@ defmodule Membrane.RTP.VadUtils.IsSpeakingEstimator do
 
   @min_levels_length @n1 * @n2 * @n3
 
-  # @max_level 127
-  # @min_level 0
-  @medium_threshold 1
-  @long_threshold 3
+  @medium_subunit_threshold 1
+  @long_subunit_threshold 3
 
   @min_activity_score 1.0e-8
 
-  defp binomial_coefficient(n, k) when k < 0 or k > n, do: 0
-  defp binomial_coefficient(n, k) when k == 0 or n == k, do: 1
-
-  defp binomial_coefficient(n, k) do
-    k = min(k, n - k)
-
-    Enum.to_list(1..k)
-    |> Enum.reduce(1, fn i, acc -> div(acc * (n - i + 1), i) end)
-  end
-
-  defp compute_activity_score(vl, n_r, lambda) do
-    p = 0.5
-
-    score =
-      :math.log(binomial_coefficient(n_r, vl)) +
-        vl * :math.log(p) +
-        (n_r - vl) * :math.log(1 - p) -
-        :math.log(lambda) + lambda * vl
-
-    if score > @min_activity_score, do: score, else: @min_activity_score
-  end
-
-  defp indicator_func(x, threshold) do
-    if x >= threshold, do: 1, else: 0
-  end
-
-  defp count_active(data, threshold) do
-    Enum.reduce(data, 0, fn x, acc -> acc + indicator_func(x, threshold) end)
-  end
-
-  defp compute_interval(littles, sub_list_length, threshold) do
-    littles
-    |> Enum.chunk_every(sub_list_length)
-    |> Enum.map(&count_active(&1, threshold))
-  end
-
-  defp compute_immediates(levels, level_threshold),
-    do: compute_interval(levels, @n1, level_threshold)
-
-  defp compute_mediums(immediates), do: compute_interval(immediates, @n2, @medium_threshold)
-  defp compute_longs(mediums), do: compute_interval(mediums, @n3, @long_threshold)
-
-  defp scores_above_threshold?(immediate_score, medium_score, long_score),
-    do:
-      immediate_score > @immediate_score_threshold and
-        medium_score > @medium_score_threshold and
-        long_score > @long_score_threshold
+  @spec get_min_levels_length() :: integer
+  def get_min_levels_length(), do: @min_levels_length
 
   @spec estimate_is_speaking(list(integer), integer) :: :speech | :silence
   def estimate_is_speaking(levels, _level_threshold) when length(levels) < @min_levels_length,
@@ -93,26 +46,48 @@ defmodule Membrane.RTP.VadUtils.IsSpeakingEstimator do
       else: :silence
   end
 
-  @spec safe_trim_queue(Qex.t(), integer) :: Qex.t()
-  defp safe_trim_queue(queue, n) do
-    if Enum.count(queue) > @min_levels_length do
-      {trimmed_queue, _rest} = Qex.split(queue, n)
-      trimmed_queue
-    else
-      queue
-    end
+  defp scores_above_threshold?(immediate_score, medium_score, long_score) do
+    immediate_score > @immediate_score_threshold and
+      medium_score > @medium_score_threshold and
+      long_score > @long_score_threshold
   end
 
-  # Takes the queue from RTP VAD module and returns the queue of `@min_levels_length` length and the estimation
-  @spec trim_queue_and_estimate_vad(Qex.t(), integer) :: {Qex.t(), :speech | :silence}
-  def trim_queue_and_estimate_vad(queue, threshold) do
-    trimmed_queue = safe_trim_queue(queue, @min_levels_length)
+  defp compute_immediates(levels, level_threshold),
+    do: compute_interval(levels, @n1, level_threshold)
 
-    estimation =
-      trimmed_queue
-      |> Enum.map(fn {level, _timestamp} -> 127 + level end)
-      |> estimate_is_speaking(threshold)
+  defp compute_mediums(immediates),
+    do: compute_interval(immediates, @n2, @medium_subunit_threshold)
 
-    {trimmed_queue, estimation}
+  defp compute_longs(mediums), do: compute_interval(mediums, @n3, @long_subunit_threshold)
+
+  defp compute_interval(littles, sub_list_length, threshold) do
+    littles
+    |> Enum.chunk_every(sub_list_length)
+    |> Enum.map(&count_active(&1, threshold))
+  end
+
+  defp count_active(data, threshold) do
+    Enum.count(data, &(&1 >= threshold))
+  end
+
+  defp compute_activity_score(vl, n_r, lambda) do
+    p = 0.5
+
+    score =
+      :math.log(binomial_coefficient(n_r, vl)) +
+        vl * :math.log(p) +
+        (n_r - vl) * :math.log(1 - p) -
+        :math.log(lambda) + lambda * vl
+
+    max(score, @min_activity_score)
+  end
+
+  defp binomial_coefficient(n, k) when k < 0 or k > n, do: 0
+  defp binomial_coefficient(n, k) when k == 0 or n == k, do: 1
+
+  defp binomial_coefficient(n, k) do
+    k = min(k, n - k)
+
+    Enum.reduce(1..k, 1, fn i, acc -> div(acc * (n - i + 1), i) end)
   end
 end
