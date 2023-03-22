@@ -5,29 +5,36 @@ defmodule Membrane.RTP.VadUtils.IsSpeakingEstimator do
   by Ilana Volfin and Israel Cohen"
   """
 
+  @default_parameters [
+    n1: 1, n2: 10, n3: 7,
+    immediate_score_threshold: 0, medium_score_threshold: 20, long_score_threshold: 20,
+    medium_subunit_threshold: 1, long_subunit_threshold: 3]
+  @parameters Application.compile_env(:membrane_rtp_plugin, :vad_estimation_parameters, @default_parameters)
+
   # number of levels inside one immediate interval
-  @n1 1
+  @n1 @parameters[:n1]
   # number of immediate intervals inside one medium interval
-  @n2 10
+  @n2 @parameters[:n2]
   # number of medium intervals inside one long interval
-  @n3 7
+  @n3 @parameters[:n3]
 
-  @immediate_score_threshold 0
-  @medium_score_threshold 20
-  @long_score_threshold 20
+  @target_levels_length @n1 * @n2 * @n3
 
-  @min_levels_length @n1 * @n2 * @n3
+  @immediate_score_threshold @parameters[:immediate_score_threshold]
+  @medium_score_threshold @parameters[:medium_score_threshold]
+  @long_score_threshold @parameters[:long_score_threshold]
 
-  @medium_subunit_threshold 1
-  @long_subunit_threshold 3
+  @medium_subunit_threshold @parameters[:medium_subunit_threshold]
+  @long_subunit_threshold @parameters[:long_subunit_threshold]
 
   @min_activity_score 1.0e-8
 
-  @spec get_min_levels_length() :: integer
-  def get_min_levels_length(), do: @min_levels_length
+
+  @spec get_target_levels_length() :: integer
+  def get_target_levels_length(), do: @target_levels_length
 
   @spec estimate_is_speaking(list(integer), integer) :: :speech | :silence
-  def estimate_is_speaking(levels, _level_threshold) when length(levels) < @min_levels_length,
+  def estimate_is_speaking(levels, _level_threshold) when length(levels) < @target_levels_length,
     do: :silence
 
   def estimate_is_speaking(levels, level_threshold) do

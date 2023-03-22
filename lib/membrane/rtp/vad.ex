@@ -54,7 +54,7 @@ defmodule Membrane.RTP.VAD do
     state = %{
       vad_id: opts.vad_id,
       audio_levels: Qex.new(),
-      target_audio_levels_length: IsSpeakingEstimator.get_min_levels_length(),
+      target_audio_levels_length: IsSpeakingEstimator.get_target_levels_length(),
       vad: :silence,
       current_timestamp: nil,
       vad_threshold: opts.vad_threshold + 127
