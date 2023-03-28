@@ -34,7 +34,7 @@ defmodule Membrane.RTP.VadUtils.IsSpeakingEstimatorTest do
     |> Enum.concat()
   end
 
-  def noise_with_one_silence(n, low_item_idx) do
+  defp noise_with_one_silence(n, low_item_idx) do
     n_left = low_item_idx
     n_right = n - low_item_idx - 1
 
