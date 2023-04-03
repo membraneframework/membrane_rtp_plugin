@@ -1,30 +1,28 @@
 defmodule Membrane.RTP.VAD do
   @moduledoc """
-  TODO change the module doc
+  Vad based on audio level sent in RTP header.
+
+  To make this module work appropriate RTP header extension has to be set in SDP offer/answer.
+
+  This module is responsible for:
+    - receiving the RTP headers with audio levels in range [-127, 0] dBov
+    - calculating the epoch of the timestamp
+    - storing them in a queue
+    - asking the IsSpeakingEstimator if the audio levels indicate speech or silence
+    - emitting the VAD event if the estimation has changed
 
 
-  # Simple vad based on audio level sent in RTP header.
+  The more detailed explanation of how the VAD algorithm can be found in the IsSpeakingEstimator module
 
-  # To make this module work appropriate RTP header extension has to be set in SDP offer/answer.
+  Buffers that are processed by this element may or may not have been processed by
+  a depayloader and passed through a jitter buffer. If they have not, then the only timestamp
+  available for time comparison is the RTP timestamp.
 
-  # If avg of audio level in packets in `time_window` exceeds `vad_threshold` it emits `Membrane.RTP.VadEvent`
-  # on its output pad.
-
-  # When avg falls below `vad_threshold` and doesn't exceed it in the next `vad_silence_timer`
-  # it also emits the event.
-
-  # Buffers that are processed by this element may or may not have been processed by
-  # a depayloader and passed through a jitter buffer. If they have not, then the only timestamp
-  # available for time comparison is the RTP timestamp. The delta between RTP timestamps is
-  # dependent on the clock rate used by the encoding. For `OPUS` the clock rate is `48kHz` and
-  # packets are sent every `20ms`, so the RTP timestamp delta between sequential packets should
-  # be `48000 / 1000 * 20`, or `960`.
-
-  # When calculating the epoch of the timestamp, we need to account for 32bit integer wrapping.
-  # * `:current` - the difference between timestamps is low: the timestamp has not wrapped around.
-  # * `:next` - the timestamp has wrapped around to 0. To simplify queue processing we reset the state.
-  # * `:prev` - the timestamp has recently wrapped around. We might receive an out-of-order packet
-  #   from before the rollover, which we ignore.
+  When calculating the epoch of the timestamp, we need to account for 32bit integer wrapping.
+  * `:current` - the difference between timestamps is low: the timestamp has not wrapped around.
+  * `:next` - the timestamp has wrapped around to 0. To simplify queue processing we reset the state.
+  * `:prev` - the timestamp has recently wrapped around. We might receive an out-of-order packet
+    from before the rollover, which we ignore.
   """
   use Membrane.Filter
 
@@ -54,7 +52,7 @@ defmodule Membrane.RTP.VAD do
     state = %{
       vad_id: opts.vad_id,
       audio_levels: Qex.new(),
-      target_audio_levels_length: IsSpeakingEstimator.get_target_levels_length(),
+      target_audio_levels_length: IsSpeakingEstimator.target_levels_length(),
       vad: :silence,
       current_timestamp: nil,
       vad_threshold: opts.vad_threshold + 127
