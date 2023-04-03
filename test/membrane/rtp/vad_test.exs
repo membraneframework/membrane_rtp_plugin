@@ -104,7 +104,7 @@ defmodule Membrane.RTP.VADTest do
 
   defp levels_len(state), do: Enum.count(state.audio_levels)
 
-  defp levels_values(state), do: Enum.map(state.audio_levels, fn {level, _timestamp} -> level end)
+  defp levels_values(state), do: Enum.map(state.audio_levels, &elem(&1, 0))
 
   describe "handle_process" do
     setup [

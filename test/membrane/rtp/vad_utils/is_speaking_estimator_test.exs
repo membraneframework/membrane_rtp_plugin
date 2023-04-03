@@ -18,9 +18,13 @@ defmodule Membrane.RTP.VadUtils.IsSpeakingEstimatorTest do
 
   alias Membrane.RTP.VadUtils.IsSpeakingEstimator
 
-  @algorithm_parameters Application.compile_env(:membrane_rtp_plugin, :vad_estimation_parameters)
-  @expected_levels_length @algorithm_parameters[:n1] * @algorithm_parameters[:n2] *
-                            @algorithm_parameters[:n3]
+  @algorithm_params Application.compile_env(:membrane_rtp_plugin, :vad_estimation_parameters)
+
+  @immediate_subunits @algorithm_params[:immediate][:subunits]
+  @medium_subunits @algorithm_params[:medium][:subunits]
+  @long_subunits @algorithm_params[:long][:subunits]
+
+  @expected_levels_length @immediate_subunits * @medium_subunits * @long_subunits
 
   defp silence(n), do: List.duplicate(0, n)
   defp noise(n), do: List.duplicate(127, n)
@@ -73,7 +77,7 @@ defmodule Membrane.RTP.VadUtils.IsSpeakingEstimatorTest do
     end
 
     test "returns :speech for alternating pairs", %{threshold: threshold} do
-      levels = alternating_signal(@expected_levels_length, @algorithm_parameters[:n1])
+      levels = alternating_signal(@expected_levels_length, @immediate_subunits)
 
       assert IsSpeakingEstimator.estimate_is_speaking(levels, threshold) == :speech
     end
@@ -82,7 +86,7 @@ defmodule Membrane.RTP.VadUtils.IsSpeakingEstimatorTest do
       levels =
         alternating_signal(
           @expected_levels_length,
-          @algorithm_parameters[:n1] * @algorithm_parameters[:n2]
+          @immediate_subunits * @medium_subunits
         )
 
       assert IsSpeakingEstimator.estimate_is_speaking(levels, threshold) == :speech
@@ -95,7 +99,7 @@ defmodule Membrane.RTP.VadUtils.IsSpeakingEstimatorTest do
     end
   end
 
-  describe "get target levels length" do
+  describe "target levels length" do
     test "returns expected target levels length" do
       assert IsSpeakingEstimator.target_levels_length() == @expected_levels_length
     end

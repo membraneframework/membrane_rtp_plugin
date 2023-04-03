@@ -5,7 +5,9 @@ defmodule Membrane.RTP.VadUtils.IsSpeakingEstimator do
   by Ilana Volfin and Israel Cohen
   Link: https://israelcohen.com/wp-content/uploads/2018/05/IEEEI2012_Volfin.pdf
 
-  The `estimate_is_speaking/2` function takes a list of audio levels in range (0, 127)
+  ------------------------------------------------------------------------------------------
+
+  The `estimate_is_speaking/2` function takes a list of audio levels in range [0, 127]
   and based on a threshold given as a second input
   computes if the person is speaking.
 
@@ -26,7 +28,6 @@ defmodule Membrane.RTP.VadUtils.IsSpeakingEstimator do
   The number of subunits in one interval is given as a module parameter.
 
   Each interval is a number of active subunits that is intervals that are above a threshold of this tier.
-
   For example:
     if level_threshold is 90, levels are [80, 90, 100, 90] and there are 2 levels in a immediate,
       then immediates would be equal to [1, 2]
@@ -34,6 +35,10 @@ defmodule Membrane.RTP.VadUtils.IsSpeakingEstimator do
 
     Same goes for mediums. If medium subunit threshold is 2 and number of subunits is 2
       then mediums are equal to [1] since the only subunit [1, 2] had only one element above or equal to the threshold.
+
+  The number of levels the function accepts is equal to the product of subunits per tier.
+  This way we compute only one long interval because only one is needed.
+  If the number of levels is smaller than the required minimum, the algorithm returns silence.
 
   The most recent interval in each tier serves as a basis for computing an activity score.
   The activity score is a logarithm of a quotient of:
@@ -44,59 +49,71 @@ defmodule Membrane.RTP.VadUtils.IsSpeakingEstimator do
   A threshold for every tier is given as a module parameter.
   If all activity scores are over the threshold, the algorithm estimates that it is speech. Otherwise silence.
 
+  -----------------------------------------------------------------------------------------------------------
+  Overall the parameters for each tier are:
+
+    - subunits:           number of smaller units in one bigger unit
+    - score_threshold:    number equal or above which the activity score
+                          of the given tier must be to be counted as indicating speech
+    - subunit_threshold:  number equal or above which the number of active subunits must be
+                          for the given tier to be marked as active,
+                          (for immediates it is equal to the threshold given as a estimate_is_speaking/2 argument)
+    - lambda:             parameter for the exponential distribution (element of the activity score computations)
+
+
   A thorough explanation with images can be found in the RTC engine internal documentation.
   Link: https://github.com/jellyfish-dev/membrane_rtc_engine/tree/master/internal_docs
   """
 
-  @default_parameters [
-    n1: 1,
-    n2: 10,
-    n3: 7,
-    immediate_score_threshold: 0,
-    medium_score_threshold: 20,
-    long_score_threshold: 20,
-    medium_subunit_threshold: 1,
-    long_subunit_threshold: 3
-  ]
-  @parameters Application.compile_env(
-                :membrane_rtp_plugin,
-                :vad_estimation_parameters,
-                @default_parameters
-              )
+  @default_parameters %{
+    immediate: %{
+      subunits: 1,
+      score_threshold: 0,
+      lambda: 1
+    },
+    medium: %{
+      subunits: 10,
+      score_threshold: 20,
+      subunit_threshold: 1,
+      lambda: 24
+    },
+    long: %{
+      subunits: 7,
+      score_threshold: 20,
+      subunit_threshold: 3,
+      lambda: 47
+    }
+  }
 
-  # number of levels inside one immediate interval
-  @n1 @parameters[:n1]
-  # number of immediate intervals inside one medium interval
-  @n2 @parameters[:n2]
-  # number of medium intervals inside one long interval
-  @n3 @parameters[:n3]
+  @params Application.compile_env(
+            :membrane_rtp_plugin,
+            :vad_estimation_parameters,
+            @default_parameters
+          )
 
-  @target_levels_length @n1 * @n2 * @n3
+  @immediate @params[:immediate]
+  @medium @params[:medium]
+  @long @params[:long]
 
-  @immediate_score_threshold @parameters[:immediate_score_threshold]
-  @medium_score_threshold @parameters[:medium_score_threshold]
-  @long_score_threshold @parameters[:long_score_threshold]
+  @minimum_levels_length @immediate[:subunits] * @medium[:subunits] * @long[:subunits]
 
-  @medium_subunit_threshold @parameters[:medium_subunit_threshold]
-  @long_subunit_threshold @parameters[:long_subunit_threshold]
-
+  # If we would have accepted 0 as minimum, the log functions in activity score function would break.
   @min_activity_score 1.0e-8
 
-  @spec target_levels_length() :: pos_integer
-  def target_levels_length(), do: @target_levels_length
+  def target_levels_length(), do: @minimum_levels_length
 
   @spec estimate_is_speaking([integer], integer) :: :speech | :silence
-  def estimate_is_speaking(levels, _level_threshold) when length(levels) < @target_levels_length,
+  def estimate_is_speaking(levels, _level_threshold) when length(levels) < @minimum_levels_length,
     do: :silence
 
   def estimate_is_speaking(levels, level_threshold) do
     immediates = compute_immediates(levels, level_threshold)
-    mediums = compute_mediums(immediates)
-    longs = compute_longs(mediums)
+    mediums = compute_interval(immediates, :medium)
+    longs = compute_interval(mediums, :long)
 
-    immediate_score = immediates |> hd() |> compute_activity_score(@n1, 1)
-    medium_score = mediums |> hd() |> compute_activity_score(@n2, 24)
-    long_score = longs |> hd() |> compute_activity_score(@n3, 47)
+    immediate_score = immediate_activity_score(immediates)
+    medium_score = medium_activity_score(mediums)
+    long_score = long_activity_score(longs)
 
     above_threshold? = scores_above_threshold?(immediate_score, medium_score, long_score)
 
@@ -106,18 +123,16 @@ defmodule Membrane.RTP.VadUtils.IsSpeakingEstimator do
   end
 
   defp scores_above_threshold?(immediate_score, medium_score, long_score) do
-    immediate_score > @immediate_score_threshold and
-      medium_score > @medium_score_threshold and
-      long_score > @long_score_threshold
+    immediate_score > @immediate[:score_threshold] and
+      medium_score > @medium[:score_threshold] and
+      long_score > @long[:score_threshold]
   end
 
   defp compute_immediates(levels, level_threshold),
-    do: compute_interval(levels, @n1, level_threshold)
+    do: compute_interval(levels, @immediate[:subunits], level_threshold)
 
-  defp compute_mediums(immediates),
-    do: compute_interval(immediates, @n2, @medium_subunit_threshold)
-
-  defp compute_longs(mediums), do: compute_interval(mediums, @n3, @long_subunit_threshold)
+  defp compute_interval(littles, tier) when tier in [:medium, :long],
+    do: compute_interval(littles, @params[tier][:subunits], @params[tier][:subunit_threshold])
 
   defp compute_interval(littles, sub_list_length, threshold) do
     littles
@@ -128,6 +143,21 @@ defmodule Membrane.RTP.VadUtils.IsSpeakingEstimator do
   defp count_active(data, threshold) do
     Enum.count(data, &(&1 >= threshold))
   end
+
+  defp immediate_activity_score([newest_interval | _rest]),
+    do: compute_activity_score(newest_interval, :immediate)
+
+  defp medium_activity_score([newest_interval | _rest]),
+    do: compute_activity_score(newest_interval, :medium)
+
+  defp long_activity_score([newest_interval | _rest]),
+    do: compute_activity_score(newest_interval, :long)
+
+  defp compute_activity_score(newest_interval, tier) when tier in [:immediate, :medium, :long],
+    do: compute_activity_score(newest_interval, @params[tier][:subunits], @params[tier][:lambda])
+
+  defp compute_activity_score(_newest_interval, tier),
+    do: raise("Wrong arguments. #{tier} is not a valid interval tier atom")
 
   defp compute_activity_score(vl, n_r, lambda) do
     p = 0.5
