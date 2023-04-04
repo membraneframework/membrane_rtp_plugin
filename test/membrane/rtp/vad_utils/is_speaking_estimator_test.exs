@@ -98,10 +98,4 @@ defmodule Membrane.RTP.VadUtils.IsSpeakingEstimatorTest do
       assert IsSpeakingEstimator.estimate_is_speaking(levels, threshold)
     end
   end
-
-  describe "target levels length" do
-    test "returns expected target levels length" do
-      assert IsSpeakingEstimator.target_levels_length() == @expected_levels_length
-    end
-  end
 end

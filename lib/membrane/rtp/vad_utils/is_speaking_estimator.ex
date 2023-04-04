@@ -100,8 +100,6 @@ defmodule Membrane.RTP.VadUtils.IsSpeakingEstimator do
   # If we would have accepted 0 as minimum, the log functions in activity score function would break.
   @min_activity_score 1.0e-8
 
-  def target_levels_length(), do: @minimum_levels_length
-
   @spec estimate_is_speaking([integer], integer) :: :speech | :silence
   def estimate_is_speaking(levels, _level_threshold) when length(levels) < @minimum_levels_length,
     do: :silence
