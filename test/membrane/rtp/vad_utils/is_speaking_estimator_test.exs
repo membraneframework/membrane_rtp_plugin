@@ -16,15 +16,11 @@ defmodule Membrane.RTP.VadUtils.IsSpeakingEstimatorTest do
 
   use ExUnit.Case
 
-  alias Membrane.RTP.VadUtils.IsSpeakingEstimator
+  alias Membrane.RTP.VadUtils.{IsSpeakingEstimator, VadParams}
 
-  @algorithm_params Application.compile_env(:membrane_rtp_plugin, :vad_estimation_parameters)
-
-  @immediate_subunits @algorithm_params[:immediate][:subunits]
-  @medium_subunits @algorithm_params[:medium][:subunits]
-  @long_subunits @algorithm_params[:long][:subunits]
-
-  @expected_levels_length @immediate_subunits * @medium_subunits * @long_subunits
+  @immediate_subunits VadParams.immediate()[:subunits]
+  @medium_subunits VadParams.medium()[:subunits]
+  @expected_levels_length VadParams.target_levels_length()
 
   defp silence(n), do: List.duplicate(0, n)
   defp noise(n), do: List.duplicate(127, n)

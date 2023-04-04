@@ -6,6 +6,7 @@ defmodule Membrane.RTP.VAD do
 
   This module is responsible for:
     - receiving the RTP headers with audio levels in range [-127, 0] dBov
+    - mapping them to db (range [0, 127])
     - calculating the epoch of the timestamp
     - storing them in a queue
     - asking the IsSpeakingEstimator if the audio levels indicate speech or silence

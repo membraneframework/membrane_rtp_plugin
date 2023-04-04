@@ -5,18 +5,9 @@ defmodule Membrane.RTP.VadUtils.AudioLevelQueueTest do
 
   use ExUnit.Case
 
-  alias Membrane.RTP.VadUtils.AudioLevelQueue
+  alias Membrane.RTP.VadUtils.{AudioLevelQueue, VadParams}
 
-  @params Application.compile_env(
-            :membrane_rtp_plugin,
-            :vad_estimation_parameters
-          )
-
-  @immediate @params[:immediate]
-  @medium @params[:medium]
-  @long @params[:long]
-
-  @target_levels_length @immediate[:subunits] * @medium[:subunits] * @long[:subunits]
+  @target_levels_length VadParams.target_levels_length()
 
   describe "new" do
     test "creates new queue" do

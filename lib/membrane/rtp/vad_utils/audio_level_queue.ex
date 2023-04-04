@@ -6,15 +6,9 @@ defmodule Membrane.RTP.VadUtils.AudioLevelQueue do
   The newest element in always appended to the rear, so to_list/1 always returns the most recent element as the head of a list.
   The length of a list can be obtained in O(1) time.
   """
-  alias Membrane.RTP.VadUtils.AudioLevelQueue
+  alias Membrane.RTP.VadUtils.{AudioLevelQueue, VadParams}
 
-  @vad_params Application.compile_env(
-                :membrane_rtp_plugin,
-                :vad_estimation_parameters
-              )
-
-  @target_audio_level_length @vad_params[:immediate][:subunits] * @vad_params[:medium][:subunits] *
-                               @vad_params[:long][:subunits]
+  @target_audio_level_length VadParams.target_levels_length()
 
   @enforce_keys [:levels, :length]
   defstruct [:levels, :length]

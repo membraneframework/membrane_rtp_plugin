@@ -8,20 +8,14 @@ defmodule Membrane.RTP.VADTest do
   use ExUnit.Case
 
   alias Membrane.RTP.VAD
-  alias Membrane.RTP.VadUtils.AudioLevelQueue
+  alias Membrane.RTP.VadUtils.{AudioLevelQueue, VadParams}
 
   ExUnit.Case.register_attribute(__MODULE__, :buffer_interval)
   ExUnit.Case.register_attribute(__MODULE__, :vad_threshold)
 
   @default_vad_id 1
   @default_buffer_interval 20
-
-  @vad_params Application.compile_env(:membrane_rtp_plugin, :vad_estimation_parameters)
-  @immediate_subunits @vad_params[:immediate][:subunits]
-  @medium_subunits @vad_params[:medium][:subunits]
-  @long_subunits @vad_params[:long][:subunits]
-
-  @max_levels_length @immediate_subunits * @medium_subunits * @long_subunits
+  @max_levels_length VadParams.target_levels_length()
 
   defp calculate_buffer_time_delta(ctx) do
     buffer_interval = ctx.registered.buffer_interval || @default_buffer_interval

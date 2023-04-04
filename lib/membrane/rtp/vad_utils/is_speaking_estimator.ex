@@ -64,38 +64,14 @@ defmodule Membrane.RTP.VadUtils.IsSpeakingEstimator do
   A thorough explanation with images can be found in the RTC engine internal documentation.
   Link: https://github.com/jellyfish-dev/membrane_rtc_engine/tree/master/internal_docs
   """
+  alias Membrane.RTP.VadUtils.VadParams
 
-  @default_parameters %{
-    immediate: %{
-      subunits: 1,
-      score_threshold: 0,
-      lambda: 1
-    },
-    medium: %{
-      subunits: 10,
-      score_threshold: 20,
-      subunit_threshold: 1,
-      lambda: 24
-    },
-    long: %{
-      subunits: 7,
-      score_threshold: 20,
-      subunit_threshold: 3,
-      lambda: 47
-    }
-  }
+  @params VadParams.vad_params()
+  @immediate VadParams.immediate()
+  @medium VadParams.medium()
+  @long VadParams.long()
 
-  @params Application.compile_env(
-            :membrane_rtp_plugin,
-            :vad_estimation_parameters,
-            @default_parameters
-          )
-
-  @immediate @params[:immediate]
-  @medium @params[:medium]
-  @long @params[:long]
-
-  @minimum_levels_length @immediate[:subunits] * @medium[:subunits] * @long[:subunits]
+  @minimum_levels_length VadParams.target_levels_length()
 
   # If we would have accepted 0 as minimum, the log functions in activity score function would break.
   @min_activity_score 1.0e-8
