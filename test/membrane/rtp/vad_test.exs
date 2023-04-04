@@ -161,24 +161,23 @@ defmodule Membrane.RTP.VADTest do
       assert levels_len(state) == @max_levels_length
     end
 
-    ### TODO move it to AudioLevelQueue test
+    test "maps levels from -127 and 0 to 0 and 127", ctx do
+      %{
+        time_delta: time_delta,
+        state: state,
+        initial_timestamp: initial_timestamp
+      } = ctx
 
-    # test "maps levels from -127 and 0 to 0 and 127", ctx do
-    #   %{
-    #     time_delta: time_delta,
-    #     state: %{target_audio_levels_length: max_length} = state,
-    #     initial_timestamp: initial_timestamp
-    #   } = ctx
+      state = process_buffer(rtp_buffer(-127, initial_timestamp), state)
+      assert AudioLevelQueue.to_list(state.audio_levels) == [0]
 
-    #   state = process_buffer(rtp_buffer(-127, initial_timestamp), state)
-    #   assert levels_values(state) == [0]
+      rtp_volumes = -126..0
+      state = iterate_for(volumes: rtp_volumes, initial: state, time_delta: time_delta)
 
-    #   rtp_volumes = -126..0
-    #   state = iterate_for(volumes: rtp_volumes, initial: state, time_delta: time_delta)
+      expected_audio_levels = 0..127 |> Enum.reverse() |> Enum.take(@max_levels_length)
 
-    #   expected_audio_levels = 0..127 |> Enum.reverse() |> Enum.take(max_length)
-    #   assert levels_values(state) == expected_audio_levels
-    # end
+      assert AudioLevelQueue.to_list(state.audio_levels) == expected_audio_levels
+    end
 
     test "transitions between :speech and :silence", ctx do
       %{

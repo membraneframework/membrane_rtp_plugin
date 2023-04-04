@@ -97,8 +97,9 @@ defmodule Membrane.RTP.VAD do
     end
   end
 
-  defp handle_vad(buffer, rtp_timestamp, level, state) do
-    updated_audio_levels = AudioLevelQueue.add(state.audio_levels, level)
+  defp handle_vad(buffer, rtp_timestamp, level_in_dbov, state) do
+    level_in_db = 127 - level_in_dbov
+    updated_audio_levels = AudioLevelQueue.add(state.audio_levels, level_in_db)
 
     vad_estimation =
       updated_audio_levels
