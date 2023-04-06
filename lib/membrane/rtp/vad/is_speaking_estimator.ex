@@ -1,11 +1,10 @@
-defmodule Membrane.RTP.VadUtils.IsSpeakingEstimator do
+defmodule Membrane.RTP.Vad.IsSpeakingEstimator do
   @moduledoc """
   Module for estimating if the user is speaking inspired by
-  "Dominant Speaker Identification for Multipoint Videoconferencing"
+  [*Dominant Speaker Identification for Multipoint Videoconferencing*](https://israelcohen.com/wp-content/uploads/2018/05/IEEEI2012_Volfin.pdf)
   by Ilana Volfin and Israel Cohen
-  Link: https://israelcohen.com/wp-content/uploads/2018/05/IEEEI2012_Volfin.pdf
 
-  ------------------------------------------------------------------------------------------
+  ------
 
   The `estimate_is_speaking/2` function takes a list of audio levels in range [0, 127]
   and based on a threshold given as a second input
@@ -13,28 +12,26 @@ defmodule Membrane.RTP.VadUtils.IsSpeakingEstimator do
 
   The input levels are interpreted on 3 tiers. Each tier consists of intervals specified below:
 
-  +------------+----------------------+---------------------------------+-----------+
-  | Name       | Interpretation       | Number of RTP packets (default) | length    |
-  +============+======================+=================================+===========+
-  | immediate  | smallest sound chunk | 1                               | ~20 [ms]  |
-  +------------+----------------------+---------------------------------+-----------+
-  | medium     | one word             | 1 * 10 = 10                     | ~200 [ms] |
-  +------------+----------------------+---------------------------------+-----------+
-  | long       | half/one sentence    | 1 * 10 * 7 = 70                 | ~1.4 [s]  |
-  +------------+----------------------+---------------------------------+-----------+
+  | Name         | Interpretation       | Number of RTP packets (default) | length    |
+  |--------------|----------------------|---------------------------------|-----------|
+  | `immediate`  | smallest sound chunk | 1                               | ~20 [ms]  |
+  | `medium`     | one word             | 1 * 10 = 10                     | ~200 [ms] |
+  | `long`       | half/one sentence    | 1 \* 10 \* 7 = 70                 | ~1.4 [s]  |
 
   Each tier interval is computed based on the smaller tier intervals (subunits).
   Immediates are computed based on levels, mediums on top of immediates and long on top of mediums.
   The number of subunits in one interval is given as a module parameter.
 
   Each interval is a number of active subunits that is intervals that are above a threshold of this tier.
-  For example:
-    if level_threshold is 90, levels are [80, 90, 100, 90] and there are 2 levels in a immediate,
-      then immediates would be equal to [1, 2]
-      since subunit of [80, 90] has 1 item above or equal to the threshold and subunit [100, 90] has 2 such items.
 
-    Same goes for mediums. If medium subunit threshold is 2 and number of subunits is 2
-      then mediums are equal to [1] since the only subunit [1, 2] had only one element above or equal to the threshold.
+  > **Example**
+  >
+  > If level_threshold is 90, levels are `[80, 90, 100, 90]` and there are 2 levels in a immediate
+  > then immediates would be equal to `[1, 2]` since subunit of `[80, 90]` has 1 item above or equal to
+  > the threshold and subunit `[100, 90]` has 2 such items.
+  >
+  > Same goes for mediums. If medium subunit threshold is 2 and number of subunits is 2
+  > then mediums are equal to `[1]` since the only subunit `[1, 2]` had only one element above or equal to the threshold.
 
   The number of levels the function accepts is equal to the product of subunits per tier.
   This way we compute only one long interval because only one is needed.
@@ -42,29 +39,26 @@ defmodule Membrane.RTP.VadUtils.IsSpeakingEstimator do
 
   The most recent interval in each tier serves as a basis for computing an activity score.
   The activity score is a logarithm of a quotient of:
-    - the probability of k active items in n total items under an assumption that a person is speaking (binomial coefficient)
+    - the probability of `k` active items in `n` total items under an assumption that a person is speaking (binomial coefficient)
     - same probability but under an assumption that a person is not speaking (exponential distribution)
 
   The activity score for each tier is then thresholded again.
   A threshold for every tier is given as a module parameter.
   If all activity scores are over the threshold, the algorithm estimates that it is speech. Otherwise silence.
 
-  -----------------------------------------------------------------------------------------------------------
+  -----------------
   Overall the parameters for each tier are:
 
-    - subunits:           number of smaller units in one bigger unit
-    - score_threshold:    number equal or above which the activity score
-                          of the given tier must be to be counted as indicating speech
-    - subunit_threshold:  number equal or above which the number of active subunits must be
-                          for the given tier to be marked as active,
-                          (for immediates it is equal to the threshold given as a estimate_is_speaking/2 argument)
-    - lambda:             parameter for the exponential distribution (element of the activity score computations)
+  | Parameter | Description |
+  |-|-|
+  | `subunits` | number of smaller units in one bigger unit |
+  | `score_threshold`  | number equal or above which the activity score of the given tier must be to be counted as indicating speech |
+  | `subunit_threshold` | number equal or above which the number of active subunits must be for the given tier to be marked as active (for immediates it is equal to the threshold given as a estimate_is_speaking/2 argument) |
+  | `lambda` | parameter for the exponential distribution (element of the activity score computations) |
 
-
-  A thorough explanation with images can be found in the RTC engine internal documentation.
-  Link: https://github.com/jellyfish-dev/membrane_rtc_engine/tree/master/internal_docs
+  A thorough explanation with images can be found in the Jellyfish book in the [Voice Activity Detection](https://jellyfish-dev.github.io/book/webrtc/vad.html) chapter.
   """
-  alias Membrane.RTP.VadUtils.VadParams
+  alias Membrane.RTP.Vad.VadParams
 
   @params VadParams.vad_params()
   @immediate VadParams.immediate()
@@ -76,6 +70,9 @@ defmodule Membrane.RTP.VadUtils.IsSpeakingEstimator do
   # If we would have accepted 0 as minimum, the log functions in activity score function would break.
   @min_activity_score 1.0e-8
 
+  @doc """
+  Estimates if the user is speaking based on the audio levels and a threshold.
+  """
   @spec estimate_is_speaking([integer], integer) :: :speech | :silence
   def estimate_is_speaking(levels, _level_threshold) when length(levels) < @minimum_levels_length,
     do: :silence

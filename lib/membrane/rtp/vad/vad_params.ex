@@ -1,16 +1,12 @@
-defmodule Membrane.RTP.VadUtils.VadParams do
-  @moduledoc """
-  The information about the max length of level structure is used in multiple modules
-  (VAD, its utils, tests of VAD and utils...)
+defmodule Membrane.RTP.Vad.VadParams do
+  @moduledoc false
 
-  It requires a few simple steps every time:
-    - fetch the data from the compile file
-    - multiply some numbers in this data
-    - add the value to the module argument
+  # The information about selected parameters used in multiple modules concerning VAD.
+  # Additionally it computes the `target_levels_length` which is the number audio levels needed for proper voice activity estimation. It is directly dependent on the VAD parameters.
 
-  It's repetitive, simple and takes significant amounts of space in code.
-  This module should vastly simplify this notorious task.
-  """
+  # The parameters values are different for each environment and can be tweaked in the configuration files placed in `config` directory.
+
+  # The meaning of the parameters is described in the `Membrane.RTP.Vad.IsSpeakingEstimator`.
 
   @default_parameters %{
     immediate: %{
@@ -38,9 +34,9 @@ defmodule Membrane.RTP.VadUtils.VadParams do
             @default_parameters
           )
 
-  @immediate @params[:immediate]
-  @medium @params[:medium]
-  @long @params[:long]
+  @immediate @params.immediate
+  @medium @params.medium
+  @long @params.long
 
   @spec vad_params() :: map()
   def vad_params(), do: @params
@@ -55,5 +51,5 @@ defmodule Membrane.RTP.VadUtils.VadParams do
   def long(), do: @long
 
   @spec target_levels_length() :: pos_integer()
-  def target_levels_length(), do: immediate()[:subunits] * medium()[:subunits] * long()[:subunits]
+  def target_levels_length(), do: @immediate.subunits * @medium.subunits * @long.subunits
 end

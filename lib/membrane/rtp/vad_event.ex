@@ -1,4 +1,4 @@
-defmodule Membrane.RTP.VadUtils.VadEvent do
+defmodule Membrane.RTP.VadEvent do
   @moduledoc """
   An event informing about Voice Activity Detection status changes
   """

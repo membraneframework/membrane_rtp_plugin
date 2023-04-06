@@ -8,7 +8,7 @@ defmodule Membrane.RTP.VADTest do
   use ExUnit.Case
 
   alias Membrane.RTP.VAD
-  alias Membrane.RTP.VadUtils.{AudioLevelQueue, VadParams}
+  alias Membrane.RTP.Vad.{AudioLevelQueue, VadParams}
 
   ExUnit.Case.register_attribute(__MODULE__, :buffer_interval)
   ExUnit.Case.register_attribute(__MODULE__, :vad_threshold)
@@ -104,7 +104,7 @@ defmodule Membrane.RTP.VADTest do
     new_state
   end
 
-  defp levels_len(state), do: AudioLevelQueue.len(state.audio_levels)
+  defp levels_len(state), do: state.audio_levels.length
 
   describe "handle_process" do
     setup [

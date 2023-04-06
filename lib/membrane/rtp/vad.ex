@@ -4,16 +4,9 @@ defmodule Membrane.RTP.VAD do
 
   To make this module work appropriate RTP header extension has to be set in SDP offer/answer.
 
-  This module is responsible for:
-    - receiving the RTP headers with audio levels in range [-127, 0] dBov
-    - mapping them to db (range [0, 127])
-    - calculating the epoch of the timestamp
-    - storing them in a queue
-    - asking the IsSpeakingEstimator if the audio levels indicate speech or silence
-    - emitting the VAD event if the estimation has changed
+  Sends `Membrane.RTP.VadEvent` when a score from `Membrane.RTP.VadUtils.IsSpeakingEstimator` changes.
 
-
-  The more detailed explanation of how the VAD algorithm can be found in the IsSpeakingEstimator module
+  A more detailed explanation of how the VAD algorithm can be found in the `Membrane.RTP.VadUtils.IsSpeakingEstimator` module
 
   Buffers that are processed by this element may or may not have been processed by
   a depayloader and passed through a jitter buffer. If they have not, then the only timestamp
@@ -27,8 +20,8 @@ defmodule Membrane.RTP.VAD do
   """
   use Membrane.Filter
 
-  alias Membrane.RTP.{Header, Utils}
-  alias Membrane.RTP.VadUtils.{AudioLevelQueue, IsSpeakingEstimator, VadEvent}
+  alias Membrane.RTP.{Header, Utils, VadEvent}
+  alias Membrane.RTP.Vad.{AudioLevelQueue, IsSpeakingEstimator}
 
   def_input_pad :input, availability: :always, accepted_format: _any, demand_mode: :auto
 

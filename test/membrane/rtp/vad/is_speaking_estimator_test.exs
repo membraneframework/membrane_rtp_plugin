@@ -1,4 +1,4 @@
-defmodule Membrane.RTP.VadUtils.IsSpeakingEstimatorTest do
+defmodule Membrane.RTP.Vad.IsSpeakingEstimatorTest do
   @moduledoc """
   The tests for IsSpeakingEstimator are focused on the estimate_is_speaking function which takes:
      - levels: a list of db values inferred from the RTP Header; the values range from 0 (digital silence) to 127 (digital noise)
@@ -16,10 +16,10 @@ defmodule Membrane.RTP.VadUtils.IsSpeakingEstimatorTest do
 
   use ExUnit.Case
 
-  alias Membrane.RTP.VadUtils.{IsSpeakingEstimator, VadParams}
+  alias Membrane.RTP.Vad.{IsSpeakingEstimator, VadParams}
 
-  @immediate_subunits VadParams.immediate()[:subunits]
-  @medium_subunits VadParams.medium()[:subunits]
+  @immediate_subunits VadParams.immediate().subunits
+  @medium_subunits VadParams.medium().subunits
   @expected_levels_length VadParams.target_levels_length()
 
   defp silence(n), do: List.duplicate(0, n)
