@@ -2,11 +2,11 @@ defmodule Membrane.RTP.VAD do
   @moduledoc """
   Vad based on audio level sent in RTP header.
 
-  To make this module work appropriate RTP header extension has to be set in SDP offer/answer.
+  To make this module work appropriate RTP header extension has to be set in the SDP offer/answer.
 
-  Sends `Membrane.RTP.VadEvent` when a score from `Membrane.RTP.VadUtils.IsSpeakingEstimator` changes.
+  Sends `Membrane.RTP.VadEvent` when a score from `Membrane.RTP.Vad.IsSpeakingEstimator` changes.
 
-  A more detailed explanation of how the VAD algorithm can be found in the `Membrane.RTP.VadUtils.IsSpeakingEstimator` module
+  A more detailed explanation of how the VAD algorithm can be found in the `Membrane.RTP.Vad.IsSpeakingEstimator` module.
 
   Buffers that are processed by this element may or may not have been processed by
   a depayloader and passed through a jitter buffer. If they have not, then the only timestamp

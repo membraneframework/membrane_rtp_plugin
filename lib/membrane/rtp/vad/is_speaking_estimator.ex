@@ -15,36 +15,37 @@ defmodule Membrane.RTP.Vad.IsSpeakingEstimator do
   | Name         | Interpretation       | Number of RTP packets (default) | length    |
   |--------------|----------------------|---------------------------------|-----------|
   | `immediate`  | smallest sound chunk | 1                               | ~20 [ms]  |
-  | `medium`     | one word             | 1 * 10 = 10                     | ~200 [ms] |
-  | `long`       | half/one sentence    | 1 \* 10 \* 7 = 70                 | ~1.4 [s]  |
+  | `medium`     | one word             | 1 \* 10 = 10                    | ~200 [ms] |
+  | `long`       | half/one sentence    | 1 \* 10 \* 7 = 70               | ~1.4 [s]  |
 
   Each tier interval is computed based on the smaller tier intervals (subunits).
-  Immediates are computed based on levels, mediums on top of immediates and long on top of mediums.
+  Immediates are computed based on levels, mediums on top of immediates and longs on top of mediums.
   The number of subunits in one interval is given as a module parameter.
 
-  Each interval is a number of active subunits that is intervals that are above a threshold of this tier.
+  Each interval is a number of active subunits (that is: lower tier intervals) above a threshold of a given tier.
 
   > **Example**
   >
-  > If level_threshold is 90, levels are `[80, 90, 100, 90]` and there are 2 levels in a immediate
-  > then immediates would be equal to `[1, 2]` since subunit of `[80, 90]` has 1 item above or equal to
+  > If `level_threshold` is `90`, levels are `[80, 90, 100, 90]` and there are 2 levels in a immediate
+  > then `immediates` would be equal to `[1, 2]` since subunit of `[80, 90]` has 1 item above or equal to
   > the threshold and subunit `[100, 90]` has 2 such items.
   >
-  > Same goes for mediums. If medium subunit threshold is 2 and number of subunits is 2
-  > then mediums are equal to `[1]` since the only subunit `[1, 2]` had only one element above or equal to the threshold.
+  > Same goes for mediums. If `medium subunit threshold` is 2 and number of subunits is 2
+  > then `mediums` are equal to `[1]` since the only subunit `[1, 2]` had only one element above or equal to the threshold.
 
-  The number of levels the function accepts is equal to the product of subunits per tier.
+  The number of levels the function requires is equal to the product of all subunits per tier.
   This way we compute only one long interval because only one is needed.
   If the number of levels is smaller than the required minimum, the algorithm returns silence.
 
   The most recent interval in each tier serves as a basis for computing an activity score.
   The activity score is a logarithm of a quotient of:
-    - the probability of `k` active items in `n` total items under an assumption that a person is speaking (binomial coefficient)
-    - same probability but under an assumption that a person is not speaking (exponential distribution)
+    - the probability of `k` active items in `n` total items under an assumption that a person is speaking (modeled as a *binomial distribution*)
+    - probability same as above but under an assumption that a person is not speaking (modeled as an *exponential distribution*)
 
   The activity score for each tier is then thresholded again.
   A threshold for every tier is given as a module parameter.
-  If all activity scores are over the threshold, the algorithm estimates that it is speech. Otherwise silence.
+  If all activity scores are over the threshold, the algorithm returns that the input contains speech.
+  Otherwise the algorithm returns that input contains silence.
 
   -----------------
   Overall the parameters for each tier are:
@@ -53,8 +54,33 @@ defmodule Membrane.RTP.Vad.IsSpeakingEstimator do
   |-|-|
   | `subunits` | number of smaller units in one bigger unit |
   | `score_threshold`  | number equal or above which the activity score of the given tier must be to be counted as indicating speech |
-  | `subunit_threshold` | number equal or above which the number of active subunits must be for the given tier to be marked as active (for immediates it is equal to the threshold given as a estimate_is_speaking/2 argument) |
+  | `subunit_threshold` | number equal or above which the number of active subunits must be for the given tier to be marked as active (for `immediates` it is equal to the threshold given as a `estimate_is_speaking/2` argument) |
   | `lambda` | parameter for the exponential distribution (element of the activity score computations) |
+
+  To set those parameters you can tweak the values in the following snippet in the `config.exs`, `dev.exs` or you can add a similar snippet to other config files
+
+  ```
+  config :membrane_rtp_plugin,
+    vad_estimation_parameters: %{
+      immediate: %{
+        subunits: 1,
+        score_threshold: 0,
+        lambda: 1
+      },
+      medium: %{
+        subunits: 10,
+        score_threshold: 20,
+        subunit_threshold: 1,
+        lambda: 24
+      },
+      long: %{
+        subunits: 7,
+        score_threshold: 20,
+        subunit_threshold: 3,
+        lambda: 47
+      }
+    }
+  ```
 
   A thorough explanation with images can be found in the Jellyfish book in the [Voice Activity Detection](https://jellyfish-dev.github.io/book/webrtc/vad.html) chapter.
   """
