@@ -16,7 +16,7 @@ defmodule Membrane.RTP.Vad.IsSpeakingEstimator do
   |--------------|----------------------|---------------------------------|-----------|
   | `immediate`  | smallest sound chunk | 1                               | ~20 [ms]  |
   | `medium`     | one word             | 1 \* 10 = 10                    | ~200 [ms] |
-  | `long`       | half/one sentence    | 1 \* 10 \* 7 = 70               | ~1.4 [s]  |
+  | `long`       | half/one sentence    | 1 \\* 10 \* 7 = 70              | ~1.4 [s]  |
 
   Each tier interval is computed based on the smaller tier intervals (subunits).
   Immediates are computed based on levels, mediums on top of immediates and longs on top of mediums.
