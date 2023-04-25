@@ -57,7 +57,7 @@ defmodule Membrane.RTP.Vad.IsSpeakingEstimator do
   | `subunit_threshold` | number equal or above which the number of active subunits must be for the given tier to be marked as active (for `immediates` it is equal to the threshold given as a `estimate_is_speaking/2` argument) |
   | `lambda` | parameter for the exponential distribution (element of the activity score computations) |
 
-  To set those parameters you can tweak the values in the following snippet in the `config.exs`, `dev.exs` or you can add a similar snippet to other config files
+  You can set them, by adding the following code to your `config.exs`
 
   ```
   config :membrane_rtp_plugin,
