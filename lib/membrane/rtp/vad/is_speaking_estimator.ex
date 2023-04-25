@@ -33,7 +33,7 @@ defmodule Membrane.RTP.Vad.IsSpeakingEstimator do
   > Same goes for mediums. If `medium subunit threshold` is 2 and number of subunits is 2
   > then `mediums` are equal to `[1]` since the only subunit `[1, 2]` had only one element above or equal to the threshold.
 
-  The number of levels the function requires is equal to the product of all subunits per tier.
+  The number of levels the function requires equals the product of the subunits number required for each tier.
   This way we compute only one long interval because only one is needed.
   If the number of levels is smaller than the required minimum, the algorithm returns silence.
 
