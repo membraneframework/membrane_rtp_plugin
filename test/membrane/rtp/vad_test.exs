@@ -2,30 +2,24 @@ defmodule Membrane.RTP.VADTest do
   @moduledoc """
   Voice Activity Detection.
 
-  Notes for understanding these tests:
-  * The initial timestamp represents a random RTP timestamp. Since RTP timestamps for a
-    session begin at a random unsigned 32-bit integer, the value of number is not important.
-  * Buffer intervals are tightly coupled to time deltas. For OPUS, the clock rate is `48000`
-    and the interval between buffers is `20`, so the delta between RTP timestamps will be
-    `960`. Tests that use different clock rates should set an appropriate buffer interval.
+  The initial timestamp represents a random RTP timestamp. Since RTP timestamps for a
+  session begin at a random unsigned 32-bit integer, the value of number is not important.
   """
   use ExUnit.Case
 
   alias Membrane.RTP.VAD
+  alias Membrane.RTP.Vad.{AudioLevelQueue, VadParams}
 
   ExUnit.Case.register_attribute(__MODULE__, :buffer_interval)
-  ExUnit.Case.register_attribute(__MODULE__, :clock_rate)
-  ExUnit.Case.register_attribute(__MODULE__, :min_packet_num)
-  ExUnit.Case.register_attribute(__MODULE__, :time_window)
-  ExUnit.Case.register_attribute(__MODULE__, :vad_silence_time)
   ExUnit.Case.register_attribute(__MODULE__, :vad_threshold)
 
   @default_vad_id 1
   @default_buffer_interval 20
+  @max_levels_length VadParams.target_levels_length()
 
   defp calculate_buffer_time_delta(ctx) do
     buffer_interval = ctx.registered.buffer_interval || @default_buffer_interval
-    [time_delta: ctx.clock_rate / 1000 * buffer_interval]
+    [time_delta: 1 / buffer_interval]
   end
 
   defp generate_initial_timestamp(_ctx),
@@ -40,10 +34,6 @@ defmodule Membrane.RTP.VADTest do
 
   defp setup_vad_options(ctx) do
     [
-      clock_rate: get_vad_attribute_or_default(ctx, :clock_rate),
-      min_packet_num: get_vad_attribute_or_default(ctx, :min_packet_num),
-      time_window: get_vad_attribute_or_default(ctx, :time_window),
-      vad_silence_time: get_vad_attribute_or_default(ctx, :vad_silence_time),
       vad_threshold: get_vad_attribute_or_default(ctx, :vad_threshold)
     ]
   end
@@ -52,10 +42,6 @@ defmodule Membrane.RTP.VADTest do
     {[], state} =
       VAD.handle_init(nil, %{
         vad_id: @default_vad_id,
-        clock_rate: ctx.clock_rate,
-        min_packet_num: ctx.min_packet_num,
-        time_window: ctx.time_window,
-        vad_silence_time: ctx.vad_silence_time,
         vad_threshold: ctx.vad_threshold
       })
 
@@ -92,10 +78,20 @@ defmodule Membrane.RTP.VADTest do
          initial: state,
          time_delta: time_delta
        ) do
+    iterate_for(
+      volumes: List.duplicate(volume, buffer_count),
+      initial: state,
+      time_delta: time_delta
+    )
+  end
+
+  defp iterate_for(volumes: volumes, initial: state, time_delta: time_delta) do
     original_timestamp = state.current_timestamp
 
-    Enum.reduce(1..buffer_count, state, fn index, state ->
-      new_timestamp = original_timestamp + time_delta * index
+    volumes
+    |> Enum.with_index()
+    |> Enum.reduce(state, fn {volume, index}, state ->
+      new_timestamp = original_timestamp + time_delta * (index + 1)
       buffer = rtp_buffer(volume, new_timestamp)
 
       {_actions, new_state} = VAD.handle_process(:input, buffer, %{}, state)
@@ -108,6 +104,8 @@ defmodule Membrane.RTP.VADTest do
     new_state
   end
 
+  defp levels_len(state), do: state.audio_levels.length
+
   describe "handle_process" do
     setup [
       :setup_vad_options,
@@ -116,37 +114,48 @@ defmodule Membrane.RTP.VADTest do
       :calculate_buffer_time_delta
     ]
 
-    test "keeps running totals for buffers within a specific time window", ctx do
+    test "keeps audio levels length", ctx do
       %{
-        time_delta: time_delta,
         state: state,
+        time_delta: time_delta,
         initial_timestamp: initial_timestamp
       } = ctx
 
-      buffer = rtp_buffer(-127, initial_timestamp)
+      assert levels_len(state) == 0
 
-      new_state = process_buffer(buffer, state)
+      state = process_buffer(rtp_buffer(-127, initial_timestamp), state)
+      assert levels_len(state) == 1
 
-      assert %{
-               audio_levels_count: 1,
-               audio_levels_sum: -127,
-               vad: :silence
-             } = new_state
+      half_of_max_length = div(@max_levels_length, 2)
 
-      buffer = rtp_buffer(-50, initial_timestamp + time_delta)
-      new_state = process_buffer(buffer, new_state)
+      state =
+        iterate_for(
+          buffers: half_of_max_length,
+          volume: -50,
+          initial: state,
+          time_delta: time_delta
+        )
 
-      assert %{
-               audio_levels_count: 2,
-               audio_levels_sum: -177,
-               vad: :silence
-             } = new_state
+      assert levels_len(state) == half_of_max_length + 1
 
-      new_state = iterate_for(buffers: 100, volume: 0, initial: new_state, time_delta: time_delta)
-      assert %{audio_levels_count: 101, audio_levels_sum: -50, vad: :speech} = new_state
+      rest_levels_length = @max_levels_length - half_of_max_length - 1
+
+      state =
+        iterate_for(
+          buffers: rest_levels_length,
+          volume: -50,
+          initial: state,
+          time_delta: time_delta
+        )
+
+      assert levels_len(state) == @max_levels_length
+
+      state = iterate_for(buffers: 100, volume: -100, initial: state, time_delta: time_delta)
+
+      assert levels_len(state) == @max_levels_length
     end
 
-    test "changes between :speech and :silence based on a running average", ctx do
+    test "maps levels from -127 and 0 to 0 and 127", ctx do
       %{
         time_delta: time_delta,
         state: state,
@@ -154,40 +163,17 @@ defmodule Membrane.RTP.VADTest do
       } = ctx
 
       state = process_buffer(rtp_buffer(-127, initial_timestamp), state)
+      assert AudioLevelQueue.to_list(state.audio_levels) == [0]
 
-      assert %{vad: :silence} = state
+      rtp_volumes = -126..0
+      state = iterate_for(volumes: rtp_volumes, initial: state, time_delta: time_delta)
 
-      new_state = iterate_for(buffers: 100, volume: 0, initial: state, time_delta: time_delta)
-      assert %{vad: :speech} = new_state
+      expected_audio_levels = 0..127 |> Enum.reverse() |> Enum.take(@max_levels_length)
 
-      new_state = iterate_for(buffers: 5000, volume: 0, initial: state, time_delta: time_delta)
-      assert %{audio_levels_count: 101, vad: :speech} = new_state
-
-      new_state = iterate_for(buffers: 100, volume: -127, initial: state, time_delta: time_delta)
-      assert %{audio_levels_count: 101, vad: :silence} = new_state
+      assert AudioLevelQueue.to_list(state.audio_levels) == expected_audio_levels
     end
 
-    @clock_rate 1000
-    @buffer_interval 1000
-    test "retains audio levels based on the encoding's clock rate", ctx do
-      %{
-        time_delta: time_delta,
-        state: state,
-        initial_timestamp: initial_timestamp
-      } = ctx
-
-      state = process_buffer(rtp_buffer(-127, initial_timestamp), state)
-
-      new_state = iterate_for(buffers: 5, volume: -50, initial: state, time_delta: time_delta)
-      assert %{audio_levels_count: 3, audio_levels_sum: -150} = new_state
-    end
-
-    @clock_rate 1000
-    @min_packet_num 3
-    @vad_threshold -51
-    @buffer_interval 1000
-    test "transitions :silence -> :speech when avg audio level >= vad_threshold",
-         ctx do
+    test "transitions between :speech and :silence", ctx do
       %{
         time_delta: time_delta,
         state: state,
@@ -197,49 +183,14 @@ defmodule Membrane.RTP.VADTest do
       state = process_buffer(rtp_buffer(-127, initial_timestamp), state)
       assert state.vad == :silence
 
-      new_state = iterate_for(buffers: 5, volume: -50, initial: state, time_delta: time_delta)
-      assert %{audio_levels_count: 3, audio_levels_sum: -150, vad: :speech} = new_state
-    end
+      state = iterate_for(buffers: 100, volume: 0, initial: state, time_delta: time_delta)
+      assert state.vad == :speech
 
-    @clock_rate 1000
-    @min_packet_num 3
-    @vad_threshold -49
-    @buffer_interval 1000
-    test "does not transition when avg audio level < vad_threshold",
-         ctx do
-      %{
-        time_delta: time_delta,
-        state: state,
-        initial_timestamp: initial_timestamp
-      } = ctx
+      state = iterate_for(buffers: 100, volume: -100, initial: state, time_delta: time_delta)
 
-      state = process_buffer(rtp_buffer(-127, initial_timestamp), state)
       assert state.vad == :silence
-
-      new_state = iterate_for(buffers: 5, volume: -50, initial: state, time_delta: time_delta)
-      assert %{audio_levels_count: 3, audio_levels_sum: -150, vad: :silence} = new_state
     end
 
-    @clock_rate 1000
-    @min_packet_num 4
-    @vad_threshold -51
-    @buffer_interval 1000
-    test "does not transition vad mode until min_packet_num has been retained", ctx do
-      %{
-        time_delta: time_delta,
-        state: state,
-        initial_timestamp: initial_timestamp
-      } = ctx
-
-      state = process_buffer(rtp_buffer(-127, initial_timestamp), state)
-      assert state.vad == :silence
-
-      new_state = iterate_for(buffers: 5, volume: -50, initial: state, time_delta: time_delta)
-      assert %{audio_levels_count: 3, audio_levels_sum: -150, vad: :silence} = new_state
-    end
-
-    @clock_rate 1000
-    @min_packet_num 3
     @buffer_interval 1000
     test "resets the state when RTP timestamps roll over", ctx do
       %{state: state} = ctx
@@ -253,7 +204,7 @@ defmodule Membrane.RTP.VADTest do
       state = process_buffer(rtp_buffer(-5, 1995), state)
       state = process_buffer(rtp_buffer(-5, 2995), state)
 
-      assert %{audio_levels_count: 2, audio_levels_sum: -10, vad: :silence} = state
+      assert levels_len(state) === 2
     end
 
     test "ignore RTP packets that arrive out of order", ctx do
@@ -267,11 +218,9 @@ defmodule Membrane.RTP.VADTest do
       state = process_buffer(rtp_buffer(-127, initial_timestamp - time_delta), state)
       state = process_buffer(rtp_buffer(-50, initial_timestamp + time_delta * 2), state)
 
-      assert %{audio_levels_count: 2, audio_levels_sum: -177, vad: :silence} = state
+      assert levels_len(state) === 2
     end
 
-    @clock_rate 1000
-    @min_packet_num 3
     @buffer_interval 1000
     test "ignore RTP packets that arrive out of order, from before a rollover", ctx do
       %{state: state} = ctx
@@ -283,7 +232,7 @@ defmodule Membrane.RTP.VADTest do
       state = process_buffer(rtp_buffer(-127, initial_timestamp + 1000), state)
       state = process_buffer(rtp_buffer(-5, 1995), state)
 
-      assert %{audio_levels_count: 2, audio_levels_sum: -10, vad: :silence} = state
+      assert levels_len(state) === 2
     end
   end
 end
