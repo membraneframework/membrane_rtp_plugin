@@ -70,7 +70,7 @@ defmodule Membrane.RTP.OutboundTrackingSerializer do
             payload_type: RTP.payload_type_t(),
             extension_mapping: RTP.SessionBin.rtp_extension_mapping_t(),
             any_buffer_sent?: boolean(),
-            rtcp_output_pad: Membrane.Pad.ref_t() | nil,
+            rtcp_output_pad: Membrane.Pad.ref() | nil,
             stats_acc: %{}
           }
 
