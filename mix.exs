@@ -36,7 +36,7 @@ defmodule Membrane.RTP.Plugin.MixProject do
 
   defp deps do
     [
-      {:membrane_core, "~> 0.11.2"},
+      {:membrane_core, "~> 0.12.1"},
       {:membrane_rtp_format, "~> 0.6.0"},
       {:membrane_funnel_plugin, "~> 0.6"},
       {:membrane_telemetry_metrics, "~> 0.1.0"},
@@ -51,7 +51,7 @@ defmodule Membrane.RTP.Plugin.MixProject do
       {:membrane_rtp_mpegaudio_plugin, "~> 0.12.0", only: :test},
       {:membrane_h264_ffmpeg_plugin, "~> 0.25.0", only: :test},
       {:membrane_pcap_plugin,
-       github: "membraneframework/membrane_pcap_plugin", tag: "v0.7.0", only: :test},
+       github: "membraneframework/membrane_pcap_plugin", tag: "v0.8.0", only: :test},
       {:membrane_hackney_plugin, "~> 0.9.0", only: :test},
 
       # Dev
