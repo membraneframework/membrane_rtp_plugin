@@ -98,7 +98,7 @@ defmodule Membrane.RTP.SessionBin do
   """
   @type rtp_extension_option_t ::
           {extension_name :: rtp_extension_name_t(),
-           extension_config :: Membrane.ChildrenSpec.child_definition_t()}
+           extension_config :: Membrane.ChildrenSpec.child_definition()}
 
   @type rtp_extension_options_t :: [rtp_extension_option_t]
 
@@ -114,7 +114,7 @@ defmodule Membrane.RTP.SessionBin do
   Extensions can implement different functionalities, for example a filter can be responsible for dropping silent
   audio packets when encountered VAD extension data in header extensions of a packet.
   """
-  @type extension_t :: {Membrane.Child.name_t(), Membrane.ChildrenSpec.child_definition_t()}
+  @type extension_t :: {Membrane.Child.name(), Membrane.ChildrenSpec.child_definition()}
 
   @ssrc_boundaries 2..(Bitwise.bsl(1, 32) - 1)
 
