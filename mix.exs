@@ -47,7 +47,7 @@ defmodule Membrane.RTP.Plugin.MixProject do
       {:bimap, "~> 1.2"},
 
       # Test
-      {:membrane_rtp_h264_plugin, "~> 0.14.0", only: :test},
+      {:membrane_rtp_h264_plugin, "~> 0.16.0", only: :test},
       {:membrane_rtp_mpegaudio_plugin, "~> 0.12.0", only: :test},
       {:membrane_h264_ffmpeg_plugin, "~> 0.25.0", only: :test},
       {:membrane_pcap_plugin,
