@@ -91,7 +91,7 @@ defmodule Membrane.RTP.Metrics do
         "outbound-rtp.packets",
         event_name: [Membrane.RTP, :packet, :sent]
       ),
-      Metrics.counter(
+      Metrics.sum(
         "outbound-rtp.bytes",
         event_name: [Membrane.RTP, :packet, :sent],
         measurement: :bytes
