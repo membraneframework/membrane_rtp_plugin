@@ -44,7 +44,7 @@ defmodule Membrane.RTP.TWCCReceiver do
             packet_info_store: PacketInfoStore.t(),
             feedback_packet_count: non_neg_integer(),
             media_ssrc: RTP.ssrc_t() | nil,
-            buffered_actions: %{Pad.ref_t() => Qex.t()}
+            buffered_actions: %{Pad.ref() => Qex.t()}
           }
 
     @enforce_keys [:twcc_id, :report_interval, :feedback_sender_ssrc]

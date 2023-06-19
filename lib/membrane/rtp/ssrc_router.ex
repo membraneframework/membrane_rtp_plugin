@@ -52,7 +52,7 @@ defmodule Membrane.RTP.SSRCRouter do
     alias Membrane.RTP
 
     @type t() :: %__MODULE__{
-            input_pads: %{RTP.ssrc_t() => [input_pad :: Pad.ref_t()]},
+            input_pads: %{RTP.ssrc_t() => [input_pad :: Pad.ref()]},
             buffered_actions: %{RTP.ssrc_t() => [Membrane.Element.Action.t()]},
             required_extensions: %{
               RTP.payload_type_t() => MapSet.t(RTP.Header.Extension.identifier_t())
