@@ -79,7 +79,7 @@ defmodule Membrane.RTP.StreamSendBinTest do
             })
             |> child(:video_parser, %Membrane.H264.FFmpeg.Parser{
               framerate: {30, 1},
-              alignment: :nal
+              alignment: :nalu
             })
 
           :pcap ->
