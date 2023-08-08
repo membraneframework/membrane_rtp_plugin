@@ -116,7 +116,7 @@ defmodule Membrane.RTP.Session.BinTest do
           location:
             "https://raw.githubusercontent.com/membraneframework/static/gh-pages/samples/ffmpeg-testsrc.h264"
         }),
-        child(:parser, %Membrane.H264.FFmpeg.Parser{framerate: {30, 1}, alignment: :nal}),
+        child(:parser, %Membrane.H264.FFmpeg.Parser{framerate: {30, 1}, alignment: :nalu}),
         child(:rtp_sink, Testing.Sink),
         child(:rtcp_source, %Testing.Source{
           output: options.rtcp_input,
