@@ -609,17 +609,14 @@ defmodule Membrane.RTP.SessionBin do
     state = %{state | ssrcs: Map.delete(state.ssrcs, ssrc)}
 
     to_remove =
-      [
-        :rtx_funnel,
-        :rtx,
-        :rtx_decryptor,
-        :stream_receive_bin
-      ]
-      |> Enum.map(&{&1, ssrc})
-      |> Enum.filter(fn name ->
-        child = Map.get(ctx.children, name)
-        child && not child.terminating?
+      ctx.children
+      |> Enum.filter(fn {name, child} ->
+        # we use pattern matching to match all
+        # extensions spawned for given ssrc stream
+        # e.g. vad
+        match?({_name, ^ssrc}, name) && not child.terminating?
       end)
+      |> Enum.map(fn {name, child} -> name end)
 
     {[remove_child: to_remove], state}
   end
