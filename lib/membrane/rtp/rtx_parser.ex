@@ -79,7 +79,7 @@ defmodule Membrane.RTP.RTXParser do
   def handle_process(:input, %Buffer{payload: payload, metadata: metadata}, _ctx, state) do
     # Ignore empty buffers, most likely used for bandwidth estimation
     if byte_size(payload) > 0 do
-      Membrane.Logger.warn(
+      Membrane.Logger.warning(
         "Received invalid RTX buffer with sequence_number #{metadata.rtp.sequence_number}"
       )
     end

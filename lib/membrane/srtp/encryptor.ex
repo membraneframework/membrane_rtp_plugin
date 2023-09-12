@@ -89,7 +89,7 @@ if Code.ensure_loaded?(ExLibSRTP) do
 
     @impl true
     def handle_event(_pad, %SRTP.KeyingMaterialEvent{}, _ctx, state) do
-      Membrane.Logger.warn("Got unexpected SRTP.KeyingMaterialEvent. Ignoring.")
+      Membrane.Logger.warning("Got unexpected SRTP.KeyingMaterialEvent. Ignoring.")
       {[], state}
     end
 
@@ -124,7 +124,7 @@ if Code.ensure_loaded?(ExLibSRTP) do
           raise "Failed to protect #{inspect(packet_type)} due to unhandled error #{reason}"
 
         {:error, reason} ->
-          Membrane.Logger.warn("Ignoring #{inspect(packet_type)} packet due to `#{reason}`")
+          Membrane.Logger.warning("Ignoring #{inspect(packet_type)} packet due to `#{reason}`")
           []
       end
     end

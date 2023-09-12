@@ -45,7 +45,7 @@ defmodule Membrane.RTCP.Parser do
         {actions, state}
 
       {:error, reason} ->
-        Membrane.Logger.warn("""
+        Membrane.Logger.warning("""
         Couldn't parse rtcp packet:
         #{inspect(payload, limit: :infinity)}
         Reason: #{inspect(reason)}. Ignoring packet.
@@ -133,7 +133,7 @@ defmodule Membrane.RTCP.Parser do
   end
 
   defp process_rtcp(unknown_packet, metadata) do
-    Membrane.Logger.warn("""
+    Membrane.Logger.warning("""
     Unhandled RTCP packet
     #{inspect(unknown_packet, pretty: true, limit: :infinity)}
     #{inspect(metadata, pretty: true)}

@@ -82,7 +82,7 @@ defmodule Membrane.RTP.InboundPacketTracker do
     if abs(delta) > @max_diff do
       # The gap is too big, we consider this packet to be malformed
       # Ignore it
-      Membrane.Logger.warn(
+      Membrane.Logger.warning(
         "Dropping packet #{seq_num} with big sequence number difference (#{delta})"
       )
 
