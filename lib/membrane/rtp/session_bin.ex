@@ -616,7 +616,7 @@ defmodule Membrane.RTP.SessionBin do
         # e.g. vad
         match?({_name, ^ssrc}, name) && not child.terminating?
       end)
-      |> Enum.map(fn {name, child} -> name end)
+      |> Enum.map(fn {name, _child} -> name end)
 
     {[remove_child: to_remove], state}
   end
