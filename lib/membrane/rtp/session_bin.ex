@@ -609,16 +609,9 @@ defmodule Membrane.RTP.SessionBin do
     state = %{state | ssrcs: Map.delete(state.ssrcs, ssrc)}
 
     to_remove =
-      [
-        :rtx_funnel,
-        :rtx,
-        :rtx_decryptor,
-        :stream_receive_bin
-      ]
-      |> Enum.map(&{&1, ssrc})
-      |> Enum.filter(fn name ->
-        child = Map.get(ctx.children, name)
-        child && not child.terminating?
+      Enum.flat_map(ctx.children, fn
+        {{name, ^ssrc}, %{terminating?: false}} -> [{name, ssrc}]
+        _other -> []
       end)
 
     {[remove_child: to_remove], state}

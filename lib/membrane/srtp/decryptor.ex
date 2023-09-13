@@ -73,7 +73,7 @@ if Code.ensure_loaded?(ExLibSRTP) do
 
     @impl true
     def handle_event(_pad, %SRTP.KeyingMaterialEvent{}, _ctx, state) do
-      Membrane.Logger.warn("Got unexpected SRTP.KeyingMaterialEvent. Ignoring.")
+      Membrane.Logger.warning("Got unexpected SRTP.KeyingMaterialEvent. Ignoring.")
       {[], state}
     end
 
