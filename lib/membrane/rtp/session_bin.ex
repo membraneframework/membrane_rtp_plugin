@@ -610,7 +610,7 @@ defmodule Membrane.RTP.SessionBin do
 
     to_remove =
       Enum.flat_map(ctx.children, fn
-        {{name, ^ssrc}, %{terminating?: false}} -> [name]
+        {{name, ^ssrc}, %{terminating?: false}} -> [{name, ssrc}]
         _other -> []
       end)
 
