@@ -609,14 +609,10 @@ defmodule Membrane.RTP.SessionBin do
     state = %{state | ssrcs: Map.delete(state.ssrcs, ssrc)}
 
     to_remove =
-      ctx.children
-      |> Enum.filter(fn {name, child} ->
-        # we use pattern matching to match all
-        # extensions spawned for given ssrc stream
-        # e.g. vad
-        match?({_name, ^ssrc}, name) && not child.terminating?
+      Enum.flat_map(ctx.children, fn
+        {{name, ^ssrc}, %{terminating?: false}} -> [name]
+        _other -> []
       end)
-      |> Enum.map(fn {name, _child} -> name end)
 
     {[remove_child: to_remove], state}
   end
