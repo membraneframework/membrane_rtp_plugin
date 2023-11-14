@@ -1,7 +1,7 @@
 defmodule Membrane.RTP.Plugin.MixProject do
   use Mix.Project
 
-  @version "0.23.1"
+  @version "0.24.0"
   @github_url "https://github.com/membraneframework/membrane_rtp_plugin"
 
   def project do
@@ -36,9 +36,9 @@ defmodule Membrane.RTP.Plugin.MixProject do
 
   defp deps do
     [
-      {:membrane_core, "~> 0.12.1"},
-      {:membrane_rtp_format, "~> 0.7.0"},
-      {:membrane_funnel_plugin, "~> 0.8.0"},
+      {:membrane_core, "~> 1.0"},
+      {:membrane_rtp_format, "~> 0.8.0"},
+      {:membrane_funnel_plugin, "~> 0.9.0"},
       {:membrane_telemetry_metrics, "~> 0.1.0"},
       {:ex_libsrtp, "~> 0.6.0", optional: true},
       {:qex, "~> 0.5.1"},
@@ -48,11 +48,11 @@ defmodule Membrane.RTP.Plugin.MixProject do
 
       # Test
       {:membrane_rtp_h264_plugin, "~> 0.17.0", only: :test},
-      {:membrane_rtp_mpegaudio_plugin, "~> 0.13.0", only: :test},
+      {:membrane_rtp_mpegaudio_plugin, "~> 0.14.0", only: :test},
       {:membrane_h264_ffmpeg_plugin, "~> 0.28.0", only: :test},
       {:membrane_pcap_plugin,
        github: "membraneframework/membrane_pcap_plugin", tag: "v0.8.0", only: :test},
-      {:membrane_hackney_plugin, "~> 0.10.0", only: :test},
+      {:membrane_hackney_plugin, "~> 0.11.0", only: :test},
 
       # Dev
       {:ex_doc, "~> 0.28", only: :dev, runtime: false},
