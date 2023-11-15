@@ -100,8 +100,8 @@ defmodule Membrane.RTP.Session.SenderReport do
 
     rtp_offset =
       (timestamp - sender_stats.timestamp)
-      |> Ratio.mult(sender_stats.clock_rate)
-      |> Time.round_to_seconds()
+      |> Numbers.mult(sender_stats.clock_rate)
+      |> Time.as_seconds(:round)
 
     rtp_timestamp = rem(sender_stats.rtp_timestamp + rtp_offset, @timestamp_limit)
 

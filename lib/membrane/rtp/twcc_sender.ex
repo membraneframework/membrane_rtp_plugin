@@ -15,8 +15,8 @@ defmodule Membrane.RTP.TWCCSender do
 
   @seq_number_limit Bitwise.bsl(1, 16)
 
-  def_input_pad :input, accepted_format: RTP, availability: :on_request, demand_mode: :auto
-  def_output_pad :output, accepted_format: RTP, availability: :on_request, demand_mode: :auto
+  def_input_pad :input, accepted_format: RTP, availability: :on_request, flow_control: :auto
+  def_output_pad :output, accepted_format: RTP, availability: :on_request, flow_control: :auto
 
   @impl true
   def handle_init(_ctx, _options) do
@@ -134,7 +134,7 @@ defmodule Membrane.RTP.TWCCSender do
   end
 
   @impl true
-  def handle_process(Pad.ref(:input, id), buffer, ctx, state) do
+  def handle_buffer(Pad.ref(:input, id), buffer, ctx, state) do
     {seq_num, state} = Map.get_and_update!(state, :seq_num, &{&1, rem(&1 + 1, @seq_number_limit)})
 
     buffer =

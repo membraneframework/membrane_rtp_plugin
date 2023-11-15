@@ -13,12 +13,12 @@ defmodule Membrane.RTP.OutboundRtxController do
 
   def_input_pad :input,
     availability: :always,
-    demand_mode: :auto,
+    flow_control: :auto,
     accepted_format: _any
 
   def_output_pad :output,
     availability: :always,
-    demand_mode: :auto,
+    flow_control: :auto,
     accepted_format: _any
 
   @max_store_size 300
@@ -37,7 +37,7 @@ defmodule Membrane.RTP.OutboundRtxController do
   end
 
   @impl true
-  def handle_process(:input, buffer, _ctx, state) when byte_size(buffer.payload) > 0 do
+  def handle_buffer(:input, buffer, _ctx, state) when byte_size(buffer.payload) > 0 do
     idx = seq_num_to_index(buffer.metadata.rtp.sequence_number)
 
     state = put_in(state, [:store, idx], {nil, buffer})
@@ -46,7 +46,7 @@ defmodule Membrane.RTP.OutboundRtxController do
   end
 
   @impl true
-  def handle_process(:input, buffer, _ctx, state), do: {[forward: buffer], state}
+  def handle_buffer(:input, buffer, _ctx, state), do: {[forward: buffer], state}
 
   @impl true
   def handle_event(

@@ -19,7 +19,7 @@ defmodule Membrane.RTP.PipelineTest do
 
     pipeline =
       Pipeline.start_link_supervised!(
-        structure:
+        spec:
           child(:source, %Source{
             output: test_data,
             stream_format: %RemoteStream{type: :packetized, content_format: RTP}
@@ -32,6 +32,6 @@ defmodule Membrane.RTP.PipelineTest do
       assert_sink_buffer(pipeline, :sink, %Buffer{}, @buffer_receive_timeout)
     end)
 
-    Pipeline.terminate(pipeline, blocking?: true)
+    Pipeline.terminate(pipeline)
   end
 end

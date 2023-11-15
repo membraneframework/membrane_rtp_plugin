@@ -15,7 +15,7 @@ defmodule Membrane.RTP.ParserTest do
       state = %{secure?: false}
       packet = Fixtures.sample_packet_binary()
 
-      assert Parser.handle_process(:input, %Buffer{payload: packet}, nil, state) ==
+      assert Parser.handle_buffer(:input, %Buffer{payload: packet}, nil, state) ==
                {[
                   buffer:
                     {:output,
@@ -39,7 +39,7 @@ defmodule Membrane.RTP.ParserTest do
 
       packet = Fixtures.sample_packet_binary_with_padding()
 
-      assert Parser.handle_process(:input, %Buffer{payload: packet}, nil, state) ==
+      assert Parser.handle_buffer(:input, %Buffer{payload: packet}, nil, state) ==
                {[
                   buffer:
                     {:output,
@@ -66,7 +66,7 @@ defmodule Membrane.RTP.ParserTest do
       state = %{secure?: false, rtcp_output_pad: :rtcp_output}
       buffer = Fixtures.sample_rtcp_buffer()
 
-      assert Parser.handle_process(:input, buffer, nil, state) ==
+      assert Parser.handle_buffer(:input, buffer, nil, state) ==
                {[buffer: {:rtcp_output, buffer}], state}
     end
 
@@ -76,7 +76,7 @@ defmodule Membrane.RTP.ParserTest do
 
       pipeline =
         Pipeline.start_link_supervised!(
-          structure:
+          spec:
             child(:source, %Source{
               output: test_data,
               stream_format: %Membrane.RemoteStream{
@@ -92,7 +92,7 @@ defmodule Membrane.RTP.ParserTest do
         assert_sink_buffer(pipeline, :sink, %Buffer{}, @buffer_receive_timeout)
       end)
 
-      Pipeline.terminate(pipeline, blocking?: true)
+      Pipeline.terminate(pipeline)
     end
   end
 end

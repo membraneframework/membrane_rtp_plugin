@@ -33,7 +33,7 @@ defmodule Membrane.RTP.SenderReportTest do
     expected_rtp_timestamp =
       @rtp_timestamp +
         ((@h264_clock_rate * (report_wallclock_timestamp - test_wallclock_time))
-         |> Time.round_to_seconds())
+         |> Time.as_seconds(:round))
 
     assert expected_rtp_timestamp == report_rtp_timestamp
   end

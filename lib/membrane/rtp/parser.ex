@@ -44,12 +44,12 @@ defmodule Membrane.RTP.Parser do
   def_input_pad :input,
     accepted_format:
       %RemoteStream{type: :packetized, content_format: cf} when cf in [nil, RTP, RTCP],
-    demand_mode: :auto
+    flow_control: :auto
 
-  def_output_pad :output, accepted_format: RTP, demand_mode: :auto
+  def_output_pad :output, accepted_format: RTP, flow_control: :auto
 
   def_output_pad :rtcp_output,
-    mode: :push,
+    flow_control: :push,
     accepted_format: %RemoteStream{content_format: RTCP, type: :packetized},
     availability: :on_request
 
@@ -86,7 +86,7 @@ defmodule Membrane.RTP.Parser do
   end
 
   @impl true
-  def handle_process(:input, %Buffer{payload: payload, metadata: metadata} = buffer, _ctx, state) do
+  def handle_buffer(:input, %Buffer{payload: payload, metadata: metadata} = buffer, _ctx, state) do
     with :rtp <- RTP.Packet.identify(payload),
          {:ok,
           %{packet: packet, padding_size: padding_size, total_header_size: total_header_size}} <-

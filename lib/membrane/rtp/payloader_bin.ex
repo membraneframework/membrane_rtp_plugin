@@ -7,9 +7,9 @@ defmodule Membrane.RTP.PayloaderBin do
 
   alias Membrane.RTP
 
-  def_input_pad :input, accepted_format: _any, demand_unit: :buffers
+  def_input_pad :input, accepted_format: _any
 
-  def_output_pad :output, accepted_format: RTP, demand_unit: :buffers
+  def_output_pad :output, accepted_format: RTP
 
   def_options payloader: [
                 spec: module(),

@@ -94,19 +94,19 @@ defmodule Membrane.RTP.VADTest do
       new_timestamp = original_timestamp + time_delta * (index + 1)
       buffer = rtp_buffer(volume, new_timestamp)
 
-      {_actions, new_state} = VAD.handle_process(:input, buffer, %{}, state)
+      {_actions, new_state} = VAD.handle_buffer(:input, buffer, %{}, state)
       new_state
     end)
   end
 
   defp process_buffer(buffer, state) do
-    {_actions, new_state} = VAD.handle_process(:input, buffer, %{}, state)
+    {_actions, new_state} = VAD.handle_buffer(:input, buffer, %{}, state)
     new_state
   end
 
   defp levels_len(state), do: state.audio_levels.length
 
-  describe "handle_process" do
+  describe "handle_buffer" do
     setup [
       :setup_vad_options,
       :setup_initial_vad_state,

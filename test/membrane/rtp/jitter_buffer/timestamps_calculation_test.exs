@@ -20,7 +20,7 @@ defmodule Membrane.RTP.JitterBuffer.TimestampsCalculationTest do
   defp process_and_receive_buffer_timestamps(buffers, state) do
     state =
       Enum.reduce(buffers, state, fn buffer, state ->
-        {[], state} = JitterBuffer.handle_process(:input, buffer, %{}, state)
+        {[], state} = JitterBuffer.handle_buffer(:input, buffer, %{}, state)
         state
       end)
 

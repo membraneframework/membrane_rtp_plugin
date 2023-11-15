@@ -22,7 +22,7 @@ defmodule Membrane.RTP.StreamReceiveBinTest do
   defmodule FrameCounter do
     use Membrane.Sink
 
-    def_input_pad :input, demand_unit: :buffers, accepted_format: _any
+    def_input_pad :input, flow_control: :manual, demand_unit: :buffers, accepted_format: _any
 
     @impl true
     def handle_init(_ctx, _opts), do: {[], %{counter: 0}}
@@ -32,7 +32,7 @@ defmodule Membrane.RTP.StreamReceiveBinTest do
       do: {[demand: :input], state}
 
     @impl true
-    def handle_write(_pad, _buff, _context, %{counter: c}),
+    def handle_buffer(_pad, _buff, _context, %{counter: c}),
       do: {[demand: :input], %{counter: c + 1}}
 
     @impl true
@@ -51,12 +51,13 @@ defmodule Membrane.RTP.StreamReceiveBinTest do
         local_ssrc: 0,
         rtcp_report_interval: Membrane.Time.seconds(5)
       })
-      |> child(:video_parser, %Membrane.H264.FFmpeg.Parser{framerate: {30, 1}})
+      |> child(:video_parser, %Membrane.H264.Parser{
+        generate_best_effort_timestamps: %{framerate: {30, 1}}
+      })
       |> child(:frame_counter, FrameCounter)
 
-    pipeline = Testing.Pipeline.start_link_supervised!(structure: structure)
+    pipeline = Testing.Pipeline.start_link_supervised!(spec: structure)
 
-    assert_pipeline_play(pipeline)
     assert_start_of_stream(pipeline, :rtp_parser)
     assert_start_of_stream(pipeline, :frame_counter)
     assert_end_of_stream(pipeline, :rtp_parser, :input, 4000)
@@ -64,7 +65,7 @@ defmodule Membrane.RTP.StreamReceiveBinTest do
     assert_pipeline_notified(pipeline, :frame_counter, {:frame_count, count})
     assert count == @frames_count
 
-    Testing.Pipeline.terminate(pipeline, blocking?: true)
+    Testing.Pipeline.terminate(pipeline)
   end
 
   test "RTCP reports are generated properly" do
@@ -91,20 +92,19 @@ defmodule Membrane.RTP.StreamReceiveBinTest do
       })
       |> child(:sink, Testing.Sink)
 
-    pipeline = Testing.Pipeline.start_link_supervised!(structure: structure)
+    pipeline = Testing.Pipeline.start_link_supervised!(spec: structure)
 
-    assert_pipeline_play(pipeline)
     assert_start_of_stream(pipeline, :rtp_parser)
     assert_start_of_stream(pipeline, :sink)
     assert_end_of_stream(pipeline, :rtp_parser, :input, 4000)
     assert_end_of_stream(pipeline, :sink)
-    Testing.Pipeline.terminate(pipeline, blocking?: true)
+    Testing.Pipeline.terminate(pipeline)
   end
 
   defmodule NoopSource do
     use Membrane.Source
 
-    def_output_pad :output, mode: :push, accepted_format: _any
+    def_output_pad :output, flow_control: :push, accepted_format: _any
 
     @impl true
     def handle_event(:output, event, _ctx, state) do
@@ -115,7 +115,7 @@ defmodule Membrane.RTP.StreamReceiveBinTest do
   defmodule KeyframeRequester do
     use Membrane.Sink
 
-    def_input_pad :input, demand_unit: :buffers, accepted_format: _any
+    def_input_pad :input, flow_control: :auto, accepted_format: _any
 
     def_options delay: [spec: integer()]
 
@@ -153,9 +153,9 @@ defmodule Membrane.RTP.StreamReceiveBinTest do
       })
       |> child(:sink, %KeyframeRequester{delay: @fir_throttle_duration_ms + delta})
 
-    pipeline = Testing.Pipeline.start_link_supervised!(structure: structure)
+    pipeline = Testing.Pipeline.start_link_supervised!(spec: structure)
 
-    assert_pipeline_play(pipeline)
+    assert_sink_playing(pipeline, :sink)
     assert_pipeline_notified(pipeline, :src, %Membrane.RTCPEvent{rtcp: rtcp})
     assert %FeedbackPacket{payload: fir} = rtcp
     assert fir == %FeedbackPacket.FIR{target_ssrc: remote_ssrc, seq_num: 0}
@@ -176,6 +176,6 @@ defmodule Membrane.RTP.StreamReceiveBinTest do
 
     # ... and only one
     refute_pipeline_notified(pipeline, :src, %Membrane.RTCPEvent{}, half_throttle_duration)
-    Testing.Pipeline.terminate(pipeline, blocking?: true)
+    Testing.Pipeline.terminate(pipeline)
   end
 end

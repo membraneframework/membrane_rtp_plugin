@@ -14,8 +14,8 @@ defmodule Membrane.RTP.TWCCReceiver do
 
   @feedback_count_limit Bitwise.bsl(1, 8)
 
-  def_input_pad :input, accepted_format: RTP, availability: :on_request, demand_mode: :auto
-  def_output_pad :output, accepted_format: RTP, availability: :on_request, demand_mode: :auto
+  def_input_pad :input, accepted_format: RTP, availability: :on_request, flow_control: :auto
+  def_output_pad :output, accepted_format: RTP, availability: :on_request, flow_control: :auto
 
   def_options twcc_id: [
                 spec: 1..14,
@@ -104,7 +104,7 @@ defmodule Membrane.RTP.TWCCReceiver do
   end
 
   @impl true
-  def handle_process(Pad.ref(:input, ssrc), buffer, ctx, state) do
+  def handle_buffer(Pad.ref(:input, ssrc), buffer, ctx, state) do
     {extension, buffer} = Header.Extension.pop(buffer, state.twcc_id)
 
     state =

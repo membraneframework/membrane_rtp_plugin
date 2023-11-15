@@ -12,8 +12,8 @@ if Code.ensure_loaded?(ExLibSRTP) do
     alias Membrane.Buffer
     alias Membrane.SRTP
 
-    def_input_pad :input, accepted_format: _any, demand_mode: :auto
-    def_output_pad :output, accepted_format: _any, demand_mode: :auto
+    def_input_pad :input, accepted_format: _any, flow_control: :auto
+    def_output_pad :output, accepted_format: _any, flow_control: :auto
 
     def_options policies: [
                   spec: [ExLibSRTP.Policy.t()],
@@ -40,7 +40,7 @@ if Code.ensure_loaded?(ExLibSRTP) do
     end
 
     @impl true
-    def handle_process(:input, buffer, _ctx, state) do
+    def handle_buffer(:input, buffer, _ctx, state) do
       case ExLibSRTP.unprotect_rtcp(state.srtp, buffer.payload) do
         {:ok, payload} ->
           {[buffer: {:output, %Buffer{buffer | payload: payload}}], state}

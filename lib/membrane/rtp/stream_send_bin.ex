@@ -5,19 +5,17 @@ defmodule Membrane.RTP.StreamSendBin do
   use Membrane.Bin
   alias Membrane.RTP
 
-  def_input_pad :input, demand_unit: :buffers, accepted_format: _any
+  def_input_pad :input, accepted_format: _any
 
   def_input_pad :rtcp_input,
     availability: :on_request,
-    demand_unit: :buffers,
     accepted_format: _any
 
-  def_output_pad :output, accepted_format: _any, demand_unit: :buffers
+  def_output_pad :output, accepted_format: _any
 
   def_output_pad :rtcp_output,
     availability: :on_request,
-    accepted_format: _any,
-    demand_unit: :buffers
+    accepted_format: _any
 
   def_options payloader: [default: nil, spec: module],
               payload_type: [spec: RTP.payload_type_t()],

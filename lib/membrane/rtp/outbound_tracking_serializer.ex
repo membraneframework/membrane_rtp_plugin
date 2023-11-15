@@ -16,21 +16,21 @@ defmodule Membrane.RTP.OutboundTrackingSerializer do
   alias Membrane.RTCP.TransportFeedbackPacket.NACK
   alias Membrane.RTP.Session.SenderReport
 
-  def_input_pad :input, accepted_format: RTP, demand_mode: :auto
+  def_input_pad :input, accepted_format: RTP, flow_control: :auto
 
   def_output_pad :output,
     accepted_format: %RemoteStream{type: :packetized, content_format: RTP},
-    demand_mode: :auto
+    flow_control: :auto
 
   def_input_pad :rtcp_input,
     availability: :on_request,
     accepted_format: _any,
-    demand_mode: :auto
+    flow_control: :auto
 
   def_output_pad :rtcp_output,
     availability: :on_request,
     accepted_format: %RemoteStream{type: :packetized, content_format: RTCP},
-    demand_mode: :auto
+    flow_control: :auto
 
   def_options ssrc: [spec: RTP.ssrc_t()],
               payload_type: [spec: RTP.payload_type_t()],
@@ -209,7 +209,7 @@ defmodule Membrane.RTP.OutboundTrackingSerializer do
   end
 
   @impl true
-  def handle_process(:input, %Buffer{} = buffer, _ctx, state) do
+  def handle_buffer(:input, %Buffer{} = buffer, _ctx, state) do
     state = update_stats(buffer, state)
 
     %{rtp: rtp_metadata} = buffer.metadata

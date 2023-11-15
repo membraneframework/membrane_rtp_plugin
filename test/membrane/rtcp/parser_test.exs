@@ -7,7 +7,7 @@ defmodule Membrane.RTCP.ParserTest do
   test "Handles SR with REMB" do
     buffer = %Buffer{payload: Fixtures.compound_sr_sdes_remb(), metadata: %{arrival_ts: 2137}}
     state = %{}
-    assert {events, ^state} = Parser.handle_process(:input, buffer, %{}, state)
+    assert {events, ^state} = Parser.handle_buffer(:input, buffer, %{}, state)
     assert [event: {:output, %RTCPEvent{} = rtcp_event}] = events
     assert rtcp_event.arrival_timestamp == 2137
     assert %SenderReportPacket{} = rtcp_event.rtcp
@@ -16,7 +16,7 @@ defmodule Membrane.RTCP.ParserTest do
   test "Handles PLI" do
     buffer = %Buffer{payload: Fixtures.pli_packet(), metadata: %{arrival_ts: 2137}}
     state = %{}
-    assert {events, ^state} = Parser.handle_process(:input, buffer, %{}, state)
+    assert {events, ^state} = Parser.handle_buffer(:input, buffer, %{}, state)
     assert [event: {:output, %RTCPEvent{} = rtcp_event}] = events
     assert rtcp_event.arrival_timestamp == 2137
     assert %{rtcp: %FeedbackPacket{} = feedback} = rtcp_event

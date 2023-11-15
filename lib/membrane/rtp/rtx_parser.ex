@@ -16,8 +16,8 @@ defmodule Membrane.RTP.RTXParser do
 
   alias Membrane.{Buffer, RTP}
 
-  def_input_pad :input, accepted_format: RTP, demand_mode: :auto
-  def_output_pad :output, accepted_format: RTP, demand_mode: :auto
+  def_input_pad :input, accepted_format: RTP, flow_control: :auto
+  def_output_pad :output, accepted_format: RTP, flow_control: :auto
 
   def_options original_payload_type: [
                 description:
@@ -47,7 +47,7 @@ defmodule Membrane.RTP.RTXParser do
   end
 
   @impl true
-  def handle_process(:input, %Buffer{payload: payload} = buffer, _ctx, state)
+  def handle_buffer(:input, %Buffer{payload: payload} = buffer, _ctx, state)
       when byte_size(payload) >= 2 do
     <<original_seq_num::16, original_payload::binary>> = payload
 
@@ -76,7 +76,7 @@ defmodule Membrane.RTP.RTXParser do
   end
 
   @impl true
-  def handle_process(:input, %Buffer{payload: payload, metadata: metadata}, _ctx, state) do
+  def handle_buffer(:input, %Buffer{payload: payload, metadata: metadata}, _ctx, state) do
     # Ignore empty buffers, most likely used for bandwidth estimation
     if byte_size(payload) > 0 do
       Membrane.Logger.warning(

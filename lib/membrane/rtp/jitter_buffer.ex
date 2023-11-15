@@ -15,9 +15,9 @@ defmodule Membrane.RTP.JitterBuffer do
 
   @timestamp_limit Bitwise.bsl(1, 32)
 
-  def_output_pad :output, accepted_format: RTP, demand_mode: :auto
+  def_output_pad :output, accepted_format: RTP, flow_control: :auto
 
-  def_input_pad :input, accepted_format: RTP, demand_mode: :auto
+  def_input_pad :input, accepted_format: RTP, flow_control: :auto
 
   @default_latency 200 |> Time.milliseconds()
 
@@ -66,7 +66,7 @@ defmodule Membrane.RTP.JitterBuffer do
     Process.send_after(
       self(),
       :initial_latency_passed,
-      state.latency |> Time.round_to_milliseconds()
+      state.latency |> Time.as_milliseconds(:round)
     )
 
     {[], %{state | waiting?: true}}
@@ -83,7 +83,7 @@ defmodule Membrane.RTP.JitterBuffer do
   end
 
   @impl true
-  def handle_process(:input, buffer, _context, %State{store: store, waiting?: true} = state) do
+  def handle_buffer(:input, buffer, _context, %State{store: store, waiting?: true} = state) do
     state =
       case BufferStore.insert_buffer(store, buffer) do
         {:ok, result} ->
@@ -98,7 +98,7 @@ defmodule Membrane.RTP.JitterBuffer do
   end
 
   @impl true
-  def handle_process(:input, buffer, _context, %State{store: store} = state) do
+  def handle_buffer(:input, buffer, _context, %State{store: store} = state) do
     case BufferStore.insert_buffer(store, buffer) do
       {:ok, result} ->
         state = %State{state | store: result}
@@ -147,7 +147,7 @@ defmodule Membrane.RTP.JitterBuffer do
 
         buffer_ts ->
           since_insertion = Time.monotonic_time() - buffer_ts
-          send_after_time = max(0, latency - since_insertion) |> Time.round_to_milliseconds()
+          send_after_time = max(0, latency - since_insertion) |> Time.as_milliseconds(:round)
           Process.send_after(self(), :send_buffers, send_after_time)
       end
 

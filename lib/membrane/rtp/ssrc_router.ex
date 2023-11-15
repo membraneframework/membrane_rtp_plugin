@@ -28,12 +28,12 @@ defmodule Membrane.RTP.SSRCRouter do
   def_input_pad :input,
     accepted_format: any_of(RTCP, RTP),
     availability: :on_request,
-    demand_mode: :auto
+    flow_control: :auto
 
   def_output_pad :output,
     accepted_format: RTP,
     availability: :on_request,
-    demand_mode: :auto,
+    flow_control: :auto,
     options: [
       telemetry_label: [
         spec: Membrane.TelemetryMetrics.label(),
@@ -141,7 +141,7 @@ defmodule Membrane.RTP.SSRCRouter do
   def handle_pad_removed(pad, ctx, state), do: super(pad, ctx, state)
 
   @impl true
-  def handle_process(Pad.ref(:input, _id) = pad, buffer, ctx, state) do
+  def handle_buffer(Pad.ref(:input, _id) = pad, buffer, ctx, state) do
     %Membrane.Buffer{
       metadata: %{
         rtp: %{ssrc: ssrc, payload_type: payload_type, extensions: extensions}
