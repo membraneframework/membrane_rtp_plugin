@@ -1,7 +1,7 @@
 defmodule Membrane.RTP.Plugin.MixProject do
   use Mix.Project
 
-  @version "0.23.1"
+  @version "0.23.2"
   @github_url "https://github.com/membraneframework/membrane_rtp_plugin"
 
   def project do
@@ -40,7 +40,7 @@ defmodule Membrane.RTP.Plugin.MixProject do
       {:membrane_rtp_format, "~> 0.7.0"},
       {:membrane_funnel_plugin, "~> 0.8.0"},
       {:membrane_telemetry_metrics, "~> 0.1.0"},
-      {:ex_libsrtp, "~> 0.6.0", optional: true},
+      {:ex_libsrtp, "~> 0.6.0 or ~> 0.7.0", optional: true},
       {:qex, "~> 0.5.1"},
       {:bunch, "~> 1.5"},
       {:heap, "~> 2.0.2"},
