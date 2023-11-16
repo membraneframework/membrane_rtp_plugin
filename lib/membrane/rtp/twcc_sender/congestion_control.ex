@@ -132,7 +132,7 @@ defmodule Membrane.RTP.TWCCSender.CongestionControl do
     } = cc
 
     [recv_delta_ms, send_delta_ms] =
-      Enum.map([recv_delta, send_delta], &Time.round_to_milliseconds/1)
+      Enum.map([recv_delta, send_delta], &Time.as_milliseconds(&1, :round))
 
     interpacket_delta = recv_delta_ms - send_delta_ms
 
@@ -277,7 +277,7 @@ defmodule Membrane.RTP.TWCCSender.CongestionControl do
 
     now = Time.vm_time()
     last_bandwidth_increase_ts = last_bandwidth_increase_ts || now
-    time_since_last_update_ms = Time.round_to_milliseconds(now - last_bandwidth_increase_ts)
+    time_since_last_update_ms = Time.as_milliseconds(now - last_bandwidth_increase_ts, :round)
 
     a_hat =
       case bandwidth_increase_mode(cc) do
@@ -286,7 +286,7 @@ defmodule Membrane.RTP.TWCCSender.CongestionControl do
           eta * prev_a_hat
 
         :additive ->
-          response_time_ms = 100 + Time.round_to_milliseconds(rtt)
+          response_time_ms = 100 + Time.as_milliseconds(rtt, :round)
           alpha = 0.5 * min(time_since_last_update_ms / response_time_ms, 1)
           expected_packet_size_bits = Enum.sum(packet_sizes) / length(packet_sizes)
           prev_a_hat + max(1000, alpha * expected_packet_size_bits)

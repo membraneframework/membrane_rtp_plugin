@@ -14,8 +14,8 @@ defmodule Membrane.RTP.SilenceDiscarder do
 
   alias Membrane.RTP.{Header, PacketsDiscardedEvent}
 
-  def_input_pad :input, accepted_format: _any, demand_mode: :auto
-  def_output_pad :output, accepted_format: _any, demand_mode: :auto
+  def_input_pad :input, accepted_format: _any, flow_control: :auto
+  def_output_pad :output, accepted_format: _any, flow_control: :auto
 
   def_options max_consecutive_drops: [
                 spec: non_neg_integer() | :infinity,
@@ -53,7 +53,7 @@ defmodule Membrane.RTP.SilenceDiscarder do
   def handle_event(pad, other, ctx, state), do: super(pad, other, ctx, state)
 
   @impl true
-  def handle_process(
+  def handle_buffer(
         :input,
         buffer,
         _ctx,
@@ -64,7 +64,7 @@ defmodule Membrane.RTP.SilenceDiscarder do
   end
 
   @impl true
-  def handle_process(:input, buffer, _ctx, state) do
+  def handle_buffer(:input, buffer, _ctx, state) do
     buffer
     |> Header.Extension.find(state.vad_id)
     |> handle_vad(buffer, state)

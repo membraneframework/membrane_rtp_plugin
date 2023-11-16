@@ -3,7 +3,7 @@ if Code.ensure_loaded?(ExLibSRTP) do
     @moduledoc """
     Converts SRTP packets to plain RTP.
 
-    Decryptor expects that buffers passed to `handle_process/4` have already parsed headers
+    Decryptor expects that buffers passed to `handle_buffer/4` have already parsed headers
     in the metadata field as they contain information about header length. The header
     length is needed to avoid parsing the header twice in case of any elements preceding
     the decryptor needed the information to e.g. drop the packet before reaching the decryptor.
@@ -21,8 +21,8 @@ if Code.ensure_loaded?(ExLibSRTP) do
     alias Membrane.RTP.Utils
     alias Membrane.SRTP
 
-    def_input_pad :input, accepted_format: _any, demand_mode: :auto
-    def_output_pad :output, accepted_format: _any, demand_mode: :auto
+    def_input_pad :input, accepted_format: _any, flow_control: :auto
+    def_output_pad :output, accepted_format: _any, flow_control: :auto
 
     def_options policies: [
                   spec: [ExLibSRTP.Policy.t()],
@@ -81,7 +81,7 @@ if Code.ensure_loaded?(ExLibSRTP) do
     def handle_event(pad, other, ctx, state), do: super(pad, other, ctx, state)
 
     @impl true
-    def handle_process(:input, buffer, _ctx, state) do
+    def handle_buffer(:input, buffer, _ctx, state) do
       %Buffer{
         payload: payload,
         metadata: %{rtp: %{total_header_size: total_header_size}}

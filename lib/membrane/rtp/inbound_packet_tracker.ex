@@ -21,8 +21,8 @@ defmodule Membrane.RTP.InboundPacketTracker do
   @max_s24_val Bitwise.bsl(1, 23) - 1
   @min_s24_val -Bitwise.bsl(1, 23)
 
-  def_input_pad :input, accepted_format: _any, demand_mode: :auto
-  def_output_pad :output, accepted_format: _any, demand_mode: :auto
+  def_input_pad :input, accepted_format: _any, flow_control: :auto
+  def_output_pad :output, accepted_format: _any, flow_control: :auto
 
   def_options clock_rate: [
                 spec: Membrane.RTP.clock_rate_t()
@@ -74,7 +74,7 @@ defmodule Membrane.RTP.InboundPacketTracker do
   end
 
   @impl true
-  def handle_process(:input, buffer, _ctx, %State{} = state) do
+  def handle_buffer(:input, buffer, _ctx, %State{} = state) do
     seq_num = buffer.metadata.rtp.sequence_number
 
     {delta, packet_index, tracker} = SequenceNumberTracker.track(state.seq_num_tracker, seq_num)
@@ -187,7 +187,7 @@ defmodule Membrane.RTP.InboundPacketTracker do
     # Algorithm from https://tools.ietf.org/html/rfc3550#appendix-A.8
     arrival_ts = Map.get(metadata, :arrival_ts, Time.vm_time())
     buffer_ts = metadata.rtp.timestamp
-    arrival = arrival_ts |> Time.as_seconds() |> Ratio.mult(clock_rate) |> Ratio.trunc()
+    arrival = arrival_ts |> Time.as_seconds() |> Numbers.mult(clock_rate) |> Ratio.trunc()
     transit = arrival - buffer_ts
 
     {jitter, transit} =

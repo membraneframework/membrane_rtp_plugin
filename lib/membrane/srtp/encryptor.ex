@@ -11,8 +11,8 @@ if Code.ensure_loaded?(ExLibSRTP) do
 
     alias Membrane.{Buffer, RTP, SRTP}
 
-    def_input_pad :input, accepted_format: _any, demand_mode: :auto
-    def_output_pad :output, accepted_format: _any, demand_mode: :auto
+    def_input_pad :input, accepted_format: _any, flow_control: :auto
+    def_output_pad :output, accepted_format: _any, flow_control: :auto
 
     defguardp is_protection_error_fatal(type, reason)
               when type == :rtcp or
@@ -97,12 +97,12 @@ if Code.ensure_loaded?(ExLibSRTP) do
     def handle_event(pad, other, ctx, state), do: super(pad, other, ctx, state)
 
     @impl true
-    def handle_process(:input, buffer, _ctx, %{policies: []} = state) do
+    def handle_buffer(:input, buffer, _ctx, %{policies: []} = state) do
       {[], Map.update!(state, :queue, &[buffer | &1])}
     end
 
     @impl true
-    def handle_process(:input, buffer, _ctx, state) do
+    def handle_buffer(:input, buffer, _ctx, state) do
       {[buffer: {:output, protect_buffer(buffer, state.srtp)}], state}
     end
 

@@ -12,7 +12,7 @@ defmodule Membrane.RTP.StreamSendBinTest do
   defmodule RTCPReceiver do
     use Membrane.Sink
 
-    def_input_pad :input, demand_unit: :buffers, accepted_format: _any
+    def_input_pad :input, flow_control: :manual, demand_unit: :buffers, accepted_format: _any
 
     @impl true
     def handle_init(_ctx, _opts), do: {[], %{}}
@@ -22,7 +22,7 @@ defmodule Membrane.RTP.StreamSendBinTest do
       do: {[demand: :input], state}
 
     @impl true
-    def handle_write(_pad, buffer, _context, state) do
+    def handle_buffer(_pad, buffer, _context, state) do
       {[notify_parent: {:rtcp_packet, buffer}], state}
     end
   end
@@ -35,8 +35,8 @@ defmodule Membrane.RTP.StreamSendBinTest do
 
     def_options limit: [spec: non_neg_integer() | :infinity]
 
-    def_input_pad :input, accepted_format: _any, demand_mode: :auto
-    def_output_pad :output, accepted_format: _any, demand_mode: :auto
+    def_input_pad :input, accepted_format: _any, flow_control: :auto
+    def_output_pad :output, accepted_format: _any, flow_control: :auto
 
     @impl true
     def handle_init(_ctx, opts) do
@@ -44,18 +44,18 @@ defmodule Membrane.RTP.StreamSendBinTest do
     end
 
     @impl true
-    def handle_process(:input, buffer, _ctx, %{limit: :infinity} = state) do
+    def handle_buffer(:input, buffer, _ctx, %{limit: :infinity} = state) do
       {[buffer: {:output, buffer}], state}
     end
 
     @impl true
-    def handle_process(:input, buffer, _ctx, %{buffers: buffers, limit: limit} = state)
+    def handle_buffer(:input, buffer, _ctx, %{buffers: buffers, limit: limit} = state)
         when buffers + 1 <= limit do
       {[buffer: {:output, buffer}], %{state | buffers: buffers + 1}}
     end
 
     @impl true
-    def handle_process(:input, _buffer, _ctx, state) do
+    def handle_buffer(:input, _buffer, _ctx, state) do
       {[], state}
     end
   end
@@ -77,9 +77,9 @@ defmodule Membrane.RTP.StreamSendBinTest do
                 "https://raw.githubusercontent.com/membraneframework/static/gh-pages/samples/big-buck-bunny/bun33s_720x480.h264",
               hackney_opts: [follow_redirect: true]
             })
-            |> child(:video_parser, %Membrane.H264.FFmpeg.Parser{
-              framerate: {30, 1},
-              alignment: :nalu
+            |> child(:video_parser, %Membrane.H264.Parser{
+              generate_best_effort_timestamps: %{framerate: {30, 1}},
+              output_alignment: :nalu
             })
 
           :pcap ->
@@ -106,7 +106,7 @@ defmodule Membrane.RTP.StreamSendBinTest do
         |> child(:rtcp_sink, Testing.Sink)
       ]
 
-      {[spec: structure, playback: :playing], %{}}
+      {[spec: structure], %{}}
     end
   end
 
@@ -122,7 +122,6 @@ defmodule Membrane.RTP.StreamSendBinTest do
         }
       )
 
-    assert_pipeline_play(pipeline)
     assert_start_of_stream(pipeline, :rtp_sink)
 
     assert_sink_buffer(pipeline, :rtcp_sink, packet)
@@ -136,7 +135,7 @@ defmodule Membrane.RTP.StreamSendBinTest do
              }
            } = packet
 
-    Testing.Pipeline.terminate(pipeline, blocking?: true)
+    Testing.Pipeline.terminate(pipeline)
   end
 
   test "Depayloaded RTP stream gets payloaded and passed through bin's output properly" do
@@ -150,12 +149,11 @@ defmodule Membrane.RTP.StreamSendBinTest do
         }
       )
 
-    assert_pipeline_play(pipeline)
     assert_start_of_stream(pipeline, :rtp_sink)
 
     assert_end_of_stream(pipeline, :rtp_sink, :input, 4000)
 
-    Testing.Pipeline.terminate(pipeline, blocking?: true)
+    Testing.Pipeline.terminate(pipeline)
   end
 
   test "Payloaded RTP stream passes through bin's output properly" do
@@ -169,7 +167,6 @@ defmodule Membrane.RTP.StreamSendBinTest do
         }
       )
 
-    assert_pipeline_play(pipeline)
     assert_start_of_stream(pipeline, :rtp_sink)
 
     for _ <- 1..@frames_count do
@@ -178,6 +175,6 @@ defmodule Membrane.RTP.StreamSendBinTest do
 
     assert_end_of_stream(pipeline, :rtp_sink, :input)
 
-    Testing.Pipeline.terminate(pipeline, blocking?: true)
+    Testing.Pipeline.terminate(pipeline)
   end
 end

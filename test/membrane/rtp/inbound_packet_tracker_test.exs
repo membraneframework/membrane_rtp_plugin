@@ -27,12 +27,12 @@ defmodule Membrane.RTP.InboundPacketTrackerTest do
       timestamped_buf = put_in(buffer.metadata[:arrival_ts], ts)
 
       assert {_actions, state} =
-               InboundPacketTracker.handle_process(:input, timestamped_buf, nil, state)
+               InboundPacketTracker.handle_buffer(:input, timestamped_buf, nil, state)
 
       assert state.jitter == 0.0
 
       assert state.transit ==
-               Membrane.Time.round_to_seconds(ts) * state.clock_rate -
+               Membrane.Time.as_seconds(ts, :round) * state.clock_rate -
                  timestamped_buf.metadata.rtp.timestamp
 
       buffer = BufferFactory.sample_buffer(@base_seq_number + 1)
@@ -46,14 +46,14 @@ defmodule Membrane.RTP.InboundPacketTrackerTest do
         put_in(buffer.metadata[:arrival_ts], ts + arrival_ts_increment + packet_delay)
 
       assert {_actions, state} =
-               InboundPacketTracker.handle_process(:input, timestamped_buf, nil, state)
+               InboundPacketTracker.handle_buffer(:input, timestamped_buf, nil, state)
 
       # 16 is defined by RFC
       assert state.jitter ==
-               Membrane.Time.round_to_seconds(packet_delay) * state.clock_rate / 16
+               Membrane.Time.as_seconds(packet_delay, :round) * state.clock_rate / 16
 
       assert state.transit ==
-               Membrane.Time.round_to_seconds(ts + arrival_ts_increment + packet_delay) *
+               Membrane.Time.as_seconds(ts + arrival_ts_increment + packet_delay, :round) *
                  state.clock_rate -
                  timestamped_buf.metadata.rtp.timestamp
     end
@@ -65,7 +65,7 @@ defmodule Membrane.RTP.InboundPacketTrackerTest do
       buffer = BufferFactory.sample_buffer(100)
 
       assert {[buffer: {:output, buffer}], state} =
-               InboundPacketTracker.handle_process(:input, buffer, nil, state)
+               InboundPacketTracker.handle_buffer(:input, buffer, nil, state)
 
       assert buffer.metadata.rtp.sequence_number == 90
 
@@ -73,7 +73,7 @@ defmodule Membrane.RTP.InboundPacketTrackerTest do
       buffer = BufferFactory.sample_buffer(5)
 
       assert {[buffer: {:output, buffer}], state} =
-               InboundPacketTracker.handle_process(:input, buffer, nil, state)
+               InboundPacketTracker.handle_buffer(:input, buffer, nil, state)
 
       assert buffer.metadata.rtp.sequence_number == @max_seq_number - 5 + 1
 
@@ -81,7 +81,7 @@ defmodule Membrane.RTP.InboundPacketTrackerTest do
       buffer = BufferFactory.sample_buffer(100)
 
       assert {[buffer: {:output, buffer}], _state} =
-               InboundPacketTracker.handle_process(:input, buffer, nil, state)
+               InboundPacketTracker.handle_buffer(:input, buffer, nil, state)
 
       assert buffer.metadata.rtp.sequence_number == 100
     end

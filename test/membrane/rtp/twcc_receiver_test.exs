@@ -53,7 +53,7 @@ defmodule Membrane.RTP.TWCCReceiverTest do
   describe "When a buffer arrives, TWCC element" do
     test "forwards it via the appropriate output pad", %{state: state, buffer: buffer} do
       assert {[buffer: {out_pad, _buffer}], _state} =
-               TWCCReceiver.handle_process(@default_input_pad, buffer, @ctx, state)
+               TWCCReceiver.handle_buffer(@default_input_pad, buffer, @ctx, state)
 
       assert out_pad == {Membrane.Pad, :output, @media_ssrc}
     end
@@ -63,7 +63,7 @@ defmodule Membrane.RTP.TWCCReceiverTest do
       buffer: in_buffer
     } do
       assert {[buffer: {_out_pad, out_buffer}], _state} =
-               TWCCReceiver.handle_process(@default_input_pad, in_buffer, @ctx, state)
+               TWCCReceiver.handle_buffer(@default_input_pad, in_buffer, @ctx, state)
 
       {_twcc, buffer_without_twcc} = Header.Extension.pop(in_buffer, @default_twcc_id)
 
@@ -72,7 +72,7 @@ defmodule Membrane.RTP.TWCCReceiverTest do
 
     test "extracts appropriate sequence number", %{state: state, buffer: buffer} do
       assert {_buffer_actions, state} =
-               TWCCReceiver.handle_process(@default_input_pad, buffer, @ctx, state)
+               TWCCReceiver.handle_buffer(@default_input_pad, buffer, @ctx, state)
 
       assert [@sequence_number] = Map.keys(state.packet_info_store.seq_to_timestamp)
     end
@@ -84,10 +84,10 @@ defmodule Membrane.RTP.TWCCReceiverTest do
       buffer: buffer
     } do
       assert {_buffer_actions, state} =
-               TWCCReceiver.handle_process(@default_input_pad, buffer, @ctx, state)
+               TWCCReceiver.handle_buffer(@default_input_pad, buffer, @ctx, state)
 
       assert {_buffer_actions, state} =
-               TWCCReceiver.handle_process(@other_input_pad, buffer, @ctx, state)
+               TWCCReceiver.handle_buffer(@other_input_pad, buffer, @ctx, state)
 
       assert {[event: {@default_input_pad, event}], _state} =
                TWCCReceiver.handle_tick(:report_timer, @ctx, state)
@@ -101,12 +101,12 @@ defmodule Membrane.RTP.TWCCReceiverTest do
            buffer: buffer
          } do
       assert {_buffer_actions, state} =
-               TWCCReceiver.handle_process(@default_input_pad, buffer, @ctx, state)
+               TWCCReceiver.handle_buffer(@default_input_pad, buffer, @ctx, state)
 
       assert {[], state} = TWCCReceiver.handle_pad_removed(@default_input_pad, @ctx, state)
 
       assert {_buffer_actions, state} =
-               TWCCReceiver.handle_process(@other_input_pad, buffer, @ctx, state)
+               TWCCReceiver.handle_buffer(@other_input_pad, buffer, @ctx, state)
 
       assert {[event: {@other_input_pad, event}], _state} =
                TWCCReceiver.handle_tick(:report_timer, @ctx, state)
@@ -116,7 +116,7 @@ defmodule Membrane.RTP.TWCCReceiverTest do
 
     test "uses sender SSRC passed in options", %{state: state, buffer: buffer} do
       assert {_buffer_action, state} =
-               TWCCReceiver.handle_process(@default_input_pad, buffer, @ctx, state)
+               TWCCReceiver.handle_buffer(@default_input_pad, buffer, @ctx, state)
 
       assert {[event: {_event_pad, event}], _state} =
                TWCCReceiver.handle_tick(:report_timer, @ctx, state)
@@ -126,7 +126,7 @@ defmodule Membrane.RTP.TWCCReceiverTest do
 
     test "increments its feedback packet count", %{state: state, buffer: buffer} do
       assert {_buffer_actions, state} =
-               TWCCReceiver.handle_process(@default_input_pad, buffer, @ctx, state)
+               TWCCReceiver.handle_buffer(@default_input_pad, buffer, @ctx, state)
 
       assert {[event: {_event_pad, event}], state} =
                TWCCReceiver.handle_tick(:report_timer, @ctx, state)
@@ -134,7 +134,7 @@ defmodule Membrane.RTP.TWCCReceiverTest do
       assert event.rtcp.payload.feedback_packet_count == @feedback_packet_count
 
       assert {_buffer_action, state} =
-               TWCCReceiver.handle_process(@default_input_pad, buffer, @ctx, state)
+               TWCCReceiver.handle_buffer(@default_input_pad, buffer, @ctx, state)
 
       assert {[event: {_event_pad, event}], _state} =
                TWCCReceiver.handle_tick(:report_timer, @ctx, state)
@@ -153,7 +153,7 @@ defmodule Membrane.RTP.TWCCReceiverTest do
 
     test "performs a rollover", %{state: state, buffer: in_buffer} do
       assert {[buffer: _buffer_action], state} =
-               TWCCReceiver.handle_process(@default_input_pad, in_buffer, @ctx, state)
+               TWCCReceiver.handle_buffer(@default_input_pad, in_buffer, @ctx, state)
 
       assert {[event: _event_action], state} =
                TWCCReceiver.handle_tick(:report_timer, @ctx, state)
@@ -161,7 +161,7 @@ defmodule Membrane.RTP.TWCCReceiverTest do
       assert state.feedback_packet_count == @max_feedback_packet_count
 
       assert {[buffer: _buffer_action], state} =
-               TWCCReceiver.handle_process(@default_input_pad, in_buffer, @ctx, state)
+               TWCCReceiver.handle_buffer(@default_input_pad, in_buffer, @ctx, state)
 
       assert {[event: _event_action], state} =
                TWCCReceiver.handle_tick(:report_timer, @ctx, state)
@@ -188,7 +188,7 @@ defmodule Membrane.RTP.TWCCReceiverTest do
     end
 
     test "will not try to execute any action", %{state: state, buffer: buffer, ctx: ctx} do
-      assert {[], state} = TWCCReceiver.handle_process(@default_input_pad, buffer, ctx, state)
+      assert {[], state} = TWCCReceiver.handle_buffer(@default_input_pad, buffer, ctx, state)
 
       assert {[], state} =
                TWCCReceiver.handle_stream_format(@default_input_pad, :stream_format, ctx, state)

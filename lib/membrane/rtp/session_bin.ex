@@ -180,7 +180,6 @@ defmodule Membrane.RTP.SessionBin do
   end
 
   def_input_pad :input,
-    demand_unit: :buffers,
     accepted_format: _any,
     availability: :on_request,
     options: [
@@ -215,13 +214,11 @@ defmodule Membrane.RTP.SessionBin do
     ]
 
   def_input_pad :rtp_input,
-    demand_unit: :buffers,
     accepted_format:
       %RemoteStream{type: :packetized, content_format: cf} when cf in [RTP, RTCP, nil],
     availability: :on_request
 
   def_output_pad :output,
-    demand_unit: :buffers,
     accepted_format: _any,
     availability: :on_request,
     options: [
@@ -286,7 +283,6 @@ defmodule Membrane.RTP.SessionBin do
     ]
 
   def_output_pad :rtp_output,
-    demand_unit: :buffers,
     accepted_format: %RemoteStream{type: :packetized, content_format: RTP},
     availability: :on_request,
     options: [
@@ -322,12 +318,10 @@ defmodule Membrane.RTP.SessionBin do
     ]
 
   def_output_pad :rtcp_receiver_output,
-    demand_unit: :buffers,
     accepted_format: %RemoteStream{type: :packetized, content_format: RTCP},
     availability: :on_request
 
   def_output_pad :rtcp_sender_output,
-    demand_unit: :buffers,
     accepted_format: %RemoteStream{type: :packetized, content_format: RTCP},
     availability: :on_request
 

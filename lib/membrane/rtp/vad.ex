@@ -23,9 +23,9 @@ defmodule Membrane.RTP.VAD do
   alias Membrane.RTP.{Header, Utils, VadEvent}
   alias Membrane.RTP.Vad.{AudioLevelQueue, IsSpeakingEstimator}
 
-  def_input_pad :input, availability: :always, accepted_format: _any, demand_mode: :auto
+  def_input_pad :input, availability: :always, accepted_format: _any, flow_control: :auto
 
-  def_output_pad :output, availability: :always, accepted_format: _any, demand_mode: :auto
+  def_output_pad :output, availability: :always, accepted_format: _any, flow_control: :auto
 
   def_options vad_id: [
                 spec: 1..14,
@@ -55,7 +55,7 @@ defmodule Membrane.RTP.VAD do
   end
 
   @impl true
-  def handle_process(:input, %Membrane.Buffer{} = buffer, _ctx, state) do
+  def handle_buffer(:input, %Membrane.Buffer{} = buffer, _ctx, state) do
     {extension, buffer} = Header.Extension.pop(buffer, state.vad_id)
     handle_if_present(buffer, extension, state)
   end

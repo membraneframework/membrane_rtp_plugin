@@ -18,8 +18,8 @@ defmodule Membrane.RTCP.Receiver do
   alias Membrane.Time
   alias Membrane.{RTCP, RTP}
 
-  def_input_pad :input, accepted_format: _any, demand_mode: :auto
-  def_output_pad :output, accepted_format: _any, demand_mode: :auto
+  def_input_pad :input, accepted_format: _any, flow_control: :auto
+  def_output_pad :output, accepted_format: _any, flow_control: :auto
 
   def_options local_ssrc: [spec: RTP.ssrc_t()],
               remote_ssrc: [spec: RTP.ssrc_t()],
@@ -113,7 +113,7 @@ defmodule Membrane.RTCP.Receiver do
       interarrival_jitter: trunc(stats.interarrival_jitter),
       last_sr_timestamp: Map.get(state.sr_info, :cut_wallclock_ts, 0),
       # delay_since_sr is expressed in 1/65536 seconds, see https://tools.ietf.org/html/rfc3550#section-6.4.1
-      delay_since_sr: Time.round_to_seconds(65_536 * delay_since_sr)
+      delay_since_sr: Time.as_seconds(65_536 * delay_since_sr, :round)
     }
 
     packet = %RTCP.ReceiverReportPacket{ssrc: state.local_ssrc, reports: [report_block]}
@@ -149,7 +149,7 @@ defmodule Membrane.RTCP.Receiver do
   def handle_event(pad, event, ctx, state), do: super(pad, event, ctx, state)
 
   @impl true
-  def handle_process(:input, buffer, _ctx, state) do
+  def handle_buffer(:input, buffer, _ctx, state) do
     {[buffer: {:output, buffer}], state}
   end
 

@@ -15,7 +15,7 @@ defmodule Membrane.RTP.JitterBuffer.PipelineTest do
 
     @seq_number_limit 65_536
 
-    def_output_pad :output, accepted_format: _any, mode: :push
+    def_output_pad :output, accepted_format: _any, flow_control: :push
 
     def_options buffer_num: [spec: non_neg_integer()],
                 buffer_delay_ms: [spec: non_neg_integer()],
@@ -79,7 +79,7 @@ defmodule Membrane.RTP.JitterBuffer.PipelineTest do
   defp test_pipeline(buffers, buffer_delay_ms, latency) do
     import Membrane.ChildrenSpec
 
-    latency_ms = latency |> Membrane.Time.round_to_milliseconds()
+    latency_ms = latency |> Membrane.Time.as_milliseconds(:round)
 
     structure =
       child(:source, %PushTestingSrc{
@@ -91,10 +91,9 @@ defmodule Membrane.RTP.JitterBuffer.PipelineTest do
       |> child(:buffer, %RTPJitterBuffer{latency: latency, clock_rate: 8000})
       |> child(:sink, Testing.Sink)
 
-    pipeline = Testing.Pipeline.start_link_supervised!(structure: structure)
+    pipeline = Testing.Pipeline.start_link_supervised!(spec: structure)
 
     assert_pipeline_setup(pipeline)
-    assert_pipeline_play(pipeline)
 
     timeout = latency_ms + buffer_delay_ms + 200
     assert_start_of_stream(pipeline, :buffer, :input, 5000)
@@ -123,6 +122,6 @@ defmodule Membrane.RTP.JitterBuffer.PipelineTest do
       end
     end)
 
-    Membrane.Pipeline.terminate(pipeline, blocking?: true)
+    Membrane.Pipeline.terminate(pipeline)
   end
 end

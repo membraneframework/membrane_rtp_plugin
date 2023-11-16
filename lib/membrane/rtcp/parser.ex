@@ -11,12 +11,12 @@ defmodule Membrane.RTCP.Parser do
 
   def_input_pad :input,
     accepted_format: %RemoteStream{type: :packetized, content_format: cf} when cf in [nil, RTCP],
-    demand_mode: :auto
+    flow_control: :auto
 
-  def_output_pad :output, accepted_format: RTCP, demand_mode: :auto
+  def_output_pad :output, accepted_format: RTCP, flow_control: :auto
 
   def_output_pad :receiver_report_output,
-    mode: :push,
+    flow_control: :push,
     accepted_format: %RemoteStream{type: :packetized, content_format: RTCP}
 
   @impl true
@@ -36,7 +36,7 @@ defmodule Membrane.RTCP.Parser do
   end
 
   @impl true
-  def handle_process(:input, %Buffer{payload: payload, metadata: metadata}, _ctx, state) do
+  def handle_buffer(:input, %Buffer{payload: payload, metadata: metadata}, _ctx, state) do
     payload
     |> RTCP.Packet.parse()
     |> case do

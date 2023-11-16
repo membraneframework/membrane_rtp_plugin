@@ -34,8 +34,8 @@ defmodule Membrane.RTP.StreamReceiveBin do
                 default: []
               ]
 
-  def_input_pad :input, accepted_format: _any, demand_unit: :buffers
-  def_output_pad :output, accepted_format: _any, demand_unit: :buffers
+  def_input_pad :input, accepted_format: _any
+  def_output_pad :output, accepted_format: _any
 
   @impl true
   def handle_init(_ctx, opts) do

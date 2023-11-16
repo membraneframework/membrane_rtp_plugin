@@ -14,7 +14,7 @@ defmodule Membrane.RTP.OutboundRtxControllerTest do
 
     state =
       Enum.reduce(buffs, state, fn buffer, state ->
-        assert {[forward: ^buffer], state} = RTX.handle_process(:input, buffer, %{}, state)
+        assert {[forward: ^buffer], state} = RTX.handle_buffer(:input, buffer, %{}, state)
         state
       end)
 
@@ -67,7 +67,7 @@ defmodule Membrane.RTP.OutboundRtxControllerTest do
     buffs = Enum.map(0..received_bufs, &BufferFactory.sample_buffer(@base_seq_number + &1))
 
     Enum.reduce(buffs, state, fn buffer, state ->
-      {[forward: ^buffer], state} = RTX.handle_process(:input, buffer, %{}, state)
+      {[forward: ^buffer], state} = RTX.handle_buffer(:input, buffer, %{}, state)
       state
     end)
   end
