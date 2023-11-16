@@ -16,7 +16,7 @@ The package can be installed by adding `membrane_rtp_plugin` to your list of dep
 def deps do
   [
 	  {:membrane_rtp_plugin, "~> 0.24.0"},
-    {:ex_libsrtp, "~> 0.6.0"} # required only if SRTP/SRTCP support is needed
+    {:ex_libsrtp, ">= 0.0.0"} # required only if SRTP/SRTCP support is needed
   ]
 end
 ```
