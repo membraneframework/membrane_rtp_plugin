@@ -53,7 +53,7 @@ defmodule Membrane.RTP.Session.BinTest do
     """
     use Membrane.Filter
     def_input_pad :input, flow_control: :manual, demand_unit: :buffers, accepted_format: _any
-    def_output_pad :output, accepted_format: _any
+    def_output_pad :output, accepted_format: _any, flow_control: :manual
 
     def_options pause_after: [
                   spec: [integer],
