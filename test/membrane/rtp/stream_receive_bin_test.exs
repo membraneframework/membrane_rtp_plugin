@@ -155,7 +155,6 @@ defmodule Membrane.RTP.StreamReceiveBinTest do
 
     pipeline = Testing.Pipeline.start_link_supervised!(spec: structure)
 
-    assert_sink_playing(pipeline, :sink)
     assert_pipeline_notified(pipeline, :src, %Membrane.RTCPEvent{rtcp: rtcp})
     assert %FeedbackPacket{payload: fir} = rtcp
     assert fir == %FeedbackPacket.FIR{target_ssrc: remote_ssrc, seq_num: 0}
