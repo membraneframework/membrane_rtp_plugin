@@ -594,7 +594,7 @@ defmodule Membrane.RTP.SessionBin do
       |> Enum.map(&{&1, ref})
       |> Enum.filter(&Map.has_key?(ctx.children, &1))
 
-    {[remove_child: children], state}
+    {[remove_children: children], state}
   end
 
   @impl true
@@ -608,7 +608,7 @@ defmodule Membrane.RTP.SessionBin do
         _other -> []
       end)
 
-    {[remove_child: to_remove], state}
+    {[remove_children: to_remove], state}
   end
 
   @impl true
@@ -627,7 +627,7 @@ defmodule Membrane.RTP.SessionBin do
         child && not child.terminating?
       end)
 
-    {[remove_child: to_remove], state}
+    {[remove_children: to_remove], state}
   end
 
   @impl true
