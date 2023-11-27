@@ -260,6 +260,18 @@ defmodule Membrane.RTP.OutboundTrackingSerializer do
   end
 
   @impl true
+  def handle_end_of_stream(_pad, ctx, state) do
+    if ctx.pads
+       |> Map.values()
+       |> Enum.filter(&(&1.direction == :input))
+       |> Enum.all?(& &1.end_of_stream?) do
+      {[forward: :end_of_stream], state}
+    else
+      {[], state}
+    end
+  end
+
+  @impl true
   def handle_parent_notification(:send_stats, ctx, state) do
     %{rtcp_output_pad: rtcp_output} = state
 
