@@ -5,13 +5,20 @@ defmodule Membrane.RTP.TCP.Depayloader do
   """
   use Membrane.Filter
 
-  alias Membrane.{Buffer, RemoteStream}
+  alias Membrane.{Buffer, RemoteStream, RTP}
 
   def_options discard_non_rtp_packets: [
                 spec: bool(),
                 default: true,
                 description: """
-                Discard any data that is not RTP packets
+                Discard any data that is not RTP packets.
+                """
+              ],
+              rtp_channel_id: [
+                spec: non_neg_integer(),
+                default: 0,
+                description: """
+                Channel identifier which encapsulated RTP packets will have.
                 """
               ]
 
@@ -31,9 +38,9 @@ defmodule Membrane.RTP.TCP.Depayloader do
   end
 
   @impl true
-  def handle_playing(_ctx, state) do
+  def handle_stream_format(:input, _stream_format, _ctx, state) do
     stream_format = %RemoteStream{type: :packetized, content_format: RTP}
-    {[stream_format: {:output, accepted_format: stream_format}], state}
+    {[stream_format: {:output, stream_format}], state}
   end
 
   @impl true
@@ -41,7 +48,7 @@ defmodule Membrane.RTP.TCP.Depayloader do
     packets_binary = state.incomplete_packet_binary <> payload
 
     {incomplete_packet_binary, complete_packets_binaries} =
-      get_complete_packets_binaries(packets_binary)
+      get_complete_packets_binaries(packets_binary, state.rtp_channel_id)
 
     packets_buffers =
       Enum.map(complete_packets_binaries, &%Buffer{payload: &1, metadata: metadata})
@@ -50,28 +57,41 @@ defmodule Membrane.RTP.TCP.Depayloader do
      %{state | incomplete_packet_binary: incomplete_packet_binary}}
   end
 
-  @spec get_complete_packets_binaries(binary()) :: {rest :: binary(), payloads :: [binary()]}
-  defp get_complete_packets_binaries(packets_binary, complete_packets_binaries \\ [])
+  @spec get_complete_packets_binaries(binary(), non_neg_integer()) ::
+          {incomplete_packet_binary :: binary(), complete_packets_binaries :: [binary()]}
+  defp get_complete_packets_binaries(packets_binary, channel_id, complete_packets_binaries \\ [])
 
-  defp get_complete_packets_binaries(packets_binary, complete_packets_binaries)
+  defp get_complete_packets_binaries(packets_binary, _channel_id, complete_packets_binaries)
        when byte_size(packets_binary) <= 4 do
     {packets_binary, Enum.reverse(complete_packets_binaries)}
   end
 
   defp get_complete_packets_binaries(
          <<"$", _rest::binary>> = packets_binary,
+         channel_id,
          complete_packets_binaries
        ) do
-    IO.inspect("aaaa")
-    <<"$", _channel, payload_length::size(16), rest::binary>> = packets_binary
-
-    IO.inspect(payload_length, label: "dupa")
+    <<"$", received_channel_id, payload_length::size(16), rest::binary>> = packets_binary
 
     if payload_length > byte_size(rest) do
       {packets_binary, Enum.reverse(complete_packets_binaries)}
     else
       <<complete_packet_binary::binary-size(payload_length)-unit(8), rest::binary>> = rest
-      get_complete_packets_binaries(rest, [complete_packet_binary | complete_packets_binaries])
+
+      complete_packets_binaries =
+        if channel_id != received_channel_id,
+          do: complete_packets_binaries,
+          else: [complete_packet_binary | complete_packets_binaries]
+
+      get_complete_packets_binaries(rest, channel_id, complete_packets_binaries)
     end
+  end
+
+  defp get_complete_packets_binaries(
+         <<"RTSP", _rest::binary>>,
+         _channel_id,
+         _complete_packets_binaries
+       ) do
+    {<<>>, []}
   end
 end
