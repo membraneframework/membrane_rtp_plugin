@@ -62,15 +62,15 @@ defmodule Membrane.RTP.TCP.Depayloader do
   def get_complete_packets_binaries(packets_binary, channel_id, complete_packets_binaries \\ [])
 
   def get_complete_packets_binaries(packets_binary, _channel_id, complete_packets_binaries)
-       when byte_size(packets_binary) <= 4 do
+      when byte_size(packets_binary) <= 4 do
     {packets_binary, Enum.reverse(complete_packets_binaries)}
   end
 
   def get_complete_packets_binaries(
-         <<"$", _rest::binary>> = packets_binary,
-         channel_id,
-         complete_packets_binaries
-       ) do
+        <<"$", _rest::binary>> = packets_binary,
+        channel_id,
+        complete_packets_binaries
+      ) do
     <<"$", received_channel_id, payload_length::size(16), rest::binary>> = packets_binary
 
     if payload_length > byte_size(rest) do
@@ -87,11 +87,8 @@ defmodule Membrane.RTP.TCP.Depayloader do
     end
   end
 
-  def get_complete_packets_binaries(
-         _RTSP_packet_binary,
-         _channel_id,
-         _complete_packets_binaries
-       ) do
+  def get_complete_packets_binaries(rtsp_packet_binary, _channel_id, _complete_packets_binaries) do
+    IO.inspect(rtsp_packet_binary, label: "my_rtsp")
     {<<>>, []}
   end
 end
