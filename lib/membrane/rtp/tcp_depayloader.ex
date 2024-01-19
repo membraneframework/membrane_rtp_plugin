@@ -59,14 +59,14 @@ defmodule Membrane.RTP.TCP.Depayloader do
 
   @spec get_complete_packets_binaries(binary(), non_neg_integer()) ::
           {incomplete_packet_binary :: binary(), complete_packets_binaries :: [binary()]}
-  defp get_complete_packets_binaries(packets_binary, channel_id, complete_packets_binaries \\ [])
+  def get_complete_packets_binaries(packets_binary, channel_id, complete_packets_binaries \\ [])
 
-  defp get_complete_packets_binaries(packets_binary, _channel_id, complete_packets_binaries)
+  def get_complete_packets_binaries(packets_binary, _channel_id, complete_packets_binaries)
        when byte_size(packets_binary) <= 4 do
     {packets_binary, Enum.reverse(complete_packets_binaries)}
   end
 
-  defp get_complete_packets_binaries(
+  def get_complete_packets_binaries(
          <<"$", _rest::binary>> = packets_binary,
          channel_id,
          complete_packets_binaries
@@ -87,8 +87,8 @@ defmodule Membrane.RTP.TCP.Depayloader do
     end
   end
 
-  defp get_complete_packets_binaries(
-         <<"RTSP", _rest::binary>>,
+  def get_complete_packets_binaries(
+         _RTSP_packet_binary,
          _channel_id,
          _complete_packets_binaries
        ) do
