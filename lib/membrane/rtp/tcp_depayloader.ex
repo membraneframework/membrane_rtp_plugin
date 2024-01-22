@@ -5,7 +5,7 @@ defmodule Membrane.RTP.TCP.Depayloader do
   """
   use Membrane.Filter
 
-  alias Membrane.{Buffer, RemoteStream, RTP}
+  alias Membrane.{Buffer, RemoteStream, RTP, RTSP}
 
   def_options discard_non_rtp_packets: [
                 spec: bool(),
@@ -20,6 +20,14 @@ defmodule Membrane.RTP.TCP.Depayloader do
                 description: """
                 Channel identifier which encapsulated RTP packets will have.
                 """
+              ],
+              rtsp_session: [
+                spec: pid() | nil,
+                default: nil,
+                description: """
+                PID of a RTSP Session (returned from Membrane.RTSP.start or Membrane.RTSP.start_link)
+                that received RTSP responses will be forwarded to.
+                """
               ]
 
   def_input_pad :input, accepted_format: %RemoteStream{type: :bytestream}
@@ -31,7 +39,7 @@ defmodule Membrane.RTP.TCP.Depayloader do
     state =
       Map.from_struct(opts)
       |> Map.merge(%{
-        incomplete_packet_binary: <<>>
+        unprocessed_data: <<>>
       })
 
     {[], state}
@@ -44,51 +52,71 @@ defmodule Membrane.RTP.TCP.Depayloader do
   end
 
   @impl true
-  def handle_buffer(:input, %Buffer{payload: payload, metadata: metadata}, _ctx, state) do
-    packets_binary = state.incomplete_packet_binary <> payload
+  def handle_buffer(
+        :input,
+        %Buffer{payload: payload, metadata: metadata},
+        _ctx,
+        %{unprocessed_data: unprocessed_data, rtsp_session: rtsp_session} = state
+      ) do
+    unprocessed_data =
+      if rtsp_response?(unprocessed_data, payload) do
+        if rtsp_session != nil do
+          {:ok, %RTSP.Response{status: 200}} =
+            RTSP.handle_response(rtsp_session, unprocessed_data)
+        end
 
-    {incomplete_packet_binary, complete_packets_binaries} =
-      get_complete_packets_binaries(packets_binary, state.rtp_channel_id)
+        <<>>
+      else
+        unprocessed_data
+      end
+
+    packets_binary = unprocessed_data <> payload
+
+    {unprocessed_data, complete_packets_binaries} =
+      get_complete_packets(packets_binary, state.rtp_channel_id)
 
     packets_buffers =
       Enum.map(complete_packets_binaries, &%Buffer{payload: &1, metadata: metadata})
 
-    {[buffer: {:output, packets_buffers}],
-     %{state | incomplete_packet_binary: incomplete_packet_binary}}
+    {[buffer: {:output, packets_buffers}], %{state | unprocessed_data: unprocessed_data}}
   end
 
-  @spec get_complete_packets_binaries(binary(), non_neg_integer()) ::
-          {incomplete_packet_binary :: binary(), complete_packets_binaries :: [binary()]}
-  def get_complete_packets_binaries(packets_binary, channel_id, complete_packets_binaries \\ [])
+  @spec rtsp_response?(binary(), binary()) :: boolean()
+  defp rtsp_response?(maybe_rtsp_response, new_payload),
+    do: String.starts_with?(new_payload, "$") and String.starts_with?(maybe_rtsp_response, "RTSP")
 
-  def get_complete_packets_binaries(packets_binary, _channel_id, complete_packets_binaries)
-      when byte_size(packets_binary) <= 4 do
-    {packets_binary, Enum.reverse(complete_packets_binaries)}
+  @spec get_complete_packets(binary(), non_neg_integer()) ::
+          {unprocessed_data :: binary(), complete_packets :: [binary()]}
+  defp get_complete_packets(packets_binary, channel_id, complete_packets \\ [])
+
+  defp get_complete_packets(packets_binary, _channel_id, complete_packets)
+       when byte_size(packets_binary) <= 4 do
+    {packets_binary, Enum.reverse(complete_packets)}
   end
 
-  def get_complete_packets_binaries(
-        <<"$", _rest::binary>> = packets_binary,
-        channel_id,
-        complete_packets_binaries
-      ) do
+  defp get_complete_packets(
+         <<"$", _rest::binary>> = packets_binary,
+         channel_id,
+         complete_packets
+       ) do
     <<"$", received_channel_id, payload_length::size(16), rest::binary>> = packets_binary
 
     if payload_length > byte_size(rest) do
-      {packets_binary, Enum.reverse(complete_packets_binaries)}
+      {packets_binary, Enum.reverse(complete_packets)}
     else
       <<complete_packet_binary::binary-size(payload_length)-unit(8), rest::binary>> = rest
 
-      complete_packets_binaries =
+      complete_packets =
         if channel_id != received_channel_id,
-          do: complete_packets_binaries,
-          else: [complete_packet_binary | complete_packets_binaries]
+          do: complete_packets,
+          else: [complete_packet_binary | complete_packets]
 
-      get_complete_packets_binaries(rest, channel_id, complete_packets_binaries)
+      get_complete_packets(rest, channel_id, complete_packets)
     end
   end
 
-  def get_complete_packets_binaries(rtsp_packet_binary, _channel_id, _complete_packets_binaries) do
-    IO.inspect(rtsp_packet_binary, label: "my_rtsp")
-    {<<>>, []}
+  defp get_complete_packets(rtsp_message_binary, _channel_id, _complete_packets_binaries) do
+    IO.inspect(rtsp_message_binary, label: "my_rtsp")
+    {rtsp_message_binary, []}
   end
 end
