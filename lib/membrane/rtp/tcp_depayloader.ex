@@ -61,8 +61,9 @@ defmodule Membrane.RTP.TCP.Depayloader do
     unprocessed_data =
       if rtsp_response?(unprocessed_data, payload) do
         if rtsp_session != nil do
-          {:ok, %RTSP.Response{status: 200}} =
+          {:ok, %RTSP.Response{status: 200} = response} =
             RTSP.handle_response(rtsp_session, unprocessed_data)
+          IO.inspect(response, label: "my_reponse")
         end
 
         <<>>
