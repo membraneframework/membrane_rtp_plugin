@@ -1,20 +1,13 @@
 defmodule Membrane.RTP.TCP.Depayloader do
   @moduledoc """
-  This element provides functionality of depayloading RTP Packets received by TCP. The encapsulation
-  is described in RFC 7826 Section 14.
+  This element provides functionality of depayloading RTP Packets received by TCP and redirecting
+  RTSP messages received in the same stream. The encapsulation is described in RFC 7826 Section 14.
   """
   use Membrane.Filter
 
   alias Membrane.{Buffer, RemoteStream, RTP, RTSP}
 
-  def_options discard_non_rtp_packets: [
-                spec: bool(),
-                default: true,
-                description: """
-                Discard any data that is not RTP packets.
-                """
-              ],
-              rtp_channel_id: [
+  def_options rtp_channel_id: [
                 spec: non_neg_integer(),
                 default: 0,
                 description: """
@@ -26,7 +19,8 @@ defmodule Membrane.RTP.TCP.Depayloader do
                 default: nil,
                 description: """
                 PID of a RTSP Session (returned from Membrane.RTSP.start or Membrane.RTSP.start_link)
-                that received RTSP responses will be forwarded to.
+                that received RTSP responses will be forwarded to. If nil the responses will be
+                discarded.
                 """
               ]
 
@@ -61,9 +55,8 @@ defmodule Membrane.RTP.TCP.Depayloader do
     unprocessed_data =
       if rtsp_response?(unprocessed_data, payload) do
         if rtsp_session != nil do
-          {:ok, %RTSP.Response{status: 200} = response} =
+          {:ok, %RTSP.Response{status: 200}} =
             RTSP.handle_response(rtsp_session, unprocessed_data)
-          IO.inspect(response, label: "my_reponse")
         end
 
         <<>>
@@ -83,8 +76,11 @@ defmodule Membrane.RTP.TCP.Depayloader do
   end
 
   @spec rtsp_response?(binary(), binary()) :: boolean()
-  defp rtsp_response?(maybe_rtsp_response, new_payload),
-    do: String.starts_with?(new_payload, "$") and String.starts_with?(maybe_rtsp_response, "RTSP")
+  defp rtsp_response?(maybe_rtsp_response, new_payload) do
+    # If new payload starts with a "$" and unprocessed data started with "RTSP" then we know
+    # the unprocessed data should be a RTSP message
+    String.starts_with?(new_payload, "$") and String.starts_with?(maybe_rtsp_response, "RTSP")
+  end
 
   @spec get_complete_packets(binary(), non_neg_integer()) ::
           {unprocessed_data :: binary(), complete_packets :: [binary()]}
@@ -116,8 +112,8 @@ defmodule Membrane.RTP.TCP.Depayloader do
     end
   end
 
-  defp get_complete_packets(rtsp_message_binary, _channel_id, _complete_packets_binaries) do
-    IO.inspect(rtsp_message_binary, label: "my_rtsp")
-    {rtsp_message_binary, []}
+  defp get_complete_packets(rtsp_message, _channel_id, _complete_packets_binaries) do
+    # If the payload doesn't start with a "$" then it must be a RTSP message (or a part of it)
+    {rtsp_message, []}
   end
 end
