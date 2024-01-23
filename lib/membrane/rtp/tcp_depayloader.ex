@@ -16,15 +16,15 @@ defmodule Membrane.RTP.TCP.Depayloader do
                 spec: non_neg_integer(),
                 default: 0,
                 description: """
-                Channel identifier of encapsulated RTP packets.
+                Channel identifier which encapsulated RTP packets will have.
                 """
               ],
               rtsp_session: [
                 spec: pid() | nil,
                 default: nil,
                 description: """
-                PID of an RTSP Session (returned from `Membrane.RTSP.start` or `Membrane.RTSP.start_link`)
-                to which the received RTSP responses will be forwarded. If `nil`, the responses will be
+                PID of a RTSP Session (returned from Membrane.RTSP.start or Membrane.RTSP.start_link)
+                that received RTSP responses will be forwarded to. If nil the responses will be
                 discarded.
                 """
               ]
@@ -48,6 +48,11 @@ defmodule Membrane.RTP.TCP.Depayloader do
   def handle_playing(_ctx, state) do
     stream_format = %RemoteStream{type: :packetized, content_format: RTP}
     {[stream_format: {:output, stream_format}], state}
+  end
+
+  @impl true
+  def handle_stream_format(:input, _stream_format, _ctx, state) do
+    {[], state}
   end
 
   @impl true
