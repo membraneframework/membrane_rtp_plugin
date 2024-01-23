@@ -18,8 +18,8 @@ defmodule Membrane.RTP.TCP.Depayloader do
                 spec: pid() | nil,
                 default: nil,
                 description: """
-                PID of a RTSP Session (returned from Membrane.RTSP.start or Membrane.RTSP.start_link)
-                that received RTSP responses will be forwarded to. If nil the responses will be
+                PID of an RTSP Session (returned from `Membrane.RTSP.start` or `Membrane.RTSP.start_link`)
+                to which the received RTSP responses will be forwarded. If `nil`, the responses will be
                 discarded.
                 """
               ]
