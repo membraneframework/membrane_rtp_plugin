@@ -2,6 +2,11 @@ defmodule Membrane.RTP.TCP.Depayloader do
   @moduledoc """
   This element provides functionality of depayloading RTP Packets received by TCP and redirecting
   RTSP messages received in the same stream. The encapsulation is described in RFC 7826 Section 14.
+
+  Encapsulated packets interleaved in the stream will have the following structure:
+  ["$" = 36 :: 1 byte][Channel id :: 1 byte][Length :: 2 bytes][packet :: <Length> bytes]
+
+  RTSP Messages
   """
   use Membrane.Filter
 
@@ -40,28 +45,23 @@ defmodule Membrane.RTP.TCP.Depayloader do
   end
 
   @impl true
-  def handle_stream_format(:input, _stream_format, _ctx, state) do
+  def handle_playing(_ctx, state) do
     stream_format = %RemoteStream{type: :packetized, content_format: RTP}
     {[stream_format: {:output, stream_format}], state}
   end
 
   @impl true
-  def handle_buffer(
-        :input,
-        %Buffer{payload: payload, metadata: metadata},
-        _ctx,
-        %{unprocessed_data: unprocessed_data, rtsp_session: rtsp_session} = state
-      ) do
+  def handle_buffer(:input, %Buffer{payload: payload, metadata: metadata}, _ctx, state) do
     unprocessed_data =
-      if rtsp_response?(unprocessed_data, payload) do
-        if rtsp_session != nil do
+      if rtsp_response?(state.unprocessed_data, payload) do
+        if state.rtsp_session != nil do
           {:ok, %RTSP.Response{status: 200}} =
-            RTSP.handle_response(rtsp_session, unprocessed_data)
+            RTSP.handle_response(state.rtsp_session, state.unprocessed_data)
         end
 
         <<>>
       else
-        unprocessed_data
+        state.unprocessed_data
       end
 
     packets_binary = unprocessed_data <> payload
@@ -77,8 +77,6 @@ defmodule Membrane.RTP.TCP.Depayloader do
 
   @spec rtsp_response?(binary(), binary()) :: boolean()
   defp rtsp_response?(maybe_rtsp_response, new_payload) do
-    # If new payload starts with a "$" and unprocessed data started with "RTSP" then we know
-    # the unprocessed data should be a RTSP message
     String.starts_with?(new_payload, "$") and String.starts_with?(maybe_rtsp_response, "RTSP")
   end
 
