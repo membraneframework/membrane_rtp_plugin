@@ -11,7 +11,7 @@ defmodule Membrane.RTP.TCP.Depayloader do
                 spec: non_neg_integer(),
                 default: 0,
                 description: """
-                Channel identifier which encapsulated RTP packets will have.
+                Channel identifier of encapsulated RTP packets.
                 """
               ],
               rtsp_session: [
