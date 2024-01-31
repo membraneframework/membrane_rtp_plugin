@@ -76,7 +76,7 @@ defmodule Membrane.RTP.Packet.PayloadType do
   @doc """
   Checks if numerical payload type should be assigned to format type dynamically.
   """
-  @spec is_dynamic(payload_type :: RTP.payload_type_t()) :: boolean()
-  def is_dynamic(payload_type) when payload_type in 96..127, do: true
-  def is_dynamic(_payload_type), do: false
+  @spec dynamic?(payload_type :: RTP.payload_type_t()) :: boolean()
+  def dynamic?(payload_type) when payload_type in 96..127, do: true
+  def dynamic?(_payload_type), do: false
 end

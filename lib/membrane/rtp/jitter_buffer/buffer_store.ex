@@ -91,7 +91,7 @@ defmodule Membrane.RTP.JitterBuffer.BufferStore do
         :next -> {:next, seq_num + (roc + 1) * @seq_number_limit}
       end
 
-    if is_fresh_packet?(flush_index, index) do
+    if fresh_packet?(flush_index, index) do
       record = Record.new(buffer, index)
       {:ok, add_record(store, record, rollover)}
     else
@@ -176,7 +176,7 @@ defmodule Membrane.RTP.JitterBuffer.BufferStore do
     end
   end
 
-  defp is_fresh_packet?(flush_index, index), do: index > flush_index
+  defp fresh_packet?(flush_index, index), do: index > flush_index
 
   @spec flush_while(t, (t, Record.t() -> boolean), [Record.t() | nil]) ::
           {[Record.t() | nil], t}
