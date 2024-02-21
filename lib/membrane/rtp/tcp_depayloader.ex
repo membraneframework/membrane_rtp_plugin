@@ -1,7 +1,8 @@
-defmodule Membrane.RTP.TCP.Depayloader do
+defmodule Membrane.RTP.RTSP.Depayloader do
   @moduledoc """
   This element provides functionality of depayloading RTP Packets received by TCP and redirecting
-  RTSP messages received in the same stream. The encapsulation is described in RFC 7826 Section 14.
+  RTSP messages received in the same stream established with RTSP. The encapsulation is described
+  in RFC 7826 Section 14.
 
   Encapsulated packets interleaved in the stream will have the following structure:
   ["$" = 36 :: 1 byte][Channel id :: 1 byte][Length :: 2 bytes][packet :: <Length> bytes]
