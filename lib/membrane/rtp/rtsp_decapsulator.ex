@@ -1,12 +1,13 @@
-defmodule Membrane.RTP.TCP.Depayloader do
+defmodule Membrane.RTP.RTSP.Decapsulator do
   @moduledoc """
-  This element provides functionality of depayloading RTP Packets received by TCP and redirecting
-  RTSP messages received in the same stream. The encapsulation is described in RFC 7826 Section 14.
+  This element provides functionality of decapsulating RTP Packets and redirecting RTSP messages
+  received in the same TCP stream established with RTSP. The encapsulation is described in
+  RFC 7826 Section 14.
 
-  Encapsulated packets interleaved in the stream will have the following structure:
+  Encapsulated RTP packets interleaved in the stream will have the following structure:
   ["$" = 36 :: 1 byte][Channel id :: 1 byte][Length :: 2 bytes][packet :: <Length> bytes]
 
-  RTSP Messages
+  RTSP Messages are not encapsulated this way, but can only be present between RTP packets.
   """
   use Membrane.Filter
 
@@ -95,23 +96,21 @@ defmodule Membrane.RTP.TCP.Depayloader do
   end
 
   defp get_complete_packets(
-         <<"$", _rest::binary>> = packets_binary,
+         <<"$", received_channel_id, payload_length::size(16), rest::binary>> = packets_binary,
          channel_id,
          complete_packets
        ) do
-    <<"$", received_channel_id, payload_length::size(16), rest::binary>> = packets_binary
+    case rest do
+      <<complete_packet_binary::binary-size(payload_length)-unit(8), rest::binary>> ->
+        complete_packets =
+          if channel_id != received_channel_id,
+            do: complete_packets,
+            else: [complete_packet_binary | complete_packets]
 
-    if payload_length > byte_size(rest) do
-      {packets_binary, Enum.reverse(complete_packets)}
-    else
-      <<complete_packet_binary::binary-size(payload_length)-unit(8), rest::binary>> = rest
+        get_complete_packets(rest, channel_id, complete_packets)
 
-      complete_packets =
-        if channel_id != received_channel_id,
-          do: complete_packets,
-          else: [complete_packet_binary | complete_packets]
-
-      get_complete_packets(rest, channel_id, complete_packets)
+      _incomplete_packet_binary ->
+        {packets_binary, Enum.reverse(complete_packets)}
     end
   end
 
