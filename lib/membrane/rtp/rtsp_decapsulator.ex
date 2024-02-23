@@ -100,17 +100,17 @@ defmodule Membrane.RTP.RTSP.Decapsulator do
          channel_id,
          complete_packets
        ) do
-    if payload_length > byte_size(rest) do
-      {packets_binary, Enum.reverse(complete_packets)}
-    else
-      <<complete_packet_binary::binary-size(payload_length)-unit(8), rest::binary>> = rest
+    case rest do
+      <<complete_packet_binary::binary-size(payload_length)-unit(8), rest::binary>> ->
+        complete_packets =
+          if channel_id != received_channel_id,
+            do: complete_packets,
+            else: [complete_packet_binary | complete_packets]
 
-      complete_packets =
-        if channel_id != received_channel_id,
-          do: complete_packets,
-          else: [complete_packet_binary | complete_packets]
+        get_complete_packets(rest, channel_id, complete_packets)
 
-      get_complete_packets(rest, channel_id, complete_packets)
+      _incomplete_packet_binary ->
+        {packets_binary, Enum.reverse(complete_packets)}
     end
   end
 
