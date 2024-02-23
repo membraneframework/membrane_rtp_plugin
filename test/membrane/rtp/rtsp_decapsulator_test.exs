@@ -5,7 +5,7 @@ defmodule Membrane.RTP.RTSPDecapsulatorTest do
   import Membrane.ChildrenSpec
 
   alias Membrane.RTP.RTSP.Decapsulator
-  alias Membrane.Testing.{Sink, Source, Pipeline}
+  alias Membrane.Testing.{Pipeline, Sink, Source}
 
   @header_length 4
 
