@@ -4,7 +4,7 @@ defmodule Membrane.RTP.RTSPDecapsulatorTest do
   import Membrane.Testing.Assertions
   import Membrane.ChildrenSpec
 
-  alias Membrane.RTP.RTSP.Depayloader
+  alias Membrane.RTP.RTSP.Decapsulator
   alias Membrane.Testing.{Sink, Source, Pipeline}
 
   @header_length 4
@@ -39,7 +39,7 @@ defmodule Membrane.RTP.RTSPDecapsulatorTest do
           child(:source, %Source{
             output: tcp_segments
           })
-          |> child(:depayloader, Depayloader)
+          |> child(:decapsulator, Decapsulator)
           |> child(:sink, Sink)
       )
 
@@ -70,6 +70,8 @@ defmodule Membrane.RTP.RTSPDecapsulatorTest do
     end
 
     test "when rtp packets are spread across multiple (3) tcp segments" do
+      rtp_packets_lengths = 11..41//3
+
       tcp_segments_lengths =
         Enum.flat_map(rtp_packets_lengths, fn len ->
           tcp_segment_base_length = div(len + @header_length, 3)
