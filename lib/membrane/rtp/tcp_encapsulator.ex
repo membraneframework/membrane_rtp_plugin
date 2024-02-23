@@ -1,4 +1,4 @@
-defmodule Membrane.RTP.TCP.Depacketizer do
+defmodule Membrane.RTP.TCP.Encapsulator do
   @moduledoc """
   This element provides functionality of serializing RTP and RTCP packets into a bytestream
   that can be send over TCP connection. The encapsulation is described in RFC 4571.
@@ -32,14 +32,8 @@ defmodule Membrane.RTP.TCP.Depacketizer do
 
   @impl true
   def handle_buffer(:input, %Buffer{payload: payload, metadata: metadata}, _ctx, state) do
-    len_bytes =
-      case :binary.encode_unsigned(byte_size(payload), :big) do
-        <<len::size(8)>> -> <<0, len>>
-        <<len::binary-size(2)>> -> len
-      end
-
     buffer = %Buffer{
-      payload: len_bytes <> payload,
+      payload: <<byte_size(payload)::size(16), payload::binary>>,
       metadata: metadata
     }
 

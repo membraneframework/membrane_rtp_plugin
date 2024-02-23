@@ -1,4 +1,4 @@
-defmodule Membrane.RTP.TCP.Packetizer do
+defmodule Membrane.RTP.TCP.Decapsulator do
   @moduledoc """
   This element provides functionality of packetizing bytestream from TCP
   into RTP and RTCP Packets. The encapsulation is described in RFC 4571.
@@ -46,19 +46,14 @@ defmodule Membrane.RTP.TCP.Packetizer do
           {unprocessed_data :: binary(), complete_packets :: [binary()]}
   defp get_complete_packets(packets_binary, complete_packets \\ [])
 
-  defp get_complete_packets(packets_binary, complete_packets)
-       when byte_size(packets_binary) <= 2 do
-    {packets_binary, Enum.reverse(complete_packets)}
+  defp get_complete_packets(
+         <<payload_length::16, payload::binary-size(payload_length), rest::binary>>,
+         complete_packets
+       ) do
+    get_complete_packets(rest, [payload | complete_packets])
   end
 
-  defp get_complete_packets(packets_binary, complete_packets) do
-    <<payload_length::size(16), rest::binary>> = packets_binary
-
-    if payload_length > byte_size(rest) do
-      {packets_binary, Enum.reverse(complete_packets)}
-    else
-      <<complete_packet_binary::binary-size(payload_length)-unit(8), rest::binary>> = rest
-      get_complete_packets(rest, [complete_packet_binary | complete_packets])
-    end
+  defp get_complete_packets(unprocessed_data, complete_packets) do
+    {unprocessed_data, Enum.reverse(complete_packets)}
   end
 end
