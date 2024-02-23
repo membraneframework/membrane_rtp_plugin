@@ -1,4 +1,4 @@
-defmodule Membrane.RTP.RTSPDepayloaderTest do
+defmodule Membrane.RTP.RTSPDecapsulatorTest do
   use ExUnit.Case
 
   import Membrane.Testing.Assertions
@@ -50,7 +50,7 @@ defmodule Membrane.RTP.RTSPDepayloaderTest do
     Pipeline.terminate(pipeline)
   end
 
-  describe "RTSP Depayloader depayloads correctly" do
+  describe "RTSP Decapsulator decapsulates correctly" do
     test "when one tcp segment is one rtp packet" do
       rtp_packets_lengths = 10..20
       tcp_segments_lengths = Enum.map(rtp_packets_lengths, &(&1 + @header_length))
