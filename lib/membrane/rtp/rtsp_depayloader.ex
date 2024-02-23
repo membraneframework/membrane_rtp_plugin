@@ -96,12 +96,10 @@ defmodule Membrane.RTP.RTSP.Depayloader do
   end
 
   defp get_complete_packets(
-         <<"$", _rest::binary>> = packets_binary,
+         <<"$", received_channel_id, payload_length::size(16), rest::binary>> = packets_binary,
          channel_id,
          complete_packets
        ) do
-    <<"$", received_channel_id, payload_length::size(16), rest::binary>> = packets_binary
-
     if payload_length > byte_size(rest) do
       {packets_binary, Enum.reverse(complete_packets)}
     else
