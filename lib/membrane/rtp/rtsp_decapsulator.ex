@@ -103,7 +103,7 @@ defmodule Membrane.RTP.RTSP.Decapsulator do
     case rest do
       <<complete_packet_binary::binary-size(payload_length)-unit(8), rest::binary>> ->
         complete_packets =
-          if channel_id != received_channel_id,
+          if channel_id not in [received_channel_id, received_channel_id + 1],
             do: complete_packets,
             else: [complete_packet_binary | complete_packets]
 
