@@ -58,22 +58,10 @@ defmodule Membrane.RTP.RTSP.Decapsulator do
 
   @impl true
   def handle_buffer(:input, %Buffer{payload: payload, metadata: metadata}, _ctx, state) do
-    unprocessed_data =
-      if rtsp_response?(state.unprocessed_data, payload) do
-        if state.rtsp_session != nil do
-          {:ok, %RTSP.Response{status: 200}} =
-            RTSP.handle_response(state.rtsp_session, state.unprocessed_data)
-        end
-
-        <<>>
-      else
-        state.unprocessed_data
-      end
-
-    packets_binary = unprocessed_data <> payload
+    packets_binary = state.unprocessed_data <> payload
 
     {unprocessed_data, complete_packets_binaries} =
-      get_complete_packets(packets_binary, state.rtp_channel_id)
+      get_complete_packets(packets_binary, state.rtp_channel_id, state.rtsp_session)
 
     packets_buffers =
       Enum.map(complete_packets_binaries, &%Buffer{payload: &1, metadata: metadata})
@@ -86,11 +74,11 @@ defmodule Membrane.RTP.RTSP.Decapsulator do
     String.starts_with?(new_payload, "$") and String.starts_with?(maybe_rtsp_response, "RTSP")
   end
 
-  @spec get_complete_packets(binary(), non_neg_integer()) ::
+  @spec get_complete_packets(binary(), non_neg_integer(), pid() | nil, [binary()]) ::
           {unprocessed_data :: binary(), complete_packets :: [binary()]}
-  defp get_complete_packets(packets_binary, channel_id, complete_packets \\ [])
+  defp get_complete_packets(packets_binary, channel_id, rtsp_session, complete_packets \\ [])
 
-  defp get_complete_packets(packets_binary, _channel_id, complete_packets)
+  defp get_complete_packets(packets_binary, _channel_id, _rtsp_session, complete_packets)
        when byte_size(packets_binary) <= 4 do
     {packets_binary, Enum.reverse(complete_packets)}
   end
@@ -98,6 +86,7 @@ defmodule Membrane.RTP.RTSP.Decapsulator do
   defp get_complete_packets(
          <<"$", received_channel_id, payload_length::size(16), rest::binary>> = packets_binary,
          channel_id,
+         _rtsp_session,
          complete_packets
        ) do
     case rest do
@@ -114,8 +103,36 @@ defmodule Membrane.RTP.RTSP.Decapsulator do
     end
   end
 
-  defp get_complete_packets(rtsp_message, _channel_id, _complete_packets_binaries) do
-    # If the payload doesn't start with a "$" then it must be a RTSP message (or a part of it)
-    {rtsp_message, []}
+  defp get_complete_packets(
+         <<"RTSP", _rest::binary>> = rtsp_message_start,
+         channel_id,
+         rtsp_session,
+         complete_packets_binaries
+       ) do
+    case RTSP.Response.verify_content_length(rtsp_message_start) do
+      {:ok, _expected_length, _actual_length} ->
+        if rtsp_session != nil do
+          {:ok, %RTSP.Response{status: 200}} =
+            RTSP.handle_response(rtsp_session, rtsp_message_start)
+        end
+
+        {<<>>, complete_packets_binaries}
+
+      {:error, expected_length, actual_length} when actual_length > expected_length ->
+        rest_length = actual_length - expected_length
+        rtsp_message_length = byte_size(rtsp_message_start) - rest_length
+
+        <<rtsp_message::binary-size(rtsp_message_length)-unit(8), rest::binary>> =
+          rtsp_message_start
+
+        if rtsp_session != nil do
+          {:ok, %RTSP.Response{status: 200}} = RTSP.handle_response(rtsp_session, rtsp_message)
+        end
+
+        get_complete_packets(rest, channel_id, rtsp_session, complete_packets_binaries)
+
+      {:error, expected_length, actual_length} when actual_length <= expected_length ->
+        {rtsp_message_start, Enum.reverse(complete_packets_binaries)}
+    end
   end
 end
