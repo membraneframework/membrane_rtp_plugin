@@ -69,11 +69,6 @@ defmodule Membrane.RTP.RTSP.Decapsulator do
     {[buffer: {:output, packets_buffers}], %{state | unprocessed_data: unprocessed_data}}
   end
 
-  @spec rtsp_response?(binary(), binary()) :: boolean()
-  defp rtsp_response?(maybe_rtsp_response, new_payload) do
-    String.starts_with?(new_payload, "$") and String.starts_with?(maybe_rtsp_response, "RTSP")
-  end
-
   @spec get_complete_packets(binary(), non_neg_integer(), pid() | nil, [binary()]) ::
           {unprocessed_data :: binary(), complete_packets :: [binary()]}
   defp get_complete_packets(packets_binary, channel_id, rtsp_session, complete_packets \\ [])
@@ -86,7 +81,7 @@ defmodule Membrane.RTP.RTSP.Decapsulator do
   defp get_complete_packets(
          <<"$", received_channel_id, payload_length::size(16), rest::binary>> = packets_binary,
          channel_id,
-         _rtsp_session,
+         rtsp_session,
          complete_packets
        ) do
     case rest do
@@ -96,7 +91,7 @@ defmodule Membrane.RTP.RTSP.Decapsulator do
             do: [complete_packet_binary | complete_packets],
             else: complete_packets
 
-        get_complete_packets(rest, channel_id, complete_packets)
+        get_complete_packets(rest, channel_id, rtsp_session, complete_packets)
 
       _incomplete_packet_binary ->
         {packets_binary, Enum.reverse(complete_packets)}
