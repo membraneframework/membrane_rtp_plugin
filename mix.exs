@@ -1,7 +1,7 @@
 defmodule Membrane.RTP.Plugin.MixProject do
   use Mix.Project
 
-  @version "0.27.2"
+  @version "0.28.0"
   @github_url "https://github.com/membraneframework/membrane_rtp_plugin"
 
   def project do
@@ -42,7 +42,6 @@ defmodule Membrane.RTP.Plugin.MixProject do
       {:membrane_telemetry_metrics, "~> 0.1.0"},
       {:membrane_rtsp,
        github: "membraneframework/membrane_rtsp", branch: "expand-length-verification"},
-      # {:membrane_rtsp, "~> 0.6.0"},
       {:ex_libsrtp, "~> 0.6.0 or ~> 0.7.0", optional: true},
       {:qex, "~> 0.5.1"},
       {:bunch, "~> 1.5"},
