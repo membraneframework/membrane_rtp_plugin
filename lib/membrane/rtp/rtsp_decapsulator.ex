@@ -77,7 +77,7 @@ defmodule Membrane.RTP.RTSP.Decapsulator do
          complete_packets
        ) do
     case rest do
-      <<complete_packet_binary::binary-size(payload_length)-unit(8), rest::binary>> ->
+      <<complete_packet_binary::binary-size(payload_length), rest::binary>> ->
         complete_packets = [complete_packet_binary | complete_packets]
 
         get_complete_packets(rest, rtsp_session, complete_packets)
