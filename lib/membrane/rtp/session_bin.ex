@@ -59,6 +59,8 @@ defmodule Membrane.RTP.SessionBin do
   receiver report packets will be sent back through `rtcp_receiver_output` with the same id as `rtp_input` for the RTP stream.
 
   RTCP for outbound stream is not yet supported. # But will be :)
+
+  RTCP sender reports are dispatched as `Membrane.RTCP.SenderReportPacket` events on session bin `:output` pads
   """
   use Membrane.Bin
 
