@@ -62,7 +62,8 @@ defmodule Membrane.RTP.SessionBin do
   On each `Pad.ref(:output, ssrc)`, only RTCP sender reports with the corresponding SSRC will be sent.
   These reports can be used, for instance, to synchronize different rtp streams.
 
-  RTCP for outbound stream is not yet supported. # But will be :)
+  RTCP packets for the outbound stream are available `rtcp_sender_output` pad.
+  RTCP packets will only be produced if rtcp_receiver_report_interval option is set to a value other than nil.
   """
   use Membrane.Bin
 
