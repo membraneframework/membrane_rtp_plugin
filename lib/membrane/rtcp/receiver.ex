@@ -86,7 +86,7 @@ defmodule Membrane.RTCP.Receiver do
       arrival_ts: event.arrival_timestamp
     }
 
-    {[], %{state | sr_info: sr_info}}
+    {[event: {:output, event}], %{state | sr_info: sr_info}}
   end
 
   @impl true
