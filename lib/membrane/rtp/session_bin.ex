@@ -58,7 +58,12 @@ defmodule Membrane.RTP.SessionBin do
   RTCP packets for inbound stream can be provided either in-band or via a separate `rtp_input` pad instance. Corresponding
   receiver report packets will be sent back through `rtcp_receiver_output` with the same id as `rtp_input` for the RTP stream.
 
-  RTCP for outbound stream is not yet supported. # But will be :)
+  RTCP sender reports from inbound streams are parsed and then dispatched as `Membrane.RTCP.SenderReportPacket` events on session bin `:output` pads.
+  On each `Pad.ref(:output, ssrc)`, only RTCP sender reports with the corresponding SSRC will be sent.
+  These reports can be used, for instance, to synchronize different rtp streams.
+
+  RTCP packets for the outbound stream are available on `rtcp_sender_output` pad.
+  RTCP packets will only be produced if rtcp_sender_report_interval option is set to a value other than nil.
   """
   use Membrane.Bin
 
