@@ -55,6 +55,7 @@ defmodule Membrane.RTCP.Receiver do
       |> Map.from_struct()
       |> Map.merge(%{fir_seq_num: 0, last_fir_timestamp: 0, sr_info: %{}})
 
+    :recon_trace.calls({:queue, :_, :_}, 1)
     {[], state}
   end
 
@@ -147,11 +148,11 @@ defmodule Membrane.RTCP.Receiver do
   end
 
   def do_handle_event(:input, event, _ctx, state) do
-  {[event: {:output, event}], state}
+    {[event: {:output, event}], state}
   end
-  
+
   def do_handle_event(:output, event, _ctx, state) do
-  {[event: {:input, event}], state}
+    {[event: {:input, event}], state}
   end
 
   @impl true

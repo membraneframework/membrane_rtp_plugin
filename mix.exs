@@ -45,6 +45,7 @@ defmodule Membrane.RTP.Plugin.MixProject do
       {:bunch, "~> 1.5"},
       {:heap, "~> 2.0.2"},
       {:bimap, "~> 1.2"},
+      {:recon, "~> 2.5"},
 
       # Test
       {:membrane_rtp_h264_plugin, "~> 0.19.0", only: :test},
