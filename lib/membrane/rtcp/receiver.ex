@@ -74,7 +74,13 @@ defmodule Membrane.RTCP.Receiver do
   end
 
   @impl true
-  def handle_event(:input, %RTCPEvent{rtcp: %SenderReportPacket{} = rtcp} = event, _ctx, state) do
+  def handle_event(pad, event, ctx, state) do
+    require Membrane.Logger
+    Membrane.Logger.warning("Event123: #{inspect(event)}")
+    do_handle_event(pad, event, ctx, state)
+  end
+
+  def do_handle_event(:input, %RTCPEvent{rtcp: %SenderReportPacket{} = rtcp} = event, _ctx, state) do
     emit_telemetry_event(@sender_report_received_telemetry_event, state)
 
     <<_wallclock_ts_upper_16_bits::16, wallclock_ts_middle_32_bits::32,
@@ -89,19 +95,16 @@ defmodule Membrane.RTCP.Receiver do
     {[event: {:output, event}], %{state | sr_info: sr_info}}
   end
 
-  @impl true
-  def handle_event(:input, %RTCPEvent{} = event, _ctx, state) do
+  def do_handle_event(:input, %RTCPEvent{} = event, _ctx, state) do
     Membrane.Logger.error("Unexpected RTCPEvent: #{inspect(event)}")
     {[], state}
   end
 
-  @impl true
-  def handle_event(:output, %ReceiverReport.StatsEvent{stats: :no_stats}, _ctx, state) do
+  def do_handle_event(:output, %ReceiverReport.StatsEvent{stats: :no_stats}, _ctx, state) do
     {[], state}
   end
 
-  @impl true
-  def handle_event(:output, %ReceiverReport.StatsEvent{stats: stats}, _ctx, state) do
+  def do_handle_event(:output, %ReceiverReport.StatsEvent{stats: stats}, _ctx, state) do
     now = Time.vm_time()
     delay_since_sr = now - Map.get(state.sr_info, :arrival_ts, now)
 
@@ -123,13 +126,11 @@ defmodule Membrane.RTCP.Receiver do
     {[event: {:input, %RTCPEvent{rtcp: packet}}], state}
   end
 
-  @impl true
-  def handle_event(:output, %Membrane.KeyframeRequestEvent{}, _ctx, state) do
+  def do_handle_event(:output, %Membrane.KeyframeRequestEvent{}, _ctx, state) do
     send_fir(state)
   end
 
-  @impl true
-  def handle_event(:output, %RTP.RetransmissionRequestEvent{packet_ids: ids}, _ctx, state) do
+  def do_handle_event(:output, %RTP.RetransmissionRequestEvent{packet_ids: ids}, _ctx, state) do
     rtcp = %TransportFeedbackPacket{
       media_ssrc: state.remote_ssrc,
       sender_ssrc: state.local_ssrc,
@@ -145,8 +146,13 @@ defmodule Membrane.RTCP.Receiver do
     {[event: {:input, event}], state}
   end
 
-  @impl true
-  def handle_event(pad, event, ctx, state), do: super(pad, event, ctx, state)
+  def do_handle_event(:input, event, _ctx, state) do
+  {[event: {:output, event}], state}
+  end
+  
+  def do_handle_event(:output, event, _ctx, state) do
+  {[event: {:input, event}], state}
+  end
 
   @impl true
   def handle_buffer(:input, buffer, _ctx, state) do
