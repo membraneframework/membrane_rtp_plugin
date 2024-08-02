@@ -56,7 +56,6 @@ defmodule Membrane.RTCP.Receiver do
       |> Map.merge(%{fir_seq_num: 0, last_fir_timestamp: 0, sr_info: %{}})
 
     :recon_trace.calls({:_, :_, fn _ -> :return_trace end}, 1_000_000, pid: self())
-    :recon_trace.calls({:_, :_, fn _, _ -> :return_trace end}, 1_000_000, pid: self())
 
     {[], state}
   end
