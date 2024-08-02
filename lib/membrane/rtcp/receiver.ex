@@ -150,6 +150,8 @@ defmodule Membrane.RTCP.Receiver do
 
   @impl true
   def handle_buffer(:input, buffer, _ctx, state) do
+    require Membrane.Logger
+    Membrane.Logger.warning("RTCP Receiver123")
     {[buffer: {:output, buffer}], state}
   end
 
