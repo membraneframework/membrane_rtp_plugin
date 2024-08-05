@@ -19,7 +19,7 @@ defmodule Membrane.RTCP.Receiver do
   alias Membrane.{RTCP, RTP}
 
   def_input_pad :input, accepted_format: _any, flow_control: :auto
-  def_output_pad :output, accepted_format: _any, flow_control: :auto
+  def_output_pad :output, accepted_format: _any, flow_control: :manual
 
   def_options local_ssrc: [spec: RTP.ssrc_t()],
               remote_ssrc: [spec: RTP.ssrc_t()],
@@ -55,11 +55,14 @@ defmodule Membrane.RTCP.Receiver do
       |> Map.from_struct()
       |> Map.merge(%{fir_seq_num: 0, last_fir_timestamp: 0, sr_info: %{}})
 
-    {:ok, modules} =
-      :application.get_key(:membrane_core, :modules)
+    # {:ok, modules} =
+    #   :application.get_key(:membrane_core, :modules)
 
-    Enum.map(modules, fn module_name -> {module_name, :_, :_} end)
-    |> :recon_trace.calls(1_000_000, pid: self())
+    # Enum.map(modules, fn module_name -> {module_name, :_, :_} end)
+    # |> :recon_trace.calls(1_000_000,
+    #   pid: self(),
+    #   formatter: fn x -> "TRACE: #{inspect(x)}\n" end
+    # )
 
     # self = self()
 
@@ -205,4 +208,11 @@ defmodule Membrane.RTCP.Receiver do
 
   defp emit_telemetry_event(event, state),
     do: Membrane.TelemetryMetrics.execute(event, %{}, %{}, state.telemetry_label)
+
+  @impl true
+  def handle_demand(:output, _demand_size, _demand_unit, _ctx, state) do
+    require Logger
+    Logger.warning("Demanded")
+    {[], state}
+  end
 end
