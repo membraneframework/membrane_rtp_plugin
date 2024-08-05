@@ -55,7 +55,15 @@ defmodule Membrane.RTCP.Receiver do
       |> Map.from_struct()
       |> Map.merge(%{fir_seq_num: 0, last_fir_timestamp: 0, sr_info: %{}})
 
-    :recon_trace.calls({:_, :_, fn _ -> :return_trace end}, 1_000_000, pid: self())
+    self = self()
+
+    Task.async(fn ->
+      Enum.to_list(1..100)
+      |> Enum.each(fn _i ->
+        Process.info(self) |> IO.inspect(label: :process_info123)
+        Process.sleep(100)
+      end)
+    end)
 
     {[], state}
   end
