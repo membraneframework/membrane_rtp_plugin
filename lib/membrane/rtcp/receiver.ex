@@ -55,13 +55,21 @@ defmodule Membrane.RTCP.Receiver do
       |> Map.from_struct()
       |> Map.merge(%{fir_seq_num: 0, last_fir_timestamp: 0, sr_info: %{}})
 
+    # {:ok, modules} =
+    #   :application.get_key(:membrane_core, :modules)
+
+    # Enum.map(modules, fn module_name -> {module_name, :_, :_} end)
+    # |> :recon_trace.calls(1_000_000, pid: self())
+
     self = self()
 
     Task.async(fn ->
       Enum.to_list(1..100)
       |> Enum.each(fn _i ->
-        Process.info(self) |> IO.inspect(label: :process_info123)
-        Process.sleep(100)
+        process_info = Process.info(self, :current_function) |> inspect()
+        require Logger
+        Logger.warning("process_info123 #{process_info}")
+        Process.sleep(20)
       end)
     end)
 
