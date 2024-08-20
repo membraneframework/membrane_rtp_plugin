@@ -141,9 +141,8 @@ defmodule Membrane.RTP.SessionBin do
                 description: "Interval between sending subseqent RTCP sender reports."
               ],
               receiver_ssrc_generator: [
-                spec:
-                  (local_ssrcs :: [pos_integer], remote_ssrcs :: [pos_integer] ->
-                     ssrc :: pos_integer),
+                spec: (local_ssrcs :: [pos_integer], remote_ssrcs :: [pos_integer] ->
+                         ssrc :: pos_integer),
                 default: &__MODULE__.generate_receiver_ssrc/2,
                 description: """
                 Function generating receiver SSRCs. Default one generates random SSRC
