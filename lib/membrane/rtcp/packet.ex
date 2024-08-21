@@ -95,7 +95,6 @@ defmodule Membrane.RTCP.Packet do
           error
       end
     else
-      {:error, reason} -> {:error, reason}
       _error -> {:error, :malformed_packet}
     end
   end
