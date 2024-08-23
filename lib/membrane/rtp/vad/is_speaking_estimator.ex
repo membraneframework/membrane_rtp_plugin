@@ -82,7 +82,6 @@ defmodule Membrane.RTP.Vad.IsSpeakingEstimator do
     }
   ```
 
-  A thorough explanation with images can be found in the Jellyfish book in the [Voice Activity Detection](https://jellyfish-dev.github.io/book/webrtc/voice_activity_detection/vad.html) chapter.
   """
   alias Membrane.RTP.Vad.VadParams
 

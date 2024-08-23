@@ -291,7 +291,7 @@ defmodule Membrane.RTP.Session.BinTest do
 
     assert_specified_buffers(pipeline, :rtcp_sink, rr_match_funs)
 
-    Testing.Pipeline.message_child(pipeline, :pauser, :continue)
+    Testing.Pipeline.notify_child(pipeline, :pauser, :continue)
 
     1..input.video.frames_n
     |> Enum.each(fn _i ->

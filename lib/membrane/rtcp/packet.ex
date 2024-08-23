@@ -66,7 +66,7 @@ defmodule Membrane.RTCP.Packet do
     Enum.map_join(packets, &serialize/1)
   end
 
-  @spec parse(binary()) :: {:ok, [t()]} | {:error, any()}
+  @spec parse(binary()) :: {:ok, [t()]} | {:error, :malformed_packet}
   def parse(packets) do
     do_parse(packets, [])
   end
@@ -95,7 +95,6 @@ defmodule Membrane.RTCP.Packet do
           error
       end
     else
-      {:error, reason} -> {:error, reason}
       _error -> {:error, :malformed_packet}
     end
   end
