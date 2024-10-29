@@ -77,7 +77,7 @@ defmodule Membrane.RTP.JitterBuffer do
     {actions, state} =
       store
       |> BufferStore.dump()
-      |> Enum.map_reduce(state, &record_to_action/2)
+      |> Enum.flat_map_reduce(state, &record_to_actions/2)
 
     {actions ++ [end_of_stream: :output], %State{state | store: %BufferStore{}}}
   end
@@ -131,7 +131,8 @@ defmodule Membrane.RTP.JitterBuffer do
     # Additionally, flush buffers as long as there are no gaps
     {buffers, store} = BufferStore.flush_ordered(store)
 
-    {actions, state} = (too_old_records ++ buffers) |> Enum.map_reduce(state, &record_to_action/2)
+    {actions, state} =
+      (too_old_records ++ buffers) |> Enum.flat_map_reduce(state, &record_to_actions/2)
 
     state = %{state | store: store} |> set_timer()
 
@@ -156,12 +157,12 @@ defmodule Membrane.RTP.JitterBuffer do
 
   defp set_timer(%State{max_latency_timer: timer} = state) when timer != nil, do: state
 
-  defp record_to_action(nil, state) do
-    action = {:event, {:output, %Membrane.Event.Discontinuity{}}}
+  defp record_to_actions(nil, state) do
+    action = [event: {:output, %Membrane.Event.Discontinuity{}}]
     {action, state}
   end
 
-  defp record_to_action(%Record{buffer: buffer}, state) do
+  defp record_to_actions(%Record{buffer: buffer}, state) do
     %{timestamp: rtp_timestamp} = buffer.metadata.rtp
     timestamp_base = state.timestamp_base || rtp_timestamp
     previous_timestamp = state.previous_timestamp || rtp_timestamp
@@ -179,8 +180,10 @@ defmodule Membrane.RTP.JitterBuffer do
       end
 
     timestamp = div((rtp_timestamp - timestamp_base) * Time.second(), state.clock_rate)
-    action = {:buffer, {:output, %{buffer | pts: timestamp}}}
+    buffer = %Membrane.Buffer{buffer | pts: timestamp}
+    # An empty buffer is usually a WebRTC probing packet that should be skipped.
+    actions = if buffer.payload == <<>>, do: [], else: [buffer: {:output, buffer}]
     state = %{state | timestamp_base: timestamp_base, previous_timestamp: rtp_timestamp}
-    {action, state}
+    {actions, state}
   end
 end
