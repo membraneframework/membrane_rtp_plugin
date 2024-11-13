@@ -1,8 +1,9 @@
 defmodule Membrane.RTP.Demuxer do
+  @moduledoc """
+  RTP Demuxer TODO
+  """
   use Membrane.Filter
-  alias Hex.State
-  alias Hex.State
-  alias Membrane.{RemoteStream, RTP, RTCP}
+  alias Membrane.{RemoteStream, RTCP, RTP}
 
   def_input_pad :input,
     accepted_format:
@@ -13,6 +14,8 @@ defmodule Membrane.RTP.Demuxer do
   @type output_metadata :: %{rtp: ExRTP.Packet.t()}
 
   defmodule State do
+    @moduledoc false
+
     @type t :: %__MODULE__{
             stream_states: %{
               RTP.ssrc_t() => %{
@@ -92,7 +95,7 @@ defmodule Membrane.RTP.Demuxer do
   end
 
   @spec handle_rtcp_packets(binary(), State.t()) :: {[Membrane.Element.Action.t()], State.t()}
-  defp handle_rtcp_packets(rtcp_packets, state) do
+  defp handle_rtcp_packets(_rtcp_packets, state) do
     {[], state}
   end
 
