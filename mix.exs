@@ -41,6 +41,8 @@ defmodule Membrane.RTP.Plugin.MixProject do
       {:membrane_funnel_plugin, "~> 0.9.0"},
       {:membrane_telemetry_metrics, "~> 0.1.0"},
       {:ex_libsrtp, "~> 0.6.0 or ~> 0.7.0", optional: true},
+      {:ex_rtp, "~> 0.4.0"},
+      {:ex_rtcp, "~> 0.4.0"},
       {:qex, "~> 0.5.1"},
       {:bunch, "~> 1.5"},
       {:heap, "~> 2.0.2"},
