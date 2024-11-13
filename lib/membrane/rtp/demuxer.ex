@@ -8,7 +8,7 @@ defmodule Membrane.RTP.Demuxer do
     accepted_format:
       %RemoteStream{type: :packetized, content_format: cf} when cf in [RTP, RTCP, nil]
 
-  def_output_pad :output, accepted_format: _any
+  def_output_pad :output, accepted_format: _any, availability: :on_request
 
   @type output_metadata :: %{rtp: ExRTP.Packet.t()}
 
@@ -73,14 +73,14 @@ defmodule Membrane.RTP.Demuxer do
     {:ok, packet} = ExRTP.Packet.decode(raw_rtp_packet)
 
     {new_stream_actions, state} =
-      if Map.has_key?(state.received_streams, packet.ssrc) do
+      if Map.has_key?(state.stream_states, packet.ssrc) do
         {[], state}
       else
         initialize_new_stream_state(packet, state)
       end
 
     {buffer_actions, state} =
-      case state.received_streams[packet.ssrc].phase do
+      case state.stream_states[packet.ssrc].phase do
         :waiting_for_link ->
           {[], append_packet_to_waiting_packets(packet, state)}
 
