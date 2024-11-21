@@ -9,7 +9,7 @@ defmodule Membrane.RTP.Demuxer do
     accepted_format:
       %RemoteStream{type: :packetized, content_format: cf} when cf in [RTP, RTCP, nil]
 
-  def_output_pad :output, accepted_format: _any, availability: :on_request
+  def_output_pad :output, accepted_format: RTP, availability: :on_request
 
   @type output_metadata :: %{rtp: ExRTP.Packet.t()}
 
