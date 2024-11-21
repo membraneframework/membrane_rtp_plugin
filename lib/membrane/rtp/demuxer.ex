@@ -1,7 +1,10 @@
 defmodule Membrane.RTP.Demuxer do
   @moduledoc """
-  RTP Demuxer TODO
+  Element capable of receiving a raw RTP stream and demuxing it into individual parsed streams based on packet ssrcs. 
+  Whenever a new is recognized, a `new_rtp_stream_notification` is sent to the element's parent. In turn it should link a 
+  `Membrane.Pad.ref({:output, ssrc})` output pad of this element to receive the stream specified in the notification.
   """
+
   use Membrane.Filter
   alias Membrane.{RemoteStream, RTCP, RTP}
 
@@ -11,7 +14,20 @@ defmodule Membrane.RTP.Demuxer do
 
   def_output_pad :output, accepted_format: RTP, availability: :on_request
 
+  @typedoc """
+  Metadata present in each output buffer. The `ExRTP.Packet.t()` struct contains parsed fields of the packet
+  present in the buffer. The `payload` field of this struct will be set to `<<>>`, and the payload will
+  be present in `payload` field of the buffer.
+  """
   @type output_metadata :: %{rtp: ExRTP.Packet.t()}
+
+  @typedoc """
+  Notification sent by this element to it's parent when a new stream is received. Receiving a packet 
+  with previously unseen ssrc is treated as receiving a new stream.
+  """
+  @type new_rtp_stream_notification ::
+          {:new_rtp_stream, ssrc :: ExRTP.Packet.uint32(), payload_type :: ExRTP.Packet.uint7(),
+           extensions :: [ExRTP.Packet.Extension.t()]}
 
   defmodule State do
     @moduledoc false
