@@ -6,7 +6,10 @@ defmodule Membrane.RTP.Demuxer do
   """
 
   use Membrane.Filter
-  alias Membrane.{RemoteStream, RTCP, RTP}
+  require Membrane.Pad
+
+  alias Membrane.Element.Action
+  alias Membrane.{Pad, RemoteStream, RTCP, RTP}
 
   def_input_pad :input,
     accepted_format:
@@ -35,7 +38,7 @@ defmodule Membrane.RTP.Demuxer do
     @type t :: %__MODULE__{
             stream_states: %{
               RTP.ssrc_t() => %{
-                waiting_packets: [ExRTP.Packet.t()],
+                buffered_actions: [Action.buffer() | Action.end_of_stream()],
                 phase: :waiting_for_link | :linked
               }
             }
@@ -65,19 +68,27 @@ defmodule Membrane.RTP.Demuxer do
 
   @impl true
   def handle_pad_added(Pad.ref(:output, ssrc) = pad, _ctx, state) do
-    waiting_buffers =
-      state.stream_states[ssrc].waiting_packets
-      |> Enum.reverse()
-      |> Enum.map(&put_packet_into_buffer/1)
+    buffered_actions = state.stream_states[ssrc].buffered_actions
 
     state =
       Bunch.Struct.update_in(
         state,
         [:stream_states, ssrc],
-        &%{&1 | phase: :linked, waiting_packets: []}
+        &%{&1 | phase: :linked, buffered_actions: []}
       )
 
-    {[stream_format: {pad, %RTP{}}, buffer: {pad, waiting_buffers}], state}
+    {[stream_format: {pad, %RTP{}}] ++ Enum.reverse(buffered_actions), state}
+  end
+
+  @impl true
+  def handle_end_of_stream(:input, _ctx, state) do
+    state =
+      state.stream_states
+      |> Enum.reduce(state, fn {ssrc, _stream_state}, state ->
+        append_action_to_buffered_actions(ssrc, {:end_of_stream, Pad.ref(:output, ssrc)}, state)
+      end)
+
+    {[forward: :end_of_stream], state}
   end
 
   @spec classify_packet(binary()) :: :rtp | :rtcp
@@ -101,7 +112,12 @@ defmodule Membrane.RTP.Demuxer do
     {buffer_actions, state} =
       case state.stream_states[packet.ssrc].phase do
         :waiting_for_link ->
-          {[], append_packet_to_waiting_packets(packet, state)}
+          {[],
+           append_action_to_buffered_actions(
+             packet.ssrc,
+             {:buffer, {Pad.ref(:output, packet.ssrc), put_packet_into_buffer(packet)}},
+             state
+           )}
 
         :linked ->
           {[buffer: {Pad.ref(:output, packet.ssrc), put_packet_into_buffer(packet)}], state}
@@ -118,7 +134,7 @@ defmodule Membrane.RTP.Demuxer do
   @spec initialize_new_stream_state(ExRTP.Packet.t(), State.t()) ::
           {[Membrane.Element.Action.t()], State.t()}
   defp initialize_new_stream_state(packet, state) do
-    stream_state = %{waiting_packets: [], phase: :waiting_for_link}
+    stream_state = %{buffered_actions: [], phase: :waiting_for_link}
 
     extensions =
       case packet.extensions do
@@ -136,9 +152,13 @@ defmodule Membrane.RTP.Demuxer do
     {[notify_parent: {:new_rtp_stream, packet.ssrc, packet.payload_type, extensions}], state}
   end
 
-  @spec append_packet_to_waiting_packets(ExRTP.Packet.t(), State.t()) :: State.t()
-  defp append_packet_to_waiting_packets(packet, state) do
-    Bunch.Struct.update_in(state, [:stream_states, packet.ssrc, :waiting_packets], &[packet | &1])
+  @spec append_action_to_buffered_actions(
+          ExRTP.Packet.uint32(),
+          Action.buffer() | Action.end_of_stream(),
+          State.t()
+        ) :: State.t()
+  defp append_action_to_buffered_actions(ssrc, action, state) do
+    Bunch.Struct.update_in(state, [:stream_states, ssrc, :buffered_actions], &[action | &1])
   end
 
   @spec put_packet_into_buffer(ExRTP.Packet.t()) :: Membrane.Buffer.t()
