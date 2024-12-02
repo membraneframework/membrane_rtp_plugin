@@ -37,7 +37,7 @@ defmodule Membrane.RTP.Demuxer do
 
     @type t :: %__MODULE__{
             stream_states: %{
-              RTP.ssrc_t() => %{
+              RTP.ssrc() => %{
                 buffered_actions: [Action.buffer() | Action.end_of_stream()],
                 phase: :waiting_for_link | :linked
               }
