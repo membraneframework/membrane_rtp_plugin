@@ -9,8 +9,8 @@ defmodule Membrane.RTP.SSRCRouter.StreamsInfo do
   alias Membrane.RTP
 
   @type t() :: %__MODULE__{
-          accept_ssrcs: [RTP.ssrc_t()],
-          require_extensions: %{RTP.payload_type_t() => [RTP.Header.Extension.identifier_t()]}
+          accept_ssrcs: [RTP.ssrc()],
+          require_extensions: %{RTP.payload_type() => [RTP.Header.Extension.identifier_t()]}
         }
   @enforce_keys [:require_extensions]
   defstruct @enforce_keys ++ [accept_ssrcs: []]

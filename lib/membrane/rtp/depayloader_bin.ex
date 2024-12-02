@@ -14,7 +14,7 @@ defmodule Membrane.RTP.DepayloaderBin do
                 description: "Depayloader module that should be used for incoming stream"
               ],
               clock_rate: [
-                spec: RTP.clock_rate_t()
+                spec: RTP.clock_rate()
               ]
 
   def_input_pad :input,

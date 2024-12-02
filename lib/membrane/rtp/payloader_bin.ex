@@ -15,9 +15,9 @@ defmodule Membrane.RTP.PayloaderBin do
                 spec: module(),
                 description: "Payloader module used for payloading a stream to RTP format"
               ],
-              ssrc: [spec: RTP.ssrc_t()],
-              payload_type: [spec: RTP.payload_type_t()],
-              clock_rate: [spec: RTP.clock_rate_t()]
+              ssrc: [spec: RTP.ssrc()],
+              payload_type: [spec: RTP.payload_type()],
+              clock_rate: [spec: RTP.clock_rate()]
 
   @impl true
   def handle_init(_ctx, opts) do

@@ -21,7 +21,7 @@ defmodule Membrane.RTP.JitterBuffer do
 
   @default_latency 200 |> Time.milliseconds()
 
-  def_options clock_rate: [spec: RTP.clock_rate_t()],
+  def_options clock_rate: [spec: RTP.clock_rate()],
               latency: [
                 spec: Time.t(),
                 inspector: &Time.inspect/1,
@@ -45,7 +45,7 @@ defmodule Membrane.RTP.JitterBuffer do
 
     @type t :: %__MODULE__{
             store: BufferStore.t(),
-            clock_rate: RTP.clock_rate_t(),
+            clock_rate: RTP.clock_rate(),
             latency: Time.t(),
             waiting?: boolean(),
             max_latency_timer: reference

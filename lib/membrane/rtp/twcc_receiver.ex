@@ -27,7 +27,7 @@ defmodule Membrane.RTP.TWCCReceiver do
                 description: "How often to generate feedback packets."
               ],
               feedback_sender_ssrc: [
-                spec: RTP.ssrc_t() | nil,
+                spec: RTP.ssrc() | nil,
                 default: nil,
                 description:
                   "Sender SSRC for generated feedback packets (will be supplied by `RTP.SessionBin`)."
@@ -39,11 +39,11 @@ defmodule Membrane.RTP.TWCCReceiver do
 
     @type t :: %__MODULE__{
             twcc_id: 1..14,
-            feedback_sender_ssrc: RTP.ssrc_t() | nil,
+            feedback_sender_ssrc: RTP.ssrc() | nil,
             report_interval: Time.t(),
             packet_info_store: PacketInfoStore.t(),
             feedback_packet_count: non_neg_integer(),
-            media_ssrc: RTP.ssrc_t() | nil,
+            media_ssrc: RTP.ssrc() | nil,
             buffered_actions: %{Pad.ref() => Qex.t()}
           }
 

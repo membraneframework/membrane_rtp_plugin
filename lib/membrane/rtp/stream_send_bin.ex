@@ -18,9 +18,9 @@ defmodule Membrane.RTP.StreamSendBin do
     accepted_format: _any
 
   def_options payloader: [default: nil, spec: module],
-              payload_type: [spec: RTP.payload_type_t()],
-              ssrc: [spec: RTP.ssrc_t()],
-              clock_rate: [spec: RTP.clock_rate_t()],
+              payload_type: [spec: RTP.payload_type()],
+              ssrc: [spec: RTP.ssrc()],
+              clock_rate: [spec: RTP.clock_rate()],
               rtcp_report_interval: [spec: Membrane.Time.t() | nil],
               rtp_extension_mapping: [
                 default: nil,

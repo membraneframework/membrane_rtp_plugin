@@ -32,9 +32,9 @@ defmodule Membrane.RTP.OutboundTrackingSerializer do
     accepted_format: %RemoteStream{type: :packetized, content_format: RTCP},
     flow_control: :auto
 
-  def_options ssrc: [spec: RTP.ssrc_t()],
-              payload_type: [spec: RTP.payload_type_t()],
-              clock_rate: [spec: RTP.clock_rate_t()],
+  def_options ssrc: [spec: RTP.ssrc()],
+              payload_type: [spec: RTP.payload_type()],
+              clock_rate: [spec: RTP.clock_rate()],
               extension_mapping: [spec: RTP.SessionBin.rtp_extension_mapping_t()],
               telemetry_label: [
                 spec: Membrane.TelemetryMetrics.label(),
@@ -66,8 +66,8 @@ defmodule Membrane.RTP.OutboundTrackingSerializer do
     alias Membrane.RTP
 
     @type t :: %__MODULE__{
-            ssrc: RTP.ssrc_t(),
-            payload_type: RTP.payload_type_t(),
+            ssrc: RTP.ssrc(),
+            payload_type: RTP.payload_type(),
             extension_mapping: RTP.SessionBin.rtp_extension_mapping_t(),
             any_buffer_sent?: boolean(),
             rtcp_output_pad: Membrane.Pad.ref() | nil,
