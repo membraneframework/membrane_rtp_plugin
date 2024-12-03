@@ -75,11 +75,11 @@ defmodule Membrane.RTP.Muxer do
 
     pad_options = ctx.pads[pad_ref].options
 
-    {clock_rate, payload_type} =
-      resolve_payload_format(
-        pad_options.encoding,
-        pad_options.clock_rate,
-        pad_options.payload_type
+    {_payload_format, payload_type, clock_rate} =
+      RTP.PayloadFormat.resolve(
+        encoding_name: pad_options.encoding,
+        payload_type: pad_options.payload_type,
+        clock_rate: pad_options.clock_rate
       )
 
     new_stream_state = %{
@@ -119,11 +119,13 @@ defmodule Membrane.RTP.Muxer do
     timestamp = rem(stream_state.initial_timestamp + rtp_offset, @max_timestamp + 1)
     sequence_number = rem(stream_state.sequence_number + 1, @max_sequence_number + 1)
 
+    # IO.inspect(buffer.pts)
+
     state =
       Bunch.Struct.put_in(state, [:stream_states, pad_ref, :sequence_number], sequence_number)
 
-    header =
-      ExRTP.Packet.new(<<>>,
+    packet =
+      ExRTP.Packet.new(buffer.payload,
         payload_type: stream_state.payload_type,
         sequence_number: sequence_number,
         timestamp: timestamp,
@@ -132,7 +134,14 @@ defmodule Membrane.RTP.Muxer do
         marker: Map.get(rtp_metadata, :marker, false)
       )
 
-    buffer = %Membrane.Buffer{buffer | metadata: Map.put(metadata, :rtp, header)}
+    raw_packet = ExRTP.Packet.encode(packet)
+
+    buffer = %Membrane.Buffer{
+      buffer
+      | payload: raw_packet,
+        metadata: Map.put(metadata, :rtp, %{packet | payload: <<>>})
+    }
+
     {[buffer: {:output, buffer}], state}
   end
 
@@ -145,41 +154,5 @@ defmodule Membrane.RTP.Muxer do
     else
       {[], state}
     end
-  end
-
-  @spec resolve_payload_format(
-          RTP.encoding_name() | nil,
-          RTP.clock_rate() | nil,
-          RTP.payload_type() | nil
-        ) :: {RTP.clock_rate(), RTP.payload_type()}
-  defp resolve_payload_format(encoding_name, clock_rate, payload_type) do
-    payload_type =
-      case {encoding_name, payload_type} do
-        {nil, nil} ->
-          raise "Neither encoding name, nor payload type provided"
-
-        {encoding_name, nil} ->
-          %{payload_type: default_payload_type} = RTP.PayloadFormat.get(encoding_name)
-
-          if default_payload_type == nil do
-            raise "Payload type not provided with no default value registered"
-          end
-
-          default_payload_type
-
-        {_encoding_name, payload_type} ->
-          payload_type
-      end
-
-    payload_type_mapping = RTP.PayloadFormat.get_payload_type_mapping(payload_type)
-
-    clock_rate =
-      case {clock_rate, payload_type_mapping} do
-        {nil, %{clock_rate: default_clock_rate}} -> default_clock_rate
-        {nil, %{}} -> raise "Clock rate not provided with no default value registered"
-        {clock_rate, _payload_type_mapping} -> clock_rate
-      end
-
-    {clock_rate, payload_type}
   end
 end
