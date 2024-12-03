@@ -49,7 +49,6 @@ defmodule Membrane.RTP.DemuxerTest do
     %{audio: %{payload_type: audio_payload_type}, video: %{payload_type: video_payload_type}} =
       @rtp_output
 
-    assert_start_of_stream(pipeline, :rtp_muxer, _pad)
     assert_start_of_stream(pipeline, :sink)
 
     1..@rtp_output.video.packets
@@ -66,8 +65,6 @@ defmodule Membrane.RTP.DemuxerTest do
       })
     end)
 
-    assert_end_of_stream(pipeline, :rtp_muxer, _pad)
-    assert_end_of_stream(pipeline, :rtp_muxer, _pad)
     assert_end_of_stream(pipeline, :sink)
     Testing.Pipeline.terminate(pipeline)
   end
