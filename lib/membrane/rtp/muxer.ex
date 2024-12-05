@@ -75,22 +75,7 @@ defmodule Membrane.RTP.Muxer do
   def handle_pad_added(Pad.ref(:input, _ref) = pad_ref, ctx, state) do
     pad_options = ctx.pads[pad_ref].options
 
-    ssrc =
-      case pad_options.ssrc do
-        :random ->
-          Stream.repeatedly(fn -> Enum.random(0..@max_ssrc) end)
-          |> Enum.find(
-            &(&1 not in Enum.map(state.stream_states, fn {_pad_ref, %{ssrc: ssrc}} -> ssrc end))
-          )
-
-        provided_ssrc ->
-          if provided_ssrc in Enum.map(state.stream_states, fn {_pad_ref, %{ssrc: ssrc}} ->
-               ssrc
-             end),
-             do: raise("SSRC #{provided_ssrc} already assigned to a different stream")
-
-          provided_ssrc
-      end
+    ssrc = get_stream_ssrc(pad_options, state)
 
     {_payload_format, payload_type, clock_rate} =
       RTP.PayloadFormat.resolve(
@@ -169,6 +154,23 @@ defmodule Membrane.RTP.Muxer do
       {[end_of_stream: :output], state}
     else
       {[], state}
+    end
+  end
+
+  defp get_stream_ssrc(pad_options, state) do
+    assigned_ssrcs = Enum.map(state.stream_states, fn {_pad_ref, %{ssrc: ssrc}} -> ssrc end)
+
+    case pad_options.ssrc do
+      :random ->
+        Stream.repeatedly(fn -> Enum.random(0..@max_ssrc) end)
+        |> Enum.find(&(&1 not in assigned_ssrcs))
+
+      provided_ssrc ->
+        if provided_ssrc in assigned_ssrcs do
+          raise("SSRC #{provided_ssrc} already assigned to a different stream")
+        end
+
+        provided_ssrc
     end
   end
 end
