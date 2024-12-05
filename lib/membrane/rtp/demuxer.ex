@@ -29,7 +29,7 @@ defmodule Membrane.RTP.Demuxer do
   with previously unseen ssrc is treated as receiving a new stream.
   """
   @type new_rtp_stream_notification ::
-          {:new_rtp_stream, ssrc :: ExRTP.Packet.uint32(), payload_type :: ExRTP.Packet.uint7(),
+          {:new_rtp_stream, ssrc :: RTP.ssrc(), payload_type :: RTP.payload_type(),
            extensions :: [ExRTP.Packet.Extension.t()]}
 
   defmodule State do
@@ -153,7 +153,7 @@ defmodule Membrane.RTP.Demuxer do
   end
 
   @spec append_action_to_buffered_actions(
-          ExRTP.Packet.uint32(),
+          RTP.ssrc(),
           Action.buffer() | Action.end_of_stream(),
           State.t()
         ) :: State.t()
