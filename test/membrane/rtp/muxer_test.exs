@@ -1,4 +1,4 @@
-defmodule Membrane.RTP.DemuxerTest do
+defmodule Membrane.RTP.MuxerTest do
   @moduledoc false
   use ExUnit.Case
   import Membrane.Testing.Assertions
