@@ -15,22 +15,21 @@ defmodule Membrane.RTP.DemuxerTest do
     @impl true
     def handle_init(_ctx, opts) do
       spec = [
-        child(:hackney_source, %Membrane.Hackney.Source{
-          location:
-            "https://raw.githubusercontent.com/membraneframework/static/gh-pages/samples/big-buck-bunny/bun10s.mp4",
-          hackney_opts: [follow_redirect: true]
-        })
+        # child(:hackney_source, %Membrane.Hackney.Source{
+        # location:
+        # "https://raw.githubusercontent.com/membraneframework/static/gh-pages/samples/big-buck-bunny/bun33s.mp4",
+        # hackney_opts: [follow_redirect: true]
+        # })
+        child(:file_source, %Membrane.File.Source{location: "aaa.mp4"})
         |> child(:mp4_demuxer, Membrane.MP4.Demuxer.ISOM)
         |> via_out(:output, options: [kind: :video])
         |> child(:h264_parser, %Membrane.H264.Parser{
           output_stream_structure: :annexb,
           output_alignment: :nalu
         })
-        |> child(%Membrane.Debug.Filter{handle_buffer: &IO.inspect(&1.pts, label: "ptsss")})
         |> child(:h264_payloader, Membrane.RTP.H264.Payloader)
         |> via_in(:input, options: [encoding: :H264])
         |> child(:rtp_muxer, Membrane.RTP.Muxer)
-        # |> child(%Membrane.Debug.Filter{handle_buffer: &IO.inspect(&1, label: "czumpi")})
         |> child(:rtp_demuxer, Membrane.RTP.Demuxer),
         get_child(:mp4_demuxer)
         |> via_out(:output, options: [kind: :audio])
@@ -52,8 +51,6 @@ defmodule Membrane.RTP.DemuxerTest do
           _ctx,
           state
         ) do
-      IO.inspect("aaa")
-
       {jitter_buffer, depayloader, parser} =
         case Membrane.RTP.PayloadFormat.get_payload_type_mapping(pt) do
           %{encoding_name: :H264, clock_rate: clock_rate} ->
@@ -83,7 +80,7 @@ defmodule Membrane.RTP.DemuxerTest do
 
   test "Muxer muxes correct amount of packets" do
     pipeline =
-      Testing.Pipeline.start_supervised!(module: Pipeline, custom_args: %{output_path: "aaa.mp4"})
+      Testing.Pipeline.start_supervised!(module: Pipeline, custom_args: %{output_path: "bbb.mp4"})
 
     # %{audio: %{payload_type: audio_payload_type}, video: %{payload_type: video_payload_type}} =
     # @rtp_output
