@@ -113,8 +113,9 @@ defmodule Membrane.RTP.Muxer do
 
     rtp_offset =
       buffer.pts
-      |> Membrane.Time.as_seconds(:round)
+      |> Membrane.Time.as_seconds()
       |> Numbers.mult(stream_state.clock_rate)
+      |> Ratio.trunc()
 
     timestamp = rem(stream_state.initial_timestamp + rtp_offset, @max_timestamp + 1)
     sequence_number = rem(stream_state.sequence_number + 1, @max_sequence_number + 1)
