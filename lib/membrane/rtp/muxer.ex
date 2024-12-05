@@ -14,6 +14,13 @@ defmodule Membrane.RTP.Muxer do
     accepted_format: RTP,
     availability: :on_request,
     options: [
+      ssrc: [
+        spec: RTP.ssrc() | :random,
+        default: :random,
+        description: """
+        SSRC that this stream will be assigned. If not present, a random free value will be assigned.
+        """
+      ],
       payload_type: [
         spec: RTP.payload_type() | nil,
         default: nil,
@@ -66,16 +73,25 @@ defmodule Membrane.RTP.Muxer do
 
   @impl true
   def handle_pad_added(Pad.ref(:input, _ref) = pad_ref, ctx, state) do
-    ssrc =
-      fn -> Enum.random(0..@max_ssrc) end
-      |> Stream.repeatedly()
-      |> Enum.find(
-        &(&1 not in Enum.map(state.stream_states, fn {_pad_ref, %{ssrc: ssrc}} -> ssrc end))
-      )
-
     pad_options = ctx.pads[pad_ref].options
 
-    {_payload_format, payload_type, clock_rate} =
+    case pad_options.ssrc do
+      :random ->
+        Stream.repeatedly(fn -> Enum.random(0..@max_ssrc) end)
+        |> Enum.find(
+          &(&1 not in Enum.map(state.stream_states, fn {_pad_ref, %{ssrc: ssrc}} -> ssrc end))
+        )
+
+      provided_ssrc ->
+        if provided_ssrc in Enum.map(state.stream_states, fn {_pad_ref, %{ssrc: ssrc}} -> ssrc end) do
+          raise "SSRC #{provided_ssrc} already assigned to a different stream"
+        end
+
+        provided_ssrc
+    end
+
+    ssrc =
+      {_payload_format, payload_type, clock_rate} =
       RTP.PayloadFormat.resolve(
         encoding_name: pad_options.encoding,
         payload_type: pad_options.payload_type,
@@ -119,8 +135,6 @@ defmodule Membrane.RTP.Muxer do
 
     timestamp = rem(stream_state.initial_timestamp + rtp_offset, @max_timestamp + 1)
     sequence_number = rem(stream_state.sequence_number + 1, @max_sequence_number + 1)
-
-    # IO.inspect(buffer.pts)
 
     state =
       Bunch.Struct.put_in(state, [:stream_states, pad_ref, :sequence_number], sequence_number)

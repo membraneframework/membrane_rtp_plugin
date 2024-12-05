@@ -1,4 +1,4 @@
-defmodule Membrane.RTP.DemuxerTest do
+defmodule Membrane.RTP.DemuxerMuxerTest do
   @moduledoc false
   use ExUnit.Case
   import Membrane.Testing.Assertions
@@ -7,8 +7,7 @@ defmodule Membrane.RTP.DemuxerTest do
 
   @rtp_input %{
     pcap_path: "test/fixtures/rtp/session/demo_rtp.pcap",
-    audio: %{ssrc: 439_017_412, packets: 20},
-    video: %{ssrc: 670_572_639, packets: 842}
+    packets: 862
   }
 
   defmodule ReferencePipeline do
@@ -64,7 +63,7 @@ defmodule Membrane.RTP.DemuxerTest do
     end
   end
 
-  test "Muxer muxes correct amount of packets" do
+  test "Demuxed and muxed stream is the same as unchanged one" do
     reference_pipeline =
       Testing.Pipeline.start_supervised!(
         module: ReferencePipeline,
@@ -78,12 +77,12 @@ defmodule Membrane.RTP.DemuxerTest do
       )
 
     assert_start_of_stream(reference_pipeline, :sink)
-
     assert_start_of_stream(subject_pipeline, :sink)
-    reference_buffer_payloads = get_payloads(reference_pipeline, 862)
-    subject_buffer_payloads = get_payloads(subject_pipeline, 862)
 
-    assert reference_buffers == subject_buffers
+    reference_normalized_packets = get_normalized_packets(reference_pipeline, @rtp_input.packets)
+    subject_normalized_packets = get_normalized_packets(subject_pipeline, @rtp_input.packets)
+
+    assert reference_normalized_packets == subject_normalized_packets
 
     assert_end_of_stream(reference_pipeline, :sink)
     assert_end_of_stream(subject_pipeline, :sink)
@@ -91,7 +90,9 @@ defmodule Membrane.RTP.DemuxerTest do
     Testing.Pipeline.terminate(subject_pipeline)
   end
 
-  defp get_payloads(pipeline, buffers_amount) do
+  @spec get_normalized_packets(pid(), non_neg_integer()) ::
+          %{RTP.encoding_name() => [ExRTP.Packet.t()]}
+  defp get_normalized_packets(pipeline, buffers_amount) do
     Enum.map(1..buffers_amount, fn _i ->
       assert_sink_buffer(pipeline, :sink, %Membrane.Buffer{
         payload: payload
@@ -105,12 +106,24 @@ defmodule Membrane.RTP.DemuxerTest do
     |> Map.new(fn {payload_type, payload_type_buffers} ->
       %{encoding_name: encoding_name} = RTP.PayloadFormat.get_payload_type_mapping(payload_type)
 
-      sorted_buffer_payloads =
+      sorted_packets =
         payload_type_buffers
         |> Enum.sort(&(&1.sequence_number < &2.sequence_number))
-        |> Enum.map(& &1.payload)
 
-      {encoding_name, sorted_buffer_payloads}
+      %{ssrc: ssrc, sequence_number: first_sequence_number, timestamp: first_timestamp} =
+        List.first(sorted_packets)
+
+      normalized_packets =
+        sorted_packets
+        |> Enum.map(fn packet ->
+          packet
+          |> Bunch.Struct.update_in(:ssrc, &(&1 - ssrc))
+          |> Bunch.Struct.update_in(:sequence_number, &(&1 - first_sequence_number))
+          # round to ignore insignificant differences in timestamps
+          |> Bunch.Struct.update_in(:timestamp, &round((&1 - first_timestamp) / 10))
+        end)
+
+      {encoding_name, normalized_packets}
     end)
   end
 end
