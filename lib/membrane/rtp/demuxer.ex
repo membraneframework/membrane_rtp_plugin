@@ -1,7 +1,7 @@
 defmodule Membrane.RTP.Demuxer do
   @moduledoc """
   Element capable of receiving a raw RTP stream and demuxing it into individual parsed streams based on packet ssrcs. 
-  Whenever a new is recognized, a `new_rtp_stream_notification` is sent to the element's parent. In turn it should link a 
+  Whenever a new stream is recognized, a `new_rtp_stream_notification` is sent to the element's parent. In turn it should link a 
   `Membrane.Pad.ref({:output, ssrc})` output pad of this element to receive the stream specified in the notification.
   """
 
@@ -18,9 +18,9 @@ defmodule Membrane.RTP.Demuxer do
   def_output_pad :output, accepted_format: RTP, availability: :on_request
 
   @typedoc """
-  Metadata present in each output buffer. The `ExRTP.Packet.t()` struct contains parsed fields of the packet
-  present in the buffer. The `payload` field of this struct will be set to `<<>>`, and the payload will
-  be present in `payload` field of the buffer.
+  Metadata present in each output buffer. The `ExRTP.Packet.t()` struct contains 
+  parsed fields of the packet's header. The `payload` field of this struct will 
+  be set to `<<>>`, and the payload will be present in `payload` field of the buffer.
   """
   @type output_metadata :: %{rtp: ExRTP.Packet.t()}
 
@@ -109,18 +109,16 @@ defmodule Membrane.RTP.Demuxer do
         initialize_new_stream_state(packet, state)
       end
 
+    buffer_action =
+      {:buffer, {Pad.ref(:output, packet.ssrc), put_packet_into_buffer(packet)}}
+
     {buffer_actions, state} =
       case state.stream_states[packet.ssrc].phase do
         :waiting_for_link ->
-          {[],
-           append_action_to_buffered_actions(
-             packet.ssrc,
-             {:buffer, {Pad.ref(:output, packet.ssrc), put_packet_into_buffer(packet)}},
-             state
-           )}
+          {[], append_action_to_buffered_actions(packet.ssrc, buffer_action, state)}
 
         :linked ->
-          {[buffer: {Pad.ref(:output, packet.ssrc), put_packet_into_buffer(packet)}], state}
+          {[buffer_action], state}
       end
 
     {new_stream_actions ++ buffer_actions, state}
@@ -144,7 +142,7 @@ defmodule Membrane.RTP.Demuxer do
         extension when is_binary(extension) ->
           [ExRTP.Packet.Extension.new(packet.extension_profile, extension)]
 
-        extensions ->
+        extensions when is_list(extensions) ->
           extensions
       end
 
