@@ -77,12 +77,15 @@ defmodule Membrane.RTP.Muxer do
 
     ssrc = get_stream_ssrc(pad_options, state)
 
-    {_payload_format, payload_type, clock_rate} =
+    %{payload_type: payload_type, clock_rate: clock_rate} =
       RTP.PayloadFormat.resolve(
         encoding_name: pad_options.encoding,
         payload_type: pad_options.payload_type,
         clock_rate: pad_options.clock_rate
       )
+
+    if payload_type == nil, do: raise("Could not resolve payload type")
+    if clock_rate == nil, do: raise("Could not resolve clock rate")
 
     new_stream_state = %{
       ssrc: ssrc,
