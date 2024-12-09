@@ -1,13 +1,14 @@
 defmodule Membrane.RTP.Demuxer do
   @moduledoc """
   Element capable of receiving a raw RTP stream and demuxing it into individual parsed streams based on packet ssrcs. 
-  Whenever a new stream is recognized, a `new_rtp_stream_notification` is sent to the element's parent. In turn it should link a 
+  Whenever a new stream is recognized, a `t:new_rtp_stream_notification/0` is sent to the element's parent. In turn it should link a 
   `Membrane.Pad.ref({:output, ssrc})` output pad of this element to receive the stream specified in the notification.
   """
 
   use Membrane.Filter
   require Membrane.Pad
 
+  require Membrane.Logger
   alias Membrane.Element.Action
   alias Membrane.{Pad, RemoteStream, RTCP, RTP}
 
@@ -16,6 +17,15 @@ defmodule Membrane.RTP.Demuxer do
       %RemoteStream{type: :packetized, content_format: cf} when cf in [RTP, RTCP, nil]
 
   def_output_pad :output, accepted_format: RTP, availability: :on_request
+
+  def_options not_linked_pad_handling: [
+                spec: %{action: :raise | :ignore, timeout: Membrane.Time.t()},
+                default: %{action: :ignore, timeout: Membrane.Time.seconds(2)},
+                description: """
+                This option determines the action to be taken after a stream has been announced with a 
+                `t:new_rtp_stream_notification/0` notification but the corresponding pad has not been connected within the specified timeout period.
+                """
+              ]
 
   @typedoc """
   Metadata present in each output buffer. The `ExRTP.Packet.t()` struct contains 
@@ -36,21 +46,26 @@ defmodule Membrane.RTP.Demuxer do
     @moduledoc false
 
     @type t :: %__MODULE__{
+            not_linked_pad_handling: %{
+              action: :raise | :ignore,
+              timeout: Membrane.Time.t()
+            },
             stream_states: %{
               RTP.ssrc() => %{
                 buffered_actions: [Action.buffer() | Action.end_of_stream()],
-                phase: :waiting_for_link | :linked
+                phase: :waiting_for_link | :linked | :timed_out,
+                link_timer: reference()
               }
             }
           }
 
-    @enforce_keys []
+    @enforce_keys [:not_linked_pad_handling]
     defstruct @enforce_keys ++ [stream_states: %{}]
   end
 
   @impl true
-  def handle_init(_ctx, _opts) do
-    {[], %State{}}
+  def handle_init(_ctx, opts) do
+    {[], struct(State, Map.from_struct(opts))}
   end
 
   @impl true
@@ -68,16 +83,46 @@ defmodule Membrane.RTP.Demuxer do
 
   @impl true
   def handle_pad_added(Pad.ref(:output, ssrc) = pad, _ctx, state) do
-    buffered_actions = state.stream_states[ssrc].buffered_actions
+    stream_state = state.stream_states[ssrc]
 
-    state =
-      Bunch.Struct.update_in(
-        state,
-        [:stream_states, ssrc],
-        &%{&1 | phase: :linked, buffered_actions: []}
-      )
+    case stream_state.phase do
+      :waiting_for_link ->
+        state =
+          Bunch.Struct.put_in(
+            state,
+            [:stream_states, ssrc],
+            %{stream_state | phase: :linked, buffered_actions: []}
+          )
 
-    {[stream_format: {pad, %RTP{}}] ++ Enum.reverse(buffered_actions), state}
+        {[stream_format: {pad, %RTP{}}] ++ Enum.reverse(stream_state.buffered_actions), state}
+
+      :timed_out ->
+        Membrane.Logger.warning(
+          "Connected a pad corresponding to a timed out stream, sending end_of_stream"
+        )
+
+        {[end_of_stream: pad], state}
+    end
+  end
+
+  @impl true
+  def handle_info({:link_timeout, ssrc}, _ctx, state) do
+    case state.not_linked_pad_handling.action do
+      :raise ->
+        raise "Pad corresponding to ssrc #{ssrc} not connected within specified timeout"
+
+      :ignore ->
+        Membrane.Logger.warning(
+          "Pad corresponding to ssrc #{ssrc} not connected within specified timeout"
+        )
+
+        state =
+          state
+          |> Bunch.Struct.put_in([:stream_states, ssrc, :phase], :timed_out)
+          |> Bunch.Struct.put_in([:stream_states, ssrc, :buffered_actions], [])
+
+        {[], state}
+    end
   end
 
   @impl true
@@ -115,24 +160,38 @@ defmodule Membrane.RTP.Demuxer do
     {buffer_actions, state} =
       case state.stream_states[packet.ssrc].phase do
         :waiting_for_link ->
+          Process.cancel_timer(state.stream_states[packet.ssrc].link_timer)
           {[], append_action_to_buffered_actions(packet.ssrc, buffer_action, state)}
 
         :linked ->
           {[buffer_action], state}
+
+        :timed_out ->
+          {[], state}
       end
 
     {new_stream_actions ++ buffer_actions, state}
   end
 
   @spec handle_rtcp_packets(binary(), State.t()) :: {[Membrane.Element.Action.t()], State.t()}
-  defp handle_rtcp_packets(_rtcp_packets, state) do
+  defp handle_rtcp_packets(rtcp_packets, state) do
+    Membrane.Logger.debug_verbose("Received RTCP Packet(s): #{inspect(rtcp_packets)}")
     {[], state}
   end
 
   @spec initialize_new_stream_state(ExRTP.Packet.t(), State.t()) ::
           {[Membrane.Element.Action.t()], State.t()}
   defp initialize_new_stream_state(packet, state) do
-    stream_state = %{buffered_actions: [], phase: :waiting_for_link}
+    stream_state = %{
+      buffered_actions: [],
+      phase: :waiting_for_link,
+      link_timer:
+        Process.send_after(
+          self(),
+          {:link_timeout, packet.ssrc},
+          Membrane.Time.as_milliseconds(state.not_linked_pad_handling.timeout, :round)
+        )
+    }
 
     extensions =
       case packet.extensions do
