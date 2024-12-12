@@ -1,8 +1,11 @@
 defmodule Membrane.RTP.Demuxer do
   @moduledoc """
   Element capable of receiving a raw RTP stream and demuxing it into individual parsed streams based on packet ssrcs. 
-  Whenever a new stream is recognized, a `t:new_rtp_stream_notification/0` is sent to the element's parent. In turn it should link a 
-  `Membrane.Pad.ref({:output, ssrc})` output pad of this element to receive the stream specified in the notification.
+  Output pads can be linked either before or after a corresponding stream has been recognized. In the first case the demuxer will 
+  start sending buffers on the pad once a stream with payload type or SSRC matching the identification provided via the pad's options
+  is recognized. In the second case, whenever a new stream is recognized and no waiting pad has matching identification, a 
+  `t:new_rtp_stream_notification/0` is sent to the element's parent. In turn it should link an output pad of this element, passing
+  the SSRC received in the notification as an option, to receive the stream.
   """
 
   use Membrane.Filter
@@ -49,7 +52,12 @@ defmodule Membrane.RTP.Demuxer do
       ]
     ]
 
-  def_options not_linked_pad_handling: [
+  def_options payload_type_mapping: [
+                spec: RTP.PayloadFormat.payload_type_mapping(),
+                default: %{},
+                description: "Mapping of the custom payload types ( > 95)"
+              ],
+              not_linked_pad_handling: [
                 spec: %{action: :raise | :ignore, timeout: Membrane.Time.t()},
                 default: %{action: :ignore, timeout: Membrane.Time.seconds(2)},
                 description: """
@@ -60,9 +68,11 @@ defmodule Membrane.RTP.Demuxer do
 
   defmodule State do
     @moduledoc false
+    alias Membrane.RTP
 
     defmodule StreamState do
       @moduledoc false
+      alias Membrane.RTP
 
       @type t :: %__MODULE__{
               queued_buffers: [ExRTP.Packet.t()],
@@ -79,12 +89,13 @@ defmodule Membrane.RTP.Demuxer do
     end
 
     @type t :: %__MODULE__{
+            payload_type_mapping: RTP.PayloadFormat.payload_type_mapping(),
             not_linked_pad_handling: %{action: :raise | :ignore, timeout: Membrane.Time.t()},
             stream_states: %{RTP.ssrc() => StreamState.t()},
             pads_waiting_for_stream: %{Pad.ref() => Membrane.RTP.Demuxer.stream_id()}
           }
 
-    @enforce_keys [:not_linked_pad_handling]
+    @enforce_keys [:not_linked_pad_handling, :payload_type_mapping]
     defstruct @enforce_keys ++ [stream_states: %{}, pads_waiting_for_stream: %{}]
   end
 
@@ -109,7 +120,11 @@ defmodule Membrane.RTP.Demuxer do
   @impl true
   def handle_pad_added(Pad.ref(:output, _ref) = pad, ctx, state) do
     matching_stream_ssrc =
-      find_matching_stream_for_pad(ctx.pad_options.stream_id, state.stream_states)
+      find_matching_stream_for_pad(
+        ctx.pad_options.stream_id,
+        state.stream_states,
+        state.payload_type_mapping
+      )
 
     stream_state = state.stream_states[matching_stream_ssrc]
 
@@ -199,7 +214,7 @@ defmodule Membrane.RTP.Demuxer do
         initialize_new_stream_state(packet, state)
       end
 
-    buffer = put_packet_into_buffer(packet)
+    buffer = put_packet_into_buffer(packet, state.payload_type_mapping)
 
     {buffer_actions, state} =
       case state.stream_states[packet.ssrc].phase do
@@ -228,7 +243,11 @@ defmodule Membrane.RTP.Demuxer do
   @spec initialize_new_stream_state(ExRTP.Packet.t(), State.t()) ::
           {[Membrane.Element.Action.t()], State.t()}
   defp initialize_new_stream_state(packet, state) do
-    case find_matching_pad_for_stream(packet, state.pads_waiting_for_stream) do
+    case find_matching_pad_for_stream(
+           packet,
+           state.pads_waiting_for_stream,
+           state.payload_type_mapping
+         ) do
       nil ->
         stream_state = %State.StreamState{
           phase: :waiting_for_link,
@@ -270,51 +289,14 @@ defmodule Membrane.RTP.Demuxer do
     end
   end
 
-  # @spec find_matching_pad(ExRTP.Packet.t(), MapSet.t({stream_id(), Pad.ref()})) :: Pad.ref() | nil
-  # defp find_matching_pad(packet, pads_waiting_for_stream) do
-  ## Enum.find_value(pads_waiting_for_stream, fn {stream_id, pad_ref} -> pad_data end)
-  # end
-
-  # @spec resolve_ssrc(
-  # {:ssrc, RTP.ssrc()}
-  # | {:encoding_name, RTP.encoding_name()}
-  # | {:payload_type, RTP.payload_type()},
-  # State.t()
-  # ) :: RTP.ssrc() | nil
-  # defp resolve_ssrc(stream_id, state) do
-  # case stream_id do
-  # {:ssrc, ssrc} ->
-  # ssrc
-
-  # {:encoding_name, encoding_name} ->
-  # %{payload_type: payload_type} = RTP.PayloadFormat.resolve(encoding_name: encoding_name)
-  # if payload_type == nil, do: raise("encoding name not recognized")
-  # resolve_ssrc({:payload_type, payload_type}, state)
-
-  # {:payload_type, payload_type} ->
-  # Enum.find_value(state.stream_states, fn {ssrc, stream_state} ->
-  # if stream_state.payload_type == payload_type, do: ssrc, else: false
-  # end)
-  # end
-  # end
-
-  @spec find_matching_pad_for_stream(ExRTP.Packet.t(), %{Pad.ref() => stream_id()}) ::
-          Pad.ref() | nil
-  defp find_matching_pad_for_stream(packet, pads_waiting_for_stream) do
+  @spec find_matching_pad_for_stream(
+          ExRTP.Packet.t(),
+          %{Pad.ref() => stream_id()},
+          RTP.PayloadFormat.payload_type_mapping()
+        ) :: Pad.ref() | nil
+  defp find_matching_pad_for_stream(packet, pads_waiting_for_stream, payload_type_mapping) do
     Enum.find(pads_waiting_for_stream, fn {_pad_ref, stream_id} ->
-      pad_stream_match?(stream_id, packet.ssrc, packet.payload_type)
-      # case stream_id do
-      # {:ssrc, ssrc} ->
-      # packet.ssrc == ssrc
-
-      # {:payload_type, payload_type} ->
-      # packet.payload_type == payload_type
-
-      # {:encoding_name, encoding_name} ->
-      # %{payload_type: payload_type} = RTP.PayloadFormat.resolve(encoding_name: encoding_name)
-      # if payload_type == nil, do: raise("encoding name not recognized")
-      # packet.payload_type == payload_type
-      # end
+      pad_stream_match?(stream_id, packet.ssrc, packet.payload_type, payload_type_mapping)
     end)
     |> case do
       nil -> nil
@@ -322,19 +304,14 @@ defmodule Membrane.RTP.Demuxer do
     end
   end
 
-  # 1. pad connected: check if a corresponding stream waiting for a pad exists. 
-  # If not, add to waiting pads. 
-  # If yes, add the pad to the stream state
-  #
-  # 2. new stream received: check if a corresponding pad waiting for a stream exists.
-  # If not, set the phase to :waiting_for_link
-  # If yes, remove the pad from waiting pads and add it to the stream state
-
-  @spec find_matching_stream_for_pad(stream_id(), %{RTP.ssrc() => State.StreamState.t()}) ::
-          RTP.ssrc() | nil
-  defp find_matching_stream_for_pad(stream_id, stream_states) do
+  @spec find_matching_stream_for_pad(
+          stream_id(),
+          %{RTP.ssrc() => State.StreamState.t()},
+          RTP.PayloadFormat.payload_type_mapping()
+        ) :: RTP.ssrc() | nil
+  defp find_matching_stream_for_pad(stream_id, stream_states, payload_type_mapping) do
     Enum.find(stream_states, fn {ssrc, stream_state} ->
-      pad_stream_match?(stream_id, ssrc, stream_state.payload_type)
+      pad_stream_match?(stream_id, ssrc, stream_state.payload_type, payload_type_mapping)
     end)
     |> case do
       nil -> nil
@@ -342,8 +319,19 @@ defmodule Membrane.RTP.Demuxer do
     end
   end
 
-  defp pad_stream_match?(pad_stream_id, stream_ssrc, stream_payload_type) do
-    case pad_stream_id do
+  @spec pad_stream_match?(
+          stream_id(),
+          RTP.ssrc(),
+          RTP.payload_type(),
+          RTP.PayloadFormat.payload_type_mapping()
+        ) :: boolean()
+  defp pad_stream_match?(
+         pad_options_stream_id,
+         stream_ssrc,
+         stream_payload_type,
+         payload_type_mapping
+       ) do
+    case pad_options_stream_id do
       {:ssrc, pad_ssrc} ->
         stream_ssrc == pad_ssrc
 
@@ -352,29 +340,37 @@ defmodule Membrane.RTP.Demuxer do
 
       {:encoding_name, pad_encoding_name} ->
         %{payload_type: pad_payload_type} =
-          RTP.PayloadFormat.resolve(encoding_name: pad_encoding_name)
-
-        if pad_payload_type == nil,
-          do: raise("encoding name provided in pad options not recognized")
+          RTP.PayloadFormat.resolve(
+            encoding_name: pad_encoding_name,
+            payload_type_mapping: payload_type_mapping
+          )
 
         stream_payload_type == pad_payload_type
     end
   end
 
-  @spec append_buffer_to_queued_buffers(
-          RTP.ssrc(),
-          Buffer.t(),
-          State.t()
-        ) :: State.t()
+  @spec append_buffer_to_queued_buffers(RTP.ssrc(), Buffer.t(), State.t()) :: State.t()
   defp append_buffer_to_queued_buffers(ssrc, buffer, state) do
     Bunch.Struct.update_in(state, [:stream_states, ssrc, :queued_buffers], &[buffer | &1])
   end
 
-  @spec put_packet_into_buffer(ExRTP.Packet.t()) :: Membrane.Buffer.t()
-  defp put_packet_into_buffer(packet) do
+  @spec put_packet_into_buffer(ExRTP.Packet.t(), RTP.PayloadFormat.payload_type_mapping()) ::
+          Membrane.Buffer.t()
+  defp put_packet_into_buffer(packet, payload_type_mapping) do
+    %{clock_rate: clock_rate} =
+      RTP.PayloadFormat.resolve(
+        payload_type: packet.payload_type,
+        payload_type_mapping: payload_type_mapping
+      )
+
+    pts =
+      if clock_rate == nil,
+        do: nil,
+        else: Ratio.new(packet.timestamp, clock_rate) |> Membrane.Time.seconds()
+
     %Membrane.Buffer{
       payload: packet.payload,
-      pts: packet.timestamp,
+      pts: pts,
       metadata: %{rtp: %{packet | payload: <<>>}}
     }
   end
