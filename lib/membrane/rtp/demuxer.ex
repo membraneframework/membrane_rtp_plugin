@@ -55,7 +55,7 @@ defmodule Membrane.RTP.Demuxer do
   def_options payload_type_mapping: [
                 spec: RTP.PayloadFormat.payload_type_mapping(),
                 default: %{},
-                description: "Mapping of the custom payload types ( > 95)"
+                description: "Mapping of the custom RTP payload types ( > 95)."
               ],
               not_linked_pad_handling: [
                 spec: %{action: :raise | :ignore, timeout: Membrane.Time.t()},
@@ -139,7 +139,7 @@ defmodule Membrane.RTP.Demuxer do
         {[], state}
 
       %{phase: :waiting_for_link} ->
-        Process.cancel_timer(state.stream_states[matching_stream_ssrc].link_timer)
+        Process.cancel_timer(stream_state.link_timer)
 
         buffer_action = [buffer: {pad, Enum.reverse(stream_state.queued_buffers)}]
 
@@ -276,16 +276,23 @@ defmodule Membrane.RTP.Demuxer do
         state = Bunch.Struct.put_in(state, [:stream_states, packet.ssrc], stream_state)
         {[notify_parent: {:new_rtp_stream, packet.ssrc, packet.payload_type, extensions}], state}
 
-      pad_waiting_for_stream ->
+      matching_pad_waiting_for_stream ->
         stream_state = %State.StreamState{
           phase: :linked,
           link_timer: nil,
           payload_type: packet.payload_type,
-          pad: pad_waiting_for_stream
+          pad: matching_pad_waiting_for_stream
         }
 
-        state = Bunch.Struct.put_in(state, [:stream_states, packet.ssrc], stream_state)
-        {[stream_format: {pad_waiting_for_stream, %RTP{}}], state}
+        state =
+          state
+          |> Bunch.Struct.put_in([:stream_states, packet.ssrc], stream_state)
+          |> Map.update!(
+            :pads_waiting_for_stream,
+            &Map.delete(&1, matching_pad_waiting_for_stream)
+          )
+
+        {[stream_format: {matching_pad_waiting_for_stream, %RTP{}}], state}
     end
   end
 
