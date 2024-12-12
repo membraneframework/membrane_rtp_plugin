@@ -50,7 +50,7 @@ defmodule Membrane.RTP.DemuxerMuxerTest do
 
       spec =
         get_child(:rtp_demuxer)
-        |> via_out(Pad.ref(:output, ssrc))
+        |> via_out(:output, options: [stream_id: {:ssrc, ssrc}])
         |> child({:jitter_buffer, ssrc}, %Membrane.RTP.JitterBuffer{clock_rate: clock_rate})
         |> via_in(:input,
           options: [
