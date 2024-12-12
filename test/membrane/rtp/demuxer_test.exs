@@ -32,7 +32,7 @@ defmodule Membrane.RTP.DemuxerTest do
   defmodule UpfrontEncodingNamePipeline do
     use Membrane.Pipeline
 
-    @fmt_mapping %{
+    @payload_type_mapping %{
       96 => %{encoding_name: :Oldman, clock_rate: 90_000},
       127 => %{encoding_name: :Sysy, clock_rate: 48_000}
     }
@@ -41,7 +41,7 @@ defmodule Membrane.RTP.DemuxerTest do
     def handle_init(_ctx, opts) do
       spec = [
         child(:pcap_source, %Membrane.Pcap.Source{path: opts.pcap_path})
-        |> child(:demuxer, %Membrane.RTP.Demuxer{fmt_mapping: @fmt_mapping})
+        |> child(:demuxer, %Membrane.RTP.Demuxer{payload_type_mapping: @payload_type_mapping})
         |> via_out(:output, options: [stream_id: {:encoding_name, :Sysy}])
         |> child({:sink, opts.audio.ssrc}, Testing.Sink),
         get_child(:demuxer)
