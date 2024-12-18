@@ -63,7 +63,7 @@ defmodule Membrane.RTP.Muxer do
           }
 
     @enforce_keys []
-    defstruct @enforce_keys ++ [stream_states: %{}, pad_ref_to_ssrc: %{}]
+    defstruct @enforce_keys ++ [stream_states: %{}]
   end
 
   @impl true

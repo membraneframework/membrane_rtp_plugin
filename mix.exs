@@ -53,6 +53,7 @@ defmodule Membrane.RTP.Plugin.MixProject do
       {:membrane_rtp_aac_plugin, "~> 0.9.3", only: :test},
       {:membrane_rtp_mpegaudio_plugin, "~> 0.14.1", only: :test},
       {:membrane_h264_ffmpeg_plugin, "~> 0.31.0", only: :test},
+      {:membrane_h26x_plugin, "~> 0.10.2", only: :test},
       {:membrane_file_plugin, "~> 0.17.0", only: :test},
       {:membrane_pcap_plugin,
        github: "membraneframework/membrane_pcap_plugin", tag: "v0.9.0", only: :test},
