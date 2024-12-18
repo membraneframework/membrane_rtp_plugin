@@ -29,7 +29,6 @@ defmodule Membrane.RTP.MuxerTest do
         |> child(:h264_payloader, Membrane.RTP.H264.Payloader)
         |> via_in(:input, options: [encoding: :H264])
         |> child(:rtp_muxer, Membrane.RTP.Muxer)
-        # |> child(%Membrane.Debug.Filter{handle_buffer: &IO.inspect(&1, label: "czumpi")})
         |> child(:sink, Membrane.Testing.Sink),
         get_child(:mp4_demuxer)
         |> via_out(:output, options: [kind: :audio])
