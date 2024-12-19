@@ -1,5 +1,9 @@
 defmodule Membrane.RTP.Muxer do
-  @moduledoc false
+  @moduledoc """
+  Element that combines multiple streams into a single RTP stream. Each new input stream is assigned a unique SSRC, that the packets 
+  transporting this stream will have. When a new pad is conneted, it's required to pass it options sufficient for it to be able to 
+  resolve what `payload_type` and `clock_rate` should be assumed. Timestamps are calculated based on assumed `clock_rate`.
+  """
   use Membrane.Filter
 
   require Membrane.Pad
@@ -48,18 +52,26 @@ defmodule Membrane.RTP.Muxer do
 
   defmodule State do
     @moduledoc false
+    defmodule StreamState do
+      @moduledoc false
+      alias Membrane.RTP
+
+      @type t :: %__MODULE__{
+              ssrc: RTP.ssrc(),
+              sequence_number: ExRTP.Packet.uint16(),
+              initial_timestamp: ExRTP.Packet.uint32(),
+              clock_rate: RTP.clock_rate(),
+              payload_type: RTP.payload_type(),
+              end_of_stream: boolean()
+            }
+
+      @enforce_keys [:ssrc, :sequence_number, :initial_timestamp, :clock_rate, :payload_type]
+
+      defstruct @enforce_keys ++ [end_of_stream: false]
+    end
 
     @type t :: %__MODULE__{
-            stream_states: %{
-              Pad.ref() => %{
-                ssrc: RTP.ssrc(),
-                sequence_number: ExRTP.Packet.uint16(),
-                initial_timestamp: ExRTP.Packet.uint32(),
-                clock_rate: RTP.clock_rate(),
-                payload_type: RTP.payload_type(),
-                end_of_stream: boolean()
-              }
-            }
+            stream_states: %{Pad.ref() => StreamState.t()}
           }
 
     @enforce_keys []
@@ -87,16 +99,15 @@ defmodule Membrane.RTP.Muxer do
     if payload_type == nil, do: raise("Could not resolve payload type")
     if clock_rate == nil, do: raise("Could not resolve clock rate")
 
-    new_stream_state = %{
+    new_stream_state = %State.StreamState{
       ssrc: ssrc,
       sequence_number: Enum.random(0..@max_sequence_number),
       initial_timestamp: Enum.random(0..@max_timestamp),
       clock_rate: clock_rate,
-      payload_type: payload_type,
-      end_of_stream: false
+      payload_type: payload_type
     }
 
-    state = Bunch.Struct.put_in(state, [:stream_states, pad_ref], new_stream_state)
+    state = put_in(state.stream_states[pad_ref], new_stream_state)
 
     {[], state}
   end
@@ -125,8 +136,7 @@ defmodule Membrane.RTP.Muxer do
     timestamp = rem(stream_state.initial_timestamp + rtp_offset, @max_timestamp + 1)
     sequence_number = rem(stream_state.sequence_number + 1, @max_sequence_number + 1)
 
-    state =
-      Bunch.Struct.put_in(state, [:stream_states, pad_ref, :sequence_number], sequence_number)
+    state = put_in(state.stream_states[pad_ref].sequence_number, sequence_number)
 
     packet =
       ExRTP.Packet.new(buffer.payload,
@@ -151,7 +161,7 @@ defmodule Membrane.RTP.Muxer do
 
   @impl true
   def handle_end_of_stream(Pad.ref(:input, _ref) = pad_ref, _ctx, state) do
-    state = Bunch.Struct.put_in(state, [:stream_states, pad_ref, :end_of_stream], true)
+    state = put_in(state.stream_states[pad_ref].end_of_stream, true)
 
     if Enum.all?(Enum.map(state.stream_states, fn {_pad_ref, %{end_of_stream: eos}} -> eos end)) do
       {[end_of_stream: :output], state}
