@@ -7,12 +7,12 @@ defmodule Membrane.RTP.PayloadFormatResolver do
   alias Membrane.RTP
   alias Membrane.RTP.PayloadFormat
 
-  @type encoding_mapper_t :: %{RTP.encoding_name_t() => module()}
+  @type encoding_mapper_t :: %{RTP.encoding_name() => module()}
 
   @doc """
   Tries to resolve a depayloader based on given encoding.
   """
-  @spec depayloader(RTP.encoding_name_t()) :: {:ok, module()} | :error
+  @spec depayloader(RTP.encoding_name()) :: {:ok, module()} | :error
   def depayloader(encoding) do
     case PayloadFormat.get(encoding).depayloader do
       nil -> :error
@@ -23,7 +23,7 @@ defmodule Membrane.RTP.PayloadFormatResolver do
   @doc """
   Tries to resolve a payloader based on given encoding.
   """
-  @spec payloader(RTP.encoding_name_t()) :: {:ok, module()} | :error
+  @spec payloader(RTP.encoding_name()) :: {:ok, module()} | :error
   def payloader(encoding) do
     case PayloadFormat.get(encoding).payloader do
       nil -> :error

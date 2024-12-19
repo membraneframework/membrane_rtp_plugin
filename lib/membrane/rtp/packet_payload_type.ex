@@ -9,8 +9,8 @@ defmodule Membrane.RTP.Packet.PayloadType do
   Gets the name of used encoding from numerical payload type according to [RFC3551](https://tools.ietf.org/html/rfc3551#page-32).
   For quick reference check [datasheet](https://www.iana.org/assignments/rtp-parameters/rtp-parameters.xhtml).
   """
-  @spec get_encoding_name(payload_type :: RTP.payload_type_t()) ::
-          RTP.static_encoding_name_t() | :dynamic
+  @spec get_encoding_name(payload_type :: RTP.payload_type()) ::
+          RTP.static_encoding_name() | :dynamic
   def get_encoding_name(type)
   def get_encoding_name(0), do: :PCMU
   def get_encoding_name(3), do: :GSM
@@ -43,8 +43,8 @@ defmodule Membrane.RTP.Packet.PayloadType do
   Gets the clock rate from numerical payload type according to [RFC3551](https://tools.ietf.org/html/rfc3551#page-32).
   For quick reference check [datasheet](https://www.iana.org/assignments/rtp-parameters/rtp-parameters.xhtml).
   """
-  @spec get_clock_rate(payload_type :: RTP.payload_type_t()) ::
-          RTP.clock_rate_t() | :dynamic
+  @spec get_clock_rate(payload_type :: RTP.payload_type()) ::
+          RTP.clock_rate() | :dynamic
   def get_clock_rate(type)
   def get_clock_rate(0), do: 8000
   def get_clock_rate(3), do: 8000
@@ -76,7 +76,7 @@ defmodule Membrane.RTP.Packet.PayloadType do
   @doc """
   Checks if numerical payload type should be assigned to format type dynamically.
   """
-  @spec dynamic?(payload_type :: RTP.payload_type_t()) :: boolean()
+  @spec dynamic?(payload_type :: RTP.payload_type()) :: boolean()
   def dynamic?(payload_type) when payload_type in 96..127, do: true
   def dynamic?(_payload_type), do: false
 end

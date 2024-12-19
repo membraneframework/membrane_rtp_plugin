@@ -10,7 +10,7 @@ defmodule Membrane.RTCPEvent do
 
   @type t :: %__MODULE__{
           rtcp: Membrane.RTCP.Packet.t(),
-          ssrcs: [Membrane.RTP.ssrc_t()],
+          ssrcs: [Membrane.RTP.ssrc()],
           arrival_timestamp: Membrane.Time.t()
         }
 end

@@ -21,8 +21,8 @@ defmodule Membrane.RTCP.Receiver do
   def_input_pad :input, accepted_format: _any, flow_control: :auto
   def_output_pad :output, accepted_format: _any, flow_control: :auto
 
-  def_options local_ssrc: [spec: RTP.ssrc_t()],
-              remote_ssrc: [spec: RTP.ssrc_t()],
+  def_options local_ssrc: [spec: RTP.ssrc()],
+              remote_ssrc: [spec: RTP.ssrc()],
               report_interval: [spec: Membrane.Time.t() | nil, default: nil],
               telemetry_label: [spec: Membrane.TelemetryMetrics.label(), default: []]
 

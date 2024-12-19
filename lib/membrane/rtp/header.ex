@@ -47,12 +47,12 @@ defmodule Membrane.RTP.Header do
 
   @type t :: %__MODULE__{
           version: version(),
-          ssrc: RTP.ssrc_t(),
+          ssrc: RTP.ssrc(),
           marker: marker(),
-          payload_type: RTP.payload_type_t(),
+          payload_type: RTP.payload_type(),
           timestamp: timestamp_t(),
           sequence_number: sequence_number_t(),
-          csrcs: [RTP.ssrc_t()],
+          csrcs: [RTP.ssrc()],
           extensions: [__MODULE__.Extension.t()]
         }
 

@@ -10,7 +10,7 @@ defmodule Membrane.RTP.BufferFactory do
   @spec timestamp_increment() :: RTP.Header.timestamp_t()
   def timestamp_increment(), do: @timestamp_increment
 
-  @spec clock_rate() :: RTP.clock_rate_t()
+  @spec clock_rate() :: RTP.clock_rate()
   def clock_rate(), do: @clock_rate
 
   @spec base_seq_number() :: RTP.Header.sequence_number_t()

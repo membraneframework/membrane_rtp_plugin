@@ -22,9 +22,9 @@ defmodule Membrane.RTP.Session.SenderReport do
   defmodule Data do
     @moduledoc false
     @type t :: %__MODULE__{
-            senders_ssrcs: MapSet.t(RTP.ssrc_t()),
+            senders_ssrcs: MapSet.t(RTP.ssrc()),
             stats: %{
-              RTP.ssrc_t() => RTP.Serializer.Stats.t()
+              RTP.ssrc() => RTP.Serializer.Stats.t()
             }
           }
 
@@ -34,8 +34,8 @@ defmodule Membrane.RTP.Session.SenderReport do
 
   @type maybe_report_t :: {:report, RTCP.Packet.t()} | :no_report
 
-  @spec init_report(ssrcs :: MapSet.t(RTP.ssrc_t()), report_data :: Data.t()) ::
-          {MapSet.t(RTP.ssrc_t()), Data.t()}
+  @spec init_report(ssrcs :: MapSet.t(RTP.ssrc()), report_data :: Data.t()) ::
+          {MapSet.t(RTP.ssrc()), Data.t()}
   def init_report(ssrcs, %Data{senders_ssrcs: senders_ssrcs} = report_data)
       when senders_ssrcs == %MapSet{} do
     senders_stats =
@@ -69,7 +69,7 @@ defmodule Membrane.RTP.Session.SenderReport do
     end
   end
 
-  @spec handle_stats(RTP.Serializer.Stats.t(), RTP.ssrc_t(), Data.t()) ::
+  @spec handle_stats(RTP.Serializer.Stats.t(), RTP.ssrc(), Data.t()) ::
           {maybe_report_t(), Data.t()}
   def handle_stats(stats, sender_ssrc, data) do
     senders_ssrcs = MapSet.delete(data.senders_ssrcs, sender_ssrc)

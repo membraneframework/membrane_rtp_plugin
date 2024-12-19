@@ -25,7 +25,7 @@ defmodule Membrane.RTP.InboundPacketTracker do
   def_output_pad :output, accepted_format: _any, flow_control: :auto
 
   def_options clock_rate: [
-                spec: Membrane.RTP.clock_rate_t()
+                spec: Membrane.RTP.clock_rate()
               ],
               repair_sequence_numbers?: [
                 spec: boolean(),

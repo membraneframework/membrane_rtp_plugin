@@ -12,8 +12,8 @@ defmodule Membrane.RTCP.TransportFeedbackPacket do
   defstruct @enforce_keys
 
   @type t :: %__MODULE__{
-          sender_ssrc: RTP.ssrc_t(),
-          media_ssrc: RTP.ssrc_t(),
+          sender_ssrc: RTP.ssrc(),
+          media_ssrc: RTP.ssrc(),
           payload: struct
         }
 

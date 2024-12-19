@@ -126,7 +126,7 @@ defmodule Membrane.RTP.SessionBin do
   @rtp_input_params [toilet_capacity: 500]
 
   def_options fmt_mapping: [
-                spec: %{RTP.payload_type_t() => {RTP.encoding_name_t(), RTP.clock_rate_t()}},
+                spec: %{RTP.payload_type() => {RTP.encoding_name(), RTP.clock_rate()}},
                 default: %{},
                 description: "Mapping of the custom payload types ( > 95)"
               ],
@@ -176,7 +176,7 @@ defmodule Membrane.RTP.SessionBin do
               ]
 
   @doc false
-  @spec generate_receiver_ssrc([RTP.ssrc_t()], [RTP.ssrc_t()]) :: RTP.ssrc_t()
+  @spec generate_receiver_ssrc([RTP.ssrc()], [RTP.ssrc()]) :: RTP.ssrc()
   def generate_receiver_ssrc(local_ssrcs, remote_ssrcs) do
     fn -> Enum.random(@ssrc_boundaries) end
     |> Stream.repeatedly()
@@ -241,7 +241,7 @@ defmodule Membrane.RTP.SessionBin do
         description: "Label passed to Membrane.TelemetryMetrics functions"
       ],
       encoding: [
-        spec: RTP.encoding_name_t() | nil,
+        spec: RTP.encoding_name() | nil,
         default: nil
       ],
       clock_rate: [
@@ -291,14 +291,14 @@ defmodule Membrane.RTP.SessionBin do
     availability: :on_request,
     options: [
       payload_type: [
-        spec: RTP.payload_type_t() | nil,
+        spec: RTP.payload_type() | nil,
         default: nil,
         description: """
         Payload type of output stream. If not provided, determined from `:encoding`.
         """
       ],
       encoding: [
-        spec: RTP.encoding_name_t() | nil,
+        spec: RTP.encoding_name() | nil,
         default: nil,
         description: """
         Encoding name of output stream. If not provided, determined from `:payload_type`.

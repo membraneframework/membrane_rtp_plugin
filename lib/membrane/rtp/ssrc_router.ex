@@ -52,10 +52,10 @@ defmodule Membrane.RTP.SSRCRouter do
     alias Membrane.RTP
 
     @type t() :: %__MODULE__{
-            input_pads: %{RTP.ssrc_t() => [input_pad :: Pad.ref()]},
-            buffered_actions: %{RTP.ssrc_t() => [Membrane.Element.Action.t()]},
+            input_pads: %{RTP.ssrc() => [input_pad :: Pad.ref()]},
+            buffered_actions: %{RTP.ssrc() => [Membrane.Element.Action.t()]},
             required_extensions: %{
-              RTP.payload_type_t() => MapSet.t(RTP.Header.Extension.identifier_t())
+              RTP.payload_type() => MapSet.t(RTP.Header.Extension.identifier_t())
             },
             srtp_keying_material_event: struct() | nil
           }
@@ -71,7 +71,7 @@ defmodule Membrane.RTP.SSRCRouter do
   Notification sent when an RTP packet with new SSRC arrives and new output pad should be linked
   """
   @type new_stream_notification_t ::
-          {:new_rtp_stream, RTP.ssrc_t(), RTP.payload_type_t(), [RTP.Header.Extension.t()]}
+          {:new_rtp_stream, RTP.ssrc(), RTP.payload_type(), [RTP.Header.Extension.t()]}
 
   @impl true
   def handle_init(_ctx, _opts) do

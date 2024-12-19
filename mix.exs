@@ -37,7 +37,7 @@ defmodule Membrane.RTP.Plugin.MixProject do
   defp deps do
     [
       {:membrane_core, "~> 1.0"},
-      {:membrane_rtp_format, "~> 0.8.0"},
+      {:membrane_rtp_format, "~> 0.9.0"},
       {:membrane_funnel_plugin, "~> 0.9.0"},
       {:membrane_telemetry_metrics, "~> 0.1.0"},
       {:ex_libsrtp, "~> 0.6.0 or ~> 0.7.0", optional: true},
@@ -47,8 +47,8 @@ defmodule Membrane.RTP.Plugin.MixProject do
       {:bimap, "~> 1.2"},
 
       # Test
-      {:membrane_rtp_h264_plugin, "~> 0.19.0", only: :test},
-      {:membrane_rtp_mpegaudio_plugin, "~> 0.14.0", only: :test},
+      {:membrane_rtp_h264_plugin, "~> 0.20.1", only: :test},
+      {:membrane_rtp_mpegaudio_plugin, "~> 0.14.1", only: :test},
       {:membrane_h264_ffmpeg_plugin, "~> 0.31.0", only: :test},
       {:membrane_h26x_plugin, "~> 0.10.2", only: :test},
       {:membrane_pcap_plugin,

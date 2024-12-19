@@ -23,11 +23,11 @@ defmodule Membrane.RTP.StreamReceiveBin do
                 default: []
               ],
               clock_rate: [
-                spec: RTP.clock_rate_t()
+                spec: RTP.clock_rate()
               ],
               depayloader: [spec: module() | nil],
-              local_ssrc: [spec: RTP.ssrc_t()],
-              remote_ssrc: [spec: RTP.ssrc_t()],
+              local_ssrc: [spec: RTP.ssrc()],
+              remote_ssrc: [spec: RTP.ssrc()],
               rtcp_report_interval: [spec: Membrane.Time.t() | nil],
               telemetry_label: [
                 spec: [{atom(), any()}],

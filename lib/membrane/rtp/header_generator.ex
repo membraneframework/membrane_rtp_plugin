@@ -19,9 +19,9 @@ defmodule Membrane.RTP.HeaderGenerator do
 
   def_output_pad :output, accepted_format: RTP, flow_control: :auto
 
-  def_options ssrc: [spec: RTP.ssrc_t()],
-              payload_type: [spec: RTP.payload_type_t()],
-              clock_rate: [spec: RTP.clock_rate_t()]
+  def_options ssrc: [spec: RTP.ssrc()],
+              payload_type: [spec: RTP.payload_type()],
+              clock_rate: [spec: RTP.clock_rate()]
 
   defmodule State do
     @moduledoc false
@@ -36,9 +36,9 @@ defmodule Membrane.RTP.HeaderGenerator do
     ]
 
     @type t :: %__MODULE__{
-            ssrc: RTP.ssrc_t(),
-            payload_type: RTP.payload_type_t(),
-            clock_rate: RTP.clock_rate_t(),
+            ssrc: RTP.ssrc(),
+            payload_type: RTP.payload_type(),
+            clock_rate: RTP.clock_rate(),
             sequence_number: non_neg_integer(),
             init_timestamp: non_neg_integer()
           }
