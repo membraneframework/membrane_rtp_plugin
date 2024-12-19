@@ -66,10 +66,10 @@ defmodule Membrane.RTP.DemuxerTest do
     end
 
     @impl true
-    def handle_child_notification({:new_rtp_stream, ssrc, pt, _exts}, :demuxer, _ctx, state) do
+    def handle_child_notification({:new_rtp_stream, %{ssrc: ssrc}}, :demuxer, _ctx, state) do
       spec =
         get_child(:demuxer)
-        |> via_out(:output, options: [stream_id: {:payload_type, pt}])
+        |> via_out(:output, options: [stream_id: {:ssrc, ssrc}])
         |> child({:sink, ssrc}, Testing.Sink)
 
       {[spec: spec], state}

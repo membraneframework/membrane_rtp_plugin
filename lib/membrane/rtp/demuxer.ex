@@ -12,7 +12,7 @@ defmodule Membrane.RTP.Demuxer do
   require Membrane.Pad
 
   require Membrane.Logger
-  alias Membrane.{Buffer, Pad, RemoteStream, RTCP, RTP}
+  alias Membrane.{Pad, RemoteStream, RTCP, RTP}
 
   @typedoc """
   Metadata present in each output buffer. The `ExRTP.Packet.t()` struct contains 
@@ -26,8 +26,12 @@ defmodule Membrane.RTP.Demuxer do
   with previously unseen ssrc is treated as receiving a new stream.
   """
   @type new_rtp_stream_notification ::
-          {:new_rtp_stream, ssrc :: RTP.ssrc(), payload_type :: RTP.payload_type(),
-           extensions :: [ExRTP.Packet.Extension.t()]}
+          {:new_rtp_stream,
+           %{
+             ssrc: RTP.ssrc(),
+             payload_type: RTP.payload_type(),
+             extensions: [ExRTP.Packet.Extension.t()]
+           }}
 
   @type stream_id ::
           {:ssrc, RTP.ssrc()}
@@ -58,8 +62,8 @@ defmodule Membrane.RTP.Demuxer do
                 description: "Mapping of the custom RTP payload types ( > 95)."
               ],
               not_linked_pad_handling: [
-                spec: %{action: :raise | :ignore, timeout: Membrane.Time.t()},
-                default: %{action: :ignore, timeout: Membrane.Time.seconds(2)},
+                spec: %{action: :raise | :ignore | :warn, timeout: Membrane.Time.t()},
+                default: %{action: :warn, timeout: Membrane.Time.seconds(2)},
                 description: """
                 This option determines the action to be taken after a stream has been announced with a 
                 `t:new_rtp_stream_notification/0` notification but the corresponding pad has not been connected within the specified timeout period.
@@ -130,12 +134,7 @@ defmodule Membrane.RTP.Demuxer do
 
     case stream_state do
       nil ->
-        state = %{
-          state
-          | pads_waiting_for_stream:
-              Map.put(state.pads_waiting_for_stream, pad, ctx.pad_options.stream_id)
-        }
-
+        state = put_in(state.pads_waiting_for_stream[pad], ctx.pad_options.stream_id)
         {[], state}
 
       %{phase: :waiting_for_link} ->
@@ -147,9 +146,8 @@ defmodule Membrane.RTP.Demuxer do
           if stream_state.end_of_stream_buffered, do: [end_of_stream: pad], else: []
 
         state =
-          Bunch.Struct.put_in(
-            state,
-            [:stream_states, matching_stream_ssrc],
+          put_in(
+            state.stream_states[matching_stream_ssrc],
             %{stream_state | phase: :linked, queued_buffers: [], pad: pad}
           )
 
@@ -170,18 +168,18 @@ defmodule Membrane.RTP.Demuxer do
       :raise ->
         raise "Pad corresponding to ssrc #{ssrc} not connected within specified timeout"
 
-      :ignore ->
+      :warn ->
         Membrane.Logger.warning(
           "Pad corresponding to ssrc #{ssrc} not connected within specified timeout"
         )
 
-        state =
-          state
-          |> Bunch.Struct.put_in([:stream_states, ssrc, :phase], :timed_out)
-          |> Bunch.Struct.put_in([:stream_states, ssrc, :queued_buffers], [])
-
-        {[], state}
+      :ignore ->
+        :ok
     end
+
+    state = put_in(state.stream_states[ssrc].phase, :timed_out)
+    state = put_in(state.stream_states[ssrc].queued_buffers, [])
+    {[], state}
   end
 
   @impl true
@@ -189,7 +187,7 @@ defmodule Membrane.RTP.Demuxer do
     state =
       state.stream_states
       |> Enum.reduce(state, fn {ssrc, _stream_state}, state ->
-        Bunch.Struct.put_in(state, [:stream_states, ssrc, :end_of_stream_buffered], true)
+        put_in(state.stream_states[ssrc].end_of_stream_buffered, true)
       end)
 
     {[forward: :end_of_stream], state}
@@ -214,12 +212,16 @@ defmodule Membrane.RTP.Demuxer do
         initialize_new_stream_state(packet, state)
       end
 
-    buffer = put_packet_into_buffer(packet, state.payload_type_mapping)
+    buffer = %Membrane.Buffer{
+      payload: packet.payload,
+      metadata: %{rtp: %{packet | payload: <<>>}}
+    }
 
     {buffer_actions, state} =
       case state.stream_states[packet.ssrc].phase do
         :waiting_for_link ->
-          {[], append_buffer_to_queued_buffers(packet.ssrc, buffer, state)}
+          state = update_in(state.stream_states[packet.ssrc].queued_buffers, &[buffer | &1])
+          {[], state}
 
         :linked ->
           buffer_action =
@@ -261,38 +263,22 @@ defmodule Membrane.RTP.Demuxer do
           pad: nil
         }
 
-        extensions =
-          case packet.extensions do
-            nil ->
-              []
+        state = put_in(state.stream_states[packet.ssrc], stream_state)
 
-            extension when is_binary(extension) ->
-              [ExRTP.Packet.Extension.new(packet.extension_profile, extension)]
+        {[notify_parent: create_new_stream_notification(packet)], state}
 
-            extensions when is_list(extensions) ->
-              extensions
-          end
-
-        state = Bunch.Struct.put_in(state, [:stream_states, packet.ssrc], stream_state)
-        {[notify_parent: {:new_rtp_stream, packet.ssrc, packet.payload_type, extensions}], state}
-
-      matching_pad_waiting_for_stream ->
+      pad_waiting_for_stream ->
         stream_state = %State.StreamState{
           phase: :linked,
           link_timer: nil,
           payload_type: packet.payload_type,
-          pad: matching_pad_waiting_for_stream
+          pad: pad_waiting_for_stream
         }
 
-        state =
-          state
-          |> Bunch.Struct.put_in([:stream_states, packet.ssrc], stream_state)
-          |> Map.update!(
-            :pads_waiting_for_stream,
-            &Map.delete(&1, matching_pad_waiting_for_stream)
-          )
+        state = put_in(state.stream_states[packet.ssrc], stream_state)
+        {_stream_id, state} = pop_in(state.pads_waiting_for_stream[pad_waiting_for_stream])
 
-        {[stream_format: {matching_pad_waiting_for_stream, %RTP{}}], state}
+        {[stream_format: {pad_waiting_for_stream, %RTP{}}], state}
     end
   end
 
@@ -356,29 +342,21 @@ defmodule Membrane.RTP.Demuxer do
     end
   end
 
-  @spec append_buffer_to_queued_buffers(RTP.ssrc(), Buffer.t(), State.t()) :: State.t()
-  defp append_buffer_to_queued_buffers(ssrc, buffer, state) do
-    Bunch.Struct.update_in(state, [:stream_states, ssrc, :queued_buffers], &[buffer | &1])
-  end
+  @spec create_new_stream_notification(ExRTP.Packet.t()) :: new_rtp_stream_notification()
+  defp create_new_stream_notification(packet) do
+    extensions =
+      case packet.extensions do
+        nil ->
+          []
 
-  @spec put_packet_into_buffer(ExRTP.Packet.t(), RTP.PayloadFormat.payload_type_mapping()) ::
-          Membrane.Buffer.t()
-  defp put_packet_into_buffer(packet, payload_type_mapping) do
-    %{clock_rate: clock_rate} =
-      RTP.PayloadFormat.resolve(
-        payload_type: packet.payload_type,
-        payload_type_mapping: payload_type_mapping
-      )
+        extension when is_binary(extension) ->
+          [ExRTP.Packet.Extension.new(packet.extension_profile, extension)]
 
-    pts =
-      if clock_rate == nil,
-        do: nil,
-        else: Ratio.new(packet.timestamp, clock_rate) |> Membrane.Time.seconds()
+        extensions when is_list(extensions) ->
+          extensions
+      end
 
-    %Membrane.Buffer{
-      payload: packet.payload,
-      pts: pts,
-      metadata: %{rtp: %{packet | payload: <<>>}}
-    }
+    {:new_rtp_stream,
+     %{ssrc: packet.ssrc, payload_type: packet.payload_type, extensions: extensions}}
   end
 end
