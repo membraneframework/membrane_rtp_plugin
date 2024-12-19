@@ -40,7 +40,7 @@ defmodule Membrane.RTP.DemuxerMuxerTest do
 
     @impl true
     def handle_child_notification(
-          {:new_rtp_stream, ssrc, pt, _extensions},
+          {:new_rtp_stream, %{ssrc: ssrc, payload_type: pt}},
           :rtp_demuxer,
           _ctx,
           state
@@ -52,11 +52,7 @@ defmodule Membrane.RTP.DemuxerMuxerTest do
         get_child(:rtp_demuxer)
         |> via_out(:output, options: [stream_id: {:ssrc, ssrc}])
         |> child({:jitter_buffer, ssrc}, %Membrane.RTP.JitterBuffer{clock_rate: clock_rate})
-        |> via_in(:input,
-          options: [
-            encoding: encoding_name
-          ]
-        )
+        |> via_in(:input, options: [encoding: encoding_name])
         |> get_child(:rtp_muxer)
 
       {[spec: spec], state}
