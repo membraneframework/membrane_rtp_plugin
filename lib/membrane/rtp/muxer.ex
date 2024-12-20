@@ -1,8 +1,10 @@
 defmodule Membrane.RTP.Muxer do
   @moduledoc """
-  Element that combines multiple streams into a single RTP stream. Each new input stream is assigned a unique SSRC, that the packets 
-  transporting this stream will have. When a new pad is conneted, it's required to pass it options sufficient for it to be able to 
-  resolve what `payload_type` and `clock_rate` should be assumed. Timestamps are calculated based on assumed `clock_rate`.
+  Element that combines multiple streams into a single RTP stream. 
+
+  Each new input stream is assigned a unique SSRC that the packets 
+  transporting this stream will have. When a new pad is conneted, it's required to pass it options sufficient to resolve what 
+  `payload_type` and `clock_rate` should be assumed. Timestamps are calculated based on assumed `clock_rate`.
   """
   use Membrane.Filter
 

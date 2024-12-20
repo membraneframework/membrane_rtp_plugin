@@ -1,6 +1,7 @@
 defmodule Membrane.RTP.Demuxer do
   @moduledoc """
-  Element capable of receiving a raw RTP stream and demuxing it into individual parsed streams based on packet ssrcs. 
+  Element capable of receiving a raw RTP stream and demuxing it into individual parsed streams based on packet ssrcs.
+
   Output pads can be linked either before or after a corresponding stream has been recognized. In the first case the demuxer will 
   start sending buffers on the pad once a stream with payload type or SSRC matching the identification provided via the pad's options
   is recognized. In the second case, whenever a new stream is recognized and no waiting pad has matching identification, a 
