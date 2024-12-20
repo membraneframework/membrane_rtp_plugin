@@ -51,7 +51,7 @@ defmodule Membrane.RTCP.Fixtures do
     <<0x81, 0xCE, 0x00, 0x02, 0x00, 0x00, 0x00, 0x01, 0x41, 0x6F, 0xB1, 0x0D>>
   end
 
-  @spec pli_contents() :: binary()
+  @spec pli_contents() :: map()
   def pli_contents() do
     %{
       origin_ssrc: 1,
