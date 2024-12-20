@@ -112,11 +112,13 @@ defmodule Membrane.RTP.DemuxerMuxerTest do
       normalized_packets =
         sorted_packets
         |> Enum.map(fn packet ->
-          packet
-          |> Bunch.Struct.update_in(:ssrc, &(&1 - ssrc))
-          |> Bunch.Struct.update_in(:sequence_number, &(&1 - first_sequence_number))
-          # round to ignore insignificant differences in timestamps
-          |> Bunch.Struct.update_in(:timestamp, &round((&1 - first_timestamp) / 10))
+          %{
+            packet
+            | ssrc: packet.ssrc - ssrc,
+              sequence_number: packet.sequence_number - first_sequence_number,
+              # round to ignore insignificant differences in timestamps
+              timestamp: round((packet.timestamp - first_timestamp) / 10)
+          }
         end)
 
       {encoding_name, normalized_packets}
