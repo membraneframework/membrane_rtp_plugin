@@ -61,44 +61,6 @@ defmodule Membrane.RTP.JitterBuffer.BufferStore do
     do_insert_buffer(store, buffer, seq_num)
   end
 
-  @spec do_insert_buffer(t(), Buffer.t(), RTP.Header.sequence_number_t()) ::
-          {:ok, t()} | {:error, insert_error()}
-  defp do_insert_buffer(%__MODULE__{flush_index: nil} = store, buffer, 0) do
-    store = add_record(store, Record.new(buffer, @seq_number_limit), :next)
-    {:ok, %__MODULE__{store | flush_index: @seq_number_limit - 1}}
-  end
-
-  defp do_insert_buffer(%__MODULE__{flush_index: nil} = store, buffer, seq_num) do
-    store = add_record(store, Record.new(buffer, seq_num), :current)
-    {:ok, %__MODULE__{store | flush_index: seq_num - 1}}
-  end
-
-  defp do_insert_buffer(
-         %__MODULE__{
-           flush_index: flush_index,
-           highest_incoming_index: highest_incoming_index,
-           rollover_count: roc
-         } = store,
-         buffer,
-         seq_num
-       ) do
-    highest_seq_num = rem(highest_incoming_index, @seq_number_limit)
-
-    {rollover, index} =
-      case Utils.from_which_rollover(highest_seq_num, seq_num, @seq_number_limit) do
-        :current -> {:current, seq_num + roc * @seq_number_limit}
-        :previous -> {:previous, seq_num + (roc - 1) * @seq_number_limit}
-        :next -> {:next, seq_num + (roc + 1) * @seq_number_limit}
-      end
-
-    if fresh_packet?(flush_index, index) do
-      record = Record.new(buffer, index)
-      {:ok, add_record(store, record, rollover)}
-    else
-      {:error, :late_packet}
-    end
-  end
-
   @doc """
   Flushes the store to the buffer with the next sequence number.
 
@@ -173,6 +135,44 @@ defmodule Membrane.RTP.JitterBuffer.BufferStore do
     case Heap.root(heap) do
       %Record{timestamp: time} -> time
       nil -> nil
+    end
+  end
+
+  @spec do_insert_buffer(t(), Buffer.t(), RTP.Header.sequence_number_t()) ::
+          {:ok, t()} | {:error, insert_error()}
+  defp do_insert_buffer(%__MODULE__{flush_index: nil} = store, buffer, 0) do
+    store = add_record(store, Record.new(buffer, @seq_number_limit), :next)
+    {:ok, %__MODULE__{store | flush_index: @seq_number_limit - 1}}
+  end
+
+  defp do_insert_buffer(%__MODULE__{flush_index: nil} = store, buffer, seq_num) do
+    store = add_record(store, Record.new(buffer, seq_num), :current)
+    {:ok, %__MODULE__{store | flush_index: seq_num - 1}}
+  end
+
+  defp do_insert_buffer(
+         %__MODULE__{
+           flush_index: flush_index,
+           highest_incoming_index: highest_incoming_index,
+           rollover_count: roc
+         } = store,
+         buffer,
+         seq_num
+       ) do
+    highest_seq_num = rem(highest_incoming_index, @seq_number_limit)
+
+    {rollover, index} =
+      case Utils.from_which_rollover(highest_seq_num, seq_num, @seq_number_limit) do
+        :current -> {:current, seq_num + roc * @seq_number_limit}
+        :previous -> {:previous, seq_num + (roc - 1) * @seq_number_limit}
+        :next -> {:next, seq_num + (roc + 1) * @seq_number_limit}
+      end
+
+    if fresh_packet?(flush_index, index) do
+      record = Record.new(buffer, index)
+      {:ok, add_record(store, record, rollover)}
+    else
+      {:error, :late_packet}
     end
   end
 
