@@ -83,7 +83,7 @@ defmodule Membrane.RTP.VAD do
         handle_vad(buffer, rtp_timestamp, level, state)
 
       rollover == :next ->
-        {[], state} = handle_init(%{}, state)
+        {[], state} = handle_init(%{}, %{state | vad_threshold: state.vad_threshold - 127})
         {[buffer: {:output, buffer}], state}
 
       true ->
