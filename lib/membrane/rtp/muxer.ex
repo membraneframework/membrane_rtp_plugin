@@ -103,8 +103,11 @@ defmodule Membrane.RTP.Muxer do
 
     new_stream_state = %State.StreamState{
       ssrc: ssrc,
-      sequence_number: Enum.random(0..@max_sequence_number),
-      initial_timestamp: Enum.random(0..@max_timestamp),
+      # sequence_number: Enum.random(0..@max_sequence_number),
+      # initial_timestamp: Enum.random(0..@max_timestamp),
+      # sequence_number: 0,
+      sequence_number: @max_sequence_number - 1,
+      initial_timestamp: 0,
       clock_rate: clock_rate,
       payload_type: payload_type
     }

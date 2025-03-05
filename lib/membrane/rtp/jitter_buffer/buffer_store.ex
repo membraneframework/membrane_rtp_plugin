@@ -121,7 +121,7 @@ defmodule Membrane.RTP.JitterBuffer.BufferStore do
   @doc """
   Returns all buffers that are stored in the `BufferStore`.
   """
-  @spec dump(t()) :: [Record.t()]
+  @spec dump(t()) :: [Record.t() | nil]
   def dump(%__MODULE__{} = store) do
     {records, _store} = flush_while(store, fn _store, _record -> true end)
     records

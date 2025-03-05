@@ -148,8 +148,9 @@ defmodule Membrane.RTP.JitterBuffer do
 
         buffer_ts ->
           since_insertion = Time.monotonic_time() - buffer_ts
-          send_after_time = max(0, latency - since_insertion) |> Time.as_milliseconds(:round)
-          Process.send_after(self(), :send_buffers, send_after_time)
+          send_after_time = (latency - since_insertion) |> Time.as_milliseconds(:round)
+          #
+          if send_after_time > 0, do: Process.send_after(self(), :send_buffers, send_after_time)
       end
 
     %State{state | max_latency_timer: new_timer}

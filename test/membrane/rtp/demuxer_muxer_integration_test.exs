@@ -10,6 +10,9 @@ defmodule Membrane.RTP.DemuxerMuxerTest do
     packets: 862
   }
 
+  @max_sequence_number Bitwise.bsl(1, 16) - 1
+  @max_timestamp Bitwise.bsl(1, 32) - 1
+
   defmodule ReferencePipeline do
     use Membrane.Pipeline
 
@@ -45,13 +48,11 @@ defmodule Membrane.RTP.DemuxerMuxerTest do
           _ctx,
           state
         ) do
-      %{encoding_name: encoding_name, clock_rate: clock_rate} =
-        Membrane.RTP.PayloadFormat.get_payload_type_mapping(pt)
+      %{encoding_name: encoding_name} = Membrane.RTP.PayloadFormat.get_payload_type_mapping(pt)
 
       spec =
         get_child(:rtp_demuxer)
         |> via_out(:output, options: [stream_id: {:ssrc, ssrc}])
-        |> child({:jitter_buffer, ssrc}, %Membrane.RTP.JitterBuffer{clock_rate: clock_rate})
         |> via_in(:input, options: [encoding: encoding_name])
         |> get_child(:rtp_muxer)
 
@@ -78,7 +79,8 @@ defmodule Membrane.RTP.DemuxerMuxerTest do
     reference_normalized_packets = get_normalized_packets(reference_pipeline, @rtp_input.packets)
     subject_normalized_packets = get_normalized_packets(subject_pipeline, @rtp_input.packets)
 
-    assert reference_normalized_packets == subject_normalized_packets
+    assert reference_normalized_packets[:H264] == subject_normalized_packets[:H264]
+    assert reference_normalized_packets[:AAC] == subject_normalized_packets[:AAC]
 
     assert_end_of_stream(reference_pipeline, :sink)
     assert_end_of_stream(subject_pipeline, :sink)
@@ -99,25 +101,27 @@ defmodule Membrane.RTP.DemuxerMuxerTest do
       packet
     end)
     |> Enum.group_by(& &1.payload_type)
-    |> Map.new(fn {payload_type, payload_type_buffers} ->
+    |> Map.new(fn {payload_type, packets} ->
       %{encoding_name: encoding_name} = RTP.PayloadFormat.get_payload_type_mapping(payload_type)
 
-      sorted_packets =
-        payload_type_buffers
-        |> Enum.sort(&(&1.sequence_number < &2.sequence_number))
-
       %{ssrc: ssrc, sequence_number: first_sequence_number, timestamp: first_timestamp} =
-        List.first(sorted_packets)
+        List.first(packets)
 
       normalized_packets =
-        sorted_packets
+        packets
         |> Enum.map(fn packet ->
           %{
             packet
             | ssrc: packet.ssrc - ssrc,
-              sequence_number: packet.sequence_number - first_sequence_number,
+              # modulo to account for wrapping
+              sequence_number:
+                Integer.mod(
+                  packet.sequence_number - first_sequence_number,
+                  @max_sequence_number + 1
+                ),
               # round to ignore insignificant differences in timestamps
-              timestamp: round((packet.timestamp - first_timestamp) / 10)
+              timestamp:
+                round(Integer.mod(packet.timestamp - first_timestamp, @max_timestamp + 1) / 10)
           }
         end)
 

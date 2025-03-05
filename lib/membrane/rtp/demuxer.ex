@@ -98,11 +98,10 @@ defmodule Membrane.RTP.Demuxer do
       @type t :: %__MODULE__{
               buffer_store: RTP.JitterBuffer.BufferStore.t(),
               end_of_stream_buffered: boolean(),
-              phase: :waiting_for_link | :linked | :timed_out,
+              phase: :waiting_for_matching_pad | :matched_with_pad | :timed_out,
+              pad_match_timer: reference() | nil,
               payload_type: RTP.payload_type(),
-              link_timer: reference() | nil,
               pad: Pad.ref() | nil,
-              use_jitter_buffer: boolean() | nil,
               clock_rate: non_neg_integer() | nil,
               jitter_buffer_latency: Membrane.Time.t() | nil,
               initial_latency_waiting: boolean(),
@@ -115,9 +114,10 @@ defmodule Membrane.RTP.Demuxer do
       @enforce_keys [
         :payload_type,
         :phase,
-        :link_timer,
+        :pad_match_timer,
         :pad,
         :timestamp_base,
+        :initial_latency_waiting,
         :previous_timestamp,
         :initialization_time
       ]
@@ -126,11 +126,9 @@ defmodule Membrane.RTP.Demuxer do
                   [
                     buffer_store: %RTP.JitterBuffer.BufferStore{},
                     end_of_stream_buffered: false,
-                    initial_latency_waiting: true,
                     max_latency_timer: nil,
                     clock_rate: nil,
-                    jitter_buffer_latency: nil,
-                    use_jitter_buffer: nil
+                    jitter_buffer_latency: nil
                   ]
     end
 
@@ -179,8 +177,15 @@ defmodule Membrane.RTP.Demuxer do
         state = put_in(state.pads_waiting_for_stream[pad], ctx.pad_options.stream_id)
         {[], state}
 
-      %{phase: :waiting_for_link} ->
-        Process.cancel_timer(stream_state.link_timer)
+      %{phase: :timed_out} ->
+        Membrane.Logger.warning(
+          "Connected a pad corresponding to a timed out stream, sending end_of_stream"
+        )
+
+        {[end_of_stream: pad], state}
+
+      %{phase: :waiting_for_matching_pad} ->
+        Process.cancel_timer(stream_state.pad_match_timer)
 
         %{clock_rate: clock_rate} =
           RTP.PayloadFormat.resolve(
@@ -189,26 +194,30 @@ defmodule Membrane.RTP.Demuxer do
             payload_type_mapping: state.payload_type_mapping
           )
 
+        jitter_buffer_latency =
+          if ctx.pad_options.use_jitter_buffer, do: ctx.pad_options.jitter_buffer_latency, else: 0
+
         stream_state = %State.StreamState{
           stream_state
-          | clock_rate: clock_rate,
-            jitter_buffer_latency: ctx.pad_options.jitter_buffer_latency,
-            use_jitter_buffer: ctx.pad_options.use_jitter_buffer
+          | phase: :matched_with_pad,
+            pad: pad,
+            clock_rate: clock_rate,
+            jitter_buffer_latency: jitter_buffer_latency
         }
 
         time_since_initialization = Time.monotonic_time() - stream_state.initialization_time
 
-        if time_since_initialization < stream_state.jitter_buffer_latency do
+        if time_since_initialization < stream_state.jitter_buffer_latency and
+             ctx.pad_options.use_jitter_buffer do
           initial_latency_left = stream_state.jitter_buffer_latency - time_since_initialization
 
           Process.send_after(
             self(),
             {:initial_latency_passed, matching_stream_ssrc},
-            initial_latency_left
+            Membrane.Time.as_milliseconds(initial_latency_left, :round)
           )
         end
 
-        stream_state = %State.StreamState{stream_state | phase: :linked, pad: pad}
         {buffer_actions, stream_state} = send_buffers(matching_stream_ssrc, stream_state)
 
         {end_of_stream_actions, stream_state} =
@@ -218,25 +227,14 @@ defmodule Membrane.RTP.Demuxer do
             {[], stream_state}
           end
 
-        state =
-          put_in(
-            state.stream_states[matching_stream_ssrc],
-            %State.StreamState{stream_state | phase: :linked, pad: pad}
-          )
+        state = put_in(state.stream_states[matching_stream_ssrc], stream_state)
 
         {[stream_format: {pad, %RTP{}}] ++ buffer_actions ++ end_of_stream_actions, state}
-
-      %{phase: :timed_out} ->
-        Membrane.Logger.warning(
-          "Connected a pad corresponding to a timed out stream, sending end_of_stream"
-        )
-
-        {[end_of_stream: pad], state}
     end
   end
 
   @impl true
-  def handle_info({:link_timeout, ssrc}, _ctx, state) do
+  def handle_info({:pad_match_timeout, ssrc}, _ctx, state) do
     case state.not_linked_pad_handling.action do
       :raise ->
         raise "Pad corresponding to ssrc #{ssrc} not connected within specified timeout"
@@ -303,7 +301,12 @@ defmodule Membrane.RTP.Demuxer do
       if Map.has_key?(state.stream_states, packet.ssrc) do
         {[], state}
       else
-        initialize_new_stream_state(packet, ctx, state)
+        find_matching_pad_for_stream(
+          packet,
+          state.pads_waiting_for_stream,
+          state.payload_type_mapping
+        )
+        |> initialize_new_stream_state(packet, ctx, state)
       end
 
     buffer = %Membrane.Buffer{
@@ -311,39 +314,11 @@ defmodule Membrane.RTP.Demuxer do
       metadata: %{rtp: %{packet | payload: <<>>}}
     }
 
-    stream_state =
-      state.stream_states[packet.ssrc]
-      |> insert_buffer_into_buffer_store(buffer)
+    stream_state = insert_buffer_into_buffer_store(state.stream_states[packet.ssrc], buffer)
 
-    {buffer_actions, stream_state} =
-      maybe_send_buffers(packet.ssrc, stream_state)
+    {buffer_actions, stream_state} = maybe_send_buffers(packet.ssrc, stream_state)
 
     state = put_in(state.stream_states[packet.ssrc], stream_state)
-    # {buffer_actions, state} =
-    # case stream_state.phase do
-    # :waiting_for_link ->
-    # stream_state =
-    # case BufferStore.insert_buffer(stream_state.buffer_store, buffer) do
-    # {:ok, buffer_store} ->
-    # %State.StreamState{stream_state | buffer_store: buffer_store}
-
-    # {:error, :late_packet} ->
-    # Membrane.Logger.debug("Late packet has arrived")
-    # stream_state
-    # end
-
-    # state = put_in(state.stream_states[packet.ssrc], stream_state)
-    # {[], state}
-
-    # :linked ->
-    # buffer_action =
-    # {:buffer, {state.stream_states[packet.ssrc].pad, buffer}}
-
-    # {[buffer_action], state}
-
-    # :timed_out ->
-    # {[], state}
-    # end
 
     {new_stream_actions ++ buffer_actions, state}
   end
@@ -355,7 +330,7 @@ defmodule Membrane.RTP.Demuxer do
       :timed_out ->
         stream_state
 
-      phase when phase in [:waiting_for_link, :linked] ->
+      phase when phase in [:waiting_for_matching_pad, :matched_with_pad] ->
         case BufferStore.insert_buffer(stream_state.buffer_store, buffer) do
           {:ok, buffer_store} ->
             %State.StreamState{stream_state | buffer_store: buffer_store}
@@ -370,7 +345,7 @@ defmodule Membrane.RTP.Demuxer do
   @spec maybe_send_buffers(RTP.ssrc(), State.StreamState.t()) ::
           {[Membrane.Element.Action.t()], State.StreamState.t()}
   defp maybe_send_buffers(ssrc, stream_state) do
-    if stream_state.phase == :linked and not stream_state.initial_latency_waiting do
+    if stream_state.phase == :matched_with_pad and not stream_state.initial_latency_waiting do
       send_buffers(ssrc, stream_state)
     else
       {[], stream_state}
@@ -389,7 +364,8 @@ defmodule Membrane.RTP.Demuxer do
       |> BufferStore.dump()
       |> Enum.flat_map_reduce(stream_state, &record_to_actions/2)
 
-    {buffer_actions ++ [end_of_stream: stream_state.pad], stream_state}
+    {buffer_actions ++ [end_of_stream: stream_state.pad],
+     %State.StreamState{stream_state | buffer_store: %BufferStore{}}}
   end
 
   @spec handle_rtcp_packets(binary(), State.t()) :: {[Membrane.Element.Action.t()], State.t()}
@@ -398,68 +374,72 @@ defmodule Membrane.RTP.Demuxer do
     {[], state}
   end
 
-  @spec initialize_new_stream_state(ExRTP.Packet.t(), CallbackContext.t(), State.t()) ::
-          {[Membrane.Element.Action.t()], State.t()}
-  defp initialize_new_stream_state(packet, ctx, state) do
-    case find_matching_pad_for_stream(
-           packet,
-           state.pads_waiting_for_stream,
-           state.payload_type_mapping
-         ) do
-      nil ->
-        stream_state = %State.StreamState{
-          phase: :waiting_for_link,
-          link_timer:
-            Process.send_after(
-              self(),
-              {:link_timeout, packet.ssrc},
-              Membrane.Time.as_milliseconds(state.not_linked_pad_handling.timeout, :round)
-            ),
-          payload_type: packet.payload_type,
-          pad: nil,
-          timestamp_base: packet.timestamp,
-          previous_timestamp: packet.timestamp,
-          initialization_time: Membrane.Time.monotonic_time()
-        }
-
-        state = put_in(state.stream_states[packet.ssrc], stream_state)
-
-        {[notify_parent: create_new_stream_notification(packet)], state}
-
-      pad_waiting_for_stream ->
-        pad_options = ctx.pads[pad_waiting_for_stream].options
-
-        %{clock_rate: clock_rate} =
-          RTP.PayloadFormat.resolve(
-            payload_type: packet.payload_type,
-            clock_rate: pad_options.clock_rate,
-            payload_type_mapping: state.payload_type_mapping
-          )
-
-        stream_state = %State.StreamState{
-          phase: :linked,
-          link_timer: nil,
-          payload_type: packet.payload_type,
-          pad: pad_waiting_for_stream,
-          timestamp_base: packet.timestamp,
-          previous_timestamp: packet.timestamp,
-          initialization_time: Membrane.Time.monotonic_time(),
-          jitter_buffer_latency: pad_options.jitter_buffer_latency,
-          use_jitter_buffer: pad_options.use_jitter_buffer,
-          clock_rate: clock_rate
-        }
-
+  @spec initialize_new_stream_state(
+          matching_pad :: Pad.ref() | nil,
+          ExRTP.Packet.t(),
+          CallbackContext.t(),
+          State.t()
+        ) :: {[Membrane.Element.Action.t()], State.t()}
+  defp initialize_new_stream_state(nil, packet, _ctx, state) do
+    stream_state = %State.StreamState{
+      phase: :waiting_for_matching_pad,
+      pad_match_timer:
         Process.send_after(
           self(),
-          {:initial_latency_passed, packet.ssrc},
-          pad_options.jitter_buffer_latency
-        )
+          {:pad_match_timeout, packet.ssrc},
+          Membrane.Time.as_milliseconds(state.not_linked_pad_handling.timeout, :round)
+        ),
+      payload_type: packet.payload_type,
+      pad: nil,
+      timestamp_base: packet.timestamp,
+      previous_timestamp: packet.timestamp,
+      initialization_time: Membrane.Time.monotonic_time(),
+      initial_latency_waiting: true
+    }
 
-        state = put_in(state.stream_states[packet.ssrc], stream_state)
-        {_stream_id, state} = pop_in(state.pads_waiting_for_stream[pad_waiting_for_stream])
+    state = put_in(state.stream_states[packet.ssrc], stream_state)
 
-        {[stream_format: {pad_waiting_for_stream, %RTP{}}], state}
+    {[notify_parent: create_new_stream_notification(packet)], state}
+  end
+
+  defp initialize_new_stream_state(pad_waiting_for_stream, packet, ctx, state) do
+    pad_options = ctx.pads[pad_waiting_for_stream].options
+
+    jitter_buffer_latency =
+      if pad_options.use_jitter_buffer, do: pad_options.jitter_buffer_latency, else: 0
+
+    %{clock_rate: clock_rate} =
+      RTP.PayloadFormat.resolve(
+        payload_type: packet.payload_type,
+        clock_rate: pad_options.clock_rate,
+        payload_type_mapping: state.payload_type_mapping
+      )
+
+    stream_state = %State.StreamState{
+      phase: :matched_with_pad,
+      pad_match_timer: nil,
+      payload_type: packet.payload_type,
+      pad: pad_waiting_for_stream,
+      timestamp_base: packet.timestamp,
+      previous_timestamp: packet.timestamp,
+      initialization_time: Membrane.Time.monotonic_time(),
+      jitter_buffer_latency: jitter_buffer_latency,
+      clock_rate: clock_rate,
+      initial_latency_waiting: pad_options.use_jitter_buffer
+    }
+
+    if pad_options.use_jitter_buffer do
+      Process.send_after(
+        self(),
+        {:initial_latency_passed, packet.ssrc},
+        Membrane.Time.as_milliseconds(pad_options.jitter_buffer_latency, :round)
+      )
     end
+
+    state = put_in(state.stream_states[packet.ssrc], stream_state)
+    {_stream_id, state} = pop_in(state.pads_waiting_for_stream[pad_waiting_for_stream])
+
+    {[stream_format: {pad_waiting_for_stream, %RTP{}}], state}
   end
 
   @spec find_matching_pad_for_stream(
@@ -543,17 +523,16 @@ defmodule Membrane.RTP.Demuxer do
   @spec send_buffers(RTP.ssrc(), State.StreamState.t()) ::
           {[Membrane.Element.Action.t()], State.StreamState.t()}
   defp send_buffers(ssrc, stream_state) do
-    # Flushes buffers that stayed in queue longer than latency and any gaps before them
     {too_old_records, buffer_store} =
       BufferStore.flush_older_than(stream_state.buffer_store, stream_state.jitter_buffer_latency)
 
-    # Additionally, flush buffers as long as there are no gaps
     {buffers, buffer_store} = BufferStore.flush_ordered(buffer_store)
+    stream_state = %{stream_state | buffer_store: buffer_store}
 
     {actions, stream_state} =
       (too_old_records ++ buffers) |> Enum.flat_map_reduce(stream_state, &record_to_actions/2)
 
-    stream_state = set_timer(ssrc, %{stream_state | buffer_store: buffer_store})
+    stream_state = set_timer(ssrc, stream_state)
 
     {actions, stream_state}
   end
@@ -561,9 +540,9 @@ defmodule Membrane.RTP.Demuxer do
   @spec set_timer(RTP.ssrc(), State.StreamState.t()) :: State.StreamState.t()
   defp set_timer(
          ssrc,
-         %State.StreamState{max_latency_timer: nil, jitter_buffer_latency: latency} =
-           stream_state
-       ) do
+         %State.StreamState{max_latency_timer: nil, jitter_buffer_latency: latency} = stream_state
+       )
+       when latency > 0 do
     new_timer =
       case BufferStore.first_record_timestamp(stream_state.buffer_store) do
         nil ->
@@ -571,20 +550,24 @@ defmodule Membrane.RTP.Demuxer do
 
         buffer_ts ->
           since_insertion = Time.monotonic_time() - buffer_ts
-          send_after_time = max(0, latency - since_insertion) |> Time.as_milliseconds(:round)
-          Process.send_after(self(), {:send_buffers, ssrc}, send_after_time)
+          send_after_time = Time.as_milliseconds(latency - since_insertion, :round)
+
+          if send_after_time > 0 do
+            Process.send_after(self(), {:send_buffers, ssrc}, send_after_time)
+          else
+            nil
+          end
       end
 
     %State.StreamState{stream_state | max_latency_timer: new_timer}
   end
 
-  defp set_timer(_ssrc, %State.StreamState{max_latency_timer: timer} = stream_state)
-       when timer != nil do
+  defp set_timer(_ssrc, stream_state) do
     stream_state
   end
 
   defp record_to_actions(nil, stream_state) do
-    action = [event: {:output, %Membrane.Event.Discontinuity{}}]
+    action = [event: {stream_state.pad, %Membrane.Event.Discontinuity{}}]
     {action, stream_state}
   end
 
