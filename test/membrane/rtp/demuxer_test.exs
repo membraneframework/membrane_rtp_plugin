@@ -130,12 +130,12 @@ defmodule Membrane.RTP.DemuxerTest do
     assert_start_of_stream(pipeline, {:sink, ^video_ssrc})
     assert_start_of_stream(pipeline, {:sink, ^audio_ssrc})
 
-    1..(@rtp_input.video.packets - 0)
+    1..@rtp_input.video.packets
     |> Enum.each(fn _i ->
       assert_sink_buffer(pipeline, {:sink, video_ssrc}, %Membrane.Buffer{})
     end)
 
-    1..(@rtp_input.audio.packets - 0)
+    1..@rtp_input.audio.packets
     |> Enum.each(fn _i ->
       assert_sink_buffer(pipeline, {:sink, audio_ssrc}, %Membrane.Buffer{})
     end)
