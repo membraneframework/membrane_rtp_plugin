@@ -2,9 +2,10 @@ defmodule Membrane.RTP.Muxer do
   @moduledoc """
   Element that combines multiple streams into a single RTP stream. 
 
-  Each new input stream is assigned a unique SSRC that the packets 
-  transporting this stream will have. When a new pad is conneted, it's required to pass it options sufficient to resolve what 
-  `payload_type` and `clock_rate` should be assumed. Timestamps are calculated based on assumed `clock_rate`.
+  Each new input stream is assigned a unique SSRC that the packets transporting this stream will have. 
+  The demuxer will try to resolve what `payload_type` and `clock_rate` should be assumed based on the 
+  incoming stream format and passed pad options. 
+  Timestamps are calculated based on assumed `clock_rate`.
   """
   use Membrane.Filter
 
@@ -15,6 +16,14 @@ defmodule Membrane.RTP.Muxer do
   @max_ssrc Bitwise.bsl(1, 32) - 1
   @max_sequence_number Bitwise.bsl(1, 16) - 1
   @max_timestamp Bitwise.bsl(1, 32) - 1
+
+  @stream_format_to_encoding_name %{
+    Membrane.H264 => :H264,
+    Membrane.H265 => :H265,
+    Membrane.VP8 => :VP8,
+    Membrane.AAC => :AAC,
+    Membrane.Opus => :opus
+  }
 
   def_input_pad :input,
     accepted_format: RTP,
@@ -85,15 +94,53 @@ defmodule Membrane.RTP.Muxer do
     {[], %State{}}
   end
 
+  # @impl true
+  # def handle_pad_added(Pad.ref(:input, _ref) = pad_ref, ctx, state) do
+  # pad_options = ctx.pads[pad_ref].options
+
+  # ssrc = get_stream_ssrc(pad_options, state)
+
+  # %{payload_type: payload_type, clock_rate: clock_rate} =
+  # RTP.PayloadFormat.resolve(
+  # encoding_name: pad_options.encoding,
+  # payload_type: pad_options.payload_type,
+  # clock_rate: pad_options.clock_rate
+  # )
+
+  # if payload_type == nil, do: raise("Could not resolve payload type")
+  # if clock_rate == nil, do: raise("Could not resolve clock rate")
+
+  # new_stream_state = %State.StreamState{
+  # ssrc: ssrc,
+  # sequence_number: Enum.random(0..@max_sequence_number),
+  # initial_timestamp: Enum.random(0..@max_timestamp),
+  # clock_rate: clock_rate,
+  # payload_type: payload_type
+  # }
+
+  # state = put_in(state.stream_states[pad_ref], new_stream_state)
+
+  # {[], state}
+  # end
+
   @impl true
-  def handle_pad_added(Pad.ref(:input, _ref) = pad_ref, ctx, state) do
-    pad_options = ctx.pads[pad_ref].options
+  def handle_playing(_ctx, state) do
+    {[stream_format: {:output, %RemoteStream{type: :packetized, content_format: RTP}}], state}
+  end
+
+  @impl true
+  def handle_stream_format(pad, stream_format, ctx, state) do
+    pad_options = ctx.pads[pad].options
 
     ssrc = get_stream_ssrc(pad_options, state)
 
+    encoding_name =
+      @stream_format_to_encoding_name[stream_format.__struct__ |> IO.inspect()] ||
+        pad_options.encoding
+
     %{payload_type: payload_type, clock_rate: clock_rate} =
       RTP.PayloadFormat.resolve(
-        encoding_name: pad_options.encoding,
+        encoding_name: encoding_name,
         payload_type: pad_options.payload_type,
         clock_rate: pad_options.clock_rate
       )
@@ -109,18 +156,8 @@ defmodule Membrane.RTP.Muxer do
       payload_type: payload_type
     }
 
-    state = put_in(state.stream_states[pad_ref], new_stream_state)
+    state = put_in(state.stream_states[pad], new_stream_state)
 
-    {[], state}
-  end
-
-  @impl true
-  def handle_playing(_ctx, state) do
-    {[stream_format: {:output, %RemoteStream{type: :packetized, content_format: RTP}}], state}
-  end
-
-  @impl true
-  def handle_stream_format(_pad, _stream_format, _ctx, state) do
     {[], state}
   end
 
