@@ -49,16 +49,14 @@ defmodule Membrane.RTP.DemuxerTest do
         |> child(:demuxer, Membrane.RTP.Demuxer)
         |> via_out(:output,
           options: [
-            stream_id: {:payload_type, opts.audio.payload_type},
-            jitter_buffer_latency: Membrane.Time.milliseconds(1)
+            stream_id: {:payload_type, opts.audio.payload_type}
           ]
         )
         |> child({:sink, opts.audio.ssrc}, Testing.Sink),
         get_child(:demuxer)
         |> via_out(:output,
           options: [
-            stream_id: {:payload_type, opts.video.payload_type},
-            jitter_buffer_latency: Membrane.Time.milliseconds(1)
+            stream_id: {:payload_type, opts.video.payload_type}
           ]
         )
         |> child({:sink, opts.video.ssrc}, Testing.Sink)

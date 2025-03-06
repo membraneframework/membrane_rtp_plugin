@@ -79,8 +79,7 @@ defmodule Membrane.RTP.DemuxerMuxerTest do
     reference_normalized_packets = get_normalized_packets(reference_pipeline, @rtp_input.packets)
     subject_normalized_packets = get_normalized_packets(subject_pipeline, @rtp_input.packets)
 
-    assert reference_normalized_packets[:H264] == subject_normalized_packets[:H264]
-    assert reference_normalized_packets[:AAC] == subject_normalized_packets[:AAC]
+    assert reference_normalized_packets == subject_normalized_packets
 
     assert_end_of_stream(reference_pipeline, :sink)
     assert_end_of_stream(subject_pipeline, :sink)
