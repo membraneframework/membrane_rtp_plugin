@@ -17,7 +17,7 @@ defmodule Membrane.RTP.Muxer do
   @max_sequence_number Bitwise.bsl(1, 16) - 1
   @max_timestamp Bitwise.bsl(1, 32) - 1
 
-  @stream_format_to_encoding_name %{
+  @payload_format_to_encoding_name %{
     Membrane.H264 => :H264,
     Membrane.H265 => :H265,
     Membrane.VP8 => :VP8,
@@ -33,28 +33,29 @@ defmodule Membrane.RTP.Muxer do
         spec: RTP.ssrc() | :random,
         default: :random,
         description: """
-        SSRC that this stream will be assigned. If not present, a random free value will be assigned.
+        SSRC that this stream will be assigned. If not provided, a random free value will be assigned.
         """
       ],
       payload_type: [
         spec: RTP.payload_type() | nil,
         default: nil,
         description: """
-        Payload type of the stream. If not provided, determined from `:encoding`.
+        Payload type of the stream. If not provided, determined from the resolved encoding name.
         """
       ],
       encoding: [
         spec: RTP.encoding_name() | nil,
         default: nil,
         description: """
-        Encoding name of the stream. Used for determining payload_type, it it wasn't provided.
+        Encoding name of the stream that will be used if the muxer fails to infer it from incoming stream format. 
+        Used for determining payload_type, if it wasn't provided.
         """
       ],
       clock_rate: [
         spec: non_neg_integer() | nil,
         default: nil,
         description: """
-        Clock rate to use. If not provided, determined from `:payload_type`.
+        Clock rate to use. If not provided, determined from resolved payload type.
         """
       ]
     ]
@@ -106,7 +107,7 @@ defmodule Membrane.RTP.Muxer do
     ssrc = get_stream_ssrc(pad_options, state)
 
     encoding_name =
-      @stream_format_to_encoding_name[stream_format.__struct__ |> IO.inspect()] ||
+      @payload_format_to_encoding_name[stream_format.payload_format] ||
         pad_options.encoding
 
     %{payload_type: payload_type, clock_rate: clock_rate} =
@@ -116,8 +117,13 @@ defmodule Membrane.RTP.Muxer do
         clock_rate: pad_options.clock_rate
       )
 
-    if payload_type == nil, do: raise("Could not resolve payload type")
-    if clock_rate == nil, do: raise("Could not resolve clock rate")
+    if payload_type == nil do
+      raise "Could not resolve payload type, information provided via pad options and stream format not sufficient"
+    end
+
+    if clock_rate == nil do
+      raise "Could not resolve clock rate, information provided via pad options and stream format not sufficient"
+    end
 
     new_stream_state = %State.StreamState{
       ssrc: ssrc,

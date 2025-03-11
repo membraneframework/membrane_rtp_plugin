@@ -19,7 +19,6 @@ defmodule Membrane.RTP.MuxerDemuxerTest do
         })
         |> child(:realtimer, Membrane.Realtimer)
         |> child(:rtp_h264_payloader, Membrane.RTP.H264.Payloader)
-        |> via_in(:input, options: [encoding: :H264])
         |> child(:rtp_muxer, Membrane.RTP.Muxer)
         |> child(:rtp_demuxer, Membrane.RTP.Demuxer)
         |> via_out(:output,

@@ -26,7 +26,7 @@ defmodule Membrane.RTP.DemuxerMuxerTest do
     end
   end
 
-  defmodule SubjectPipeline do
+  defmodule DynamicSubjectPipeline do
     use Membrane.Pipeline
 
     @impl true
@@ -42,25 +42,47 @@ defmodule Membrane.RTP.DemuxerMuxerTest do
     end
 
     @impl true
-    def handle_child_notification(
-          {:new_rtp_stream, %{ssrc: ssrc, payload_type: pt}},
-          :rtp_demuxer,
-          _ctx,
-          state
-        ) do
-      %{encoding_name: encoding_name} = Membrane.RTP.PayloadFormat.get_payload_type_mapping(pt)
-
+    def handle_child_notification({:new_rtp_stream, %{ssrc: ssrc}}, :rtp_demuxer, _ctx, state) do
       spec =
         get_child(:rtp_demuxer)
         |> via_out(:output, options: [stream_id: {:ssrc, ssrc}, jitter_buffer_latency: 0])
-        |> via_in(:input, options: [encoding: encoding_name])
         |> get_child(:rtp_muxer)
 
       {[spec: spec], state}
     end
   end
 
-  test "Demuxed and muxed stream is the same as unchanged one" do
+  defmodule UpfrontSubjectPipeline do
+    use Membrane.Pipeline
+
+    @impl true
+    def handle_init(_ctx, opts) do
+      spec = [
+        child(:source, %Membrane.Pcap.Source{path: opts.input_path})
+        |> child(:rtp_demuxer, Membrane.RTP.Demuxer)
+        |> via_out(:output, options: [stream_id: {:encoding_name, :H264}])
+        |> child(:rtp_muxer, Membrane.RTP.Muxer)
+        |> child(:sink, Membrane.Testing.Sink),
+        get_child(:rtp_demuxer)
+        |> via_out(:output, options: [stream_id: {:encoding_name, :AAC}])
+        |> get_child(:rtp_muxer)
+      ]
+
+      {[spec: spec], %{}}
+    end
+  end
+
+  describe "Demuxed and muxed stream is the same as unchanged one" do
+    test "when using a dynamically linking pipeline" do
+      perform_test(DynamicSubjectPipeline)
+    end
+
+    test "when using a pipeline linked upfront" do
+      perform_test(UpfrontSubjectPipeline)
+    end
+  end
+
+  defp perform_test(subject_pipeline_module) do
     reference_pipeline =
       Testing.Pipeline.start_supervised!(
         module: ReferencePipeline,
@@ -69,7 +91,7 @@ defmodule Membrane.RTP.DemuxerMuxerTest do
 
     subject_pipeline =
       Testing.Pipeline.start_supervised!(
-        module: SubjectPipeline,
+        module: subject_pipeline_module,
         custom_args: %{input_path: @rtp_input.pcap_path}
       )
 
