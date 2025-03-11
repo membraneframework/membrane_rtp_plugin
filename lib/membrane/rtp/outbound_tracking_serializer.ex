@@ -6,7 +6,7 @@ defmodule Membrane.RTP.OutboundTrackingSerializer do
   into a proper RTP packet. When encountering header extensions, it remaps its identifiers from locally used extension
   names to integer values expected by the receiver.
   """
-  use Membrane.Filter
+  use Membrane.Filter, flow_control_hints?: false
 
   require Membrane.Logger
   require Membrane.TelemetryMetrics

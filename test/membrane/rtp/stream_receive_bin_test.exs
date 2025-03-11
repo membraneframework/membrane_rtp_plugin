@@ -76,7 +76,7 @@ defmodule Membrane.RTP.StreamReceiveBinTest do
         path: pcap_file,
         packet_transformer: fn %ExPcap.Packet{
                                  packet_header: %{ts_sec: sec, ts_usec: usec},
-                                 parsed_packet_data: {_, payload}
+                                 parsed_packet_data: {_packet, payload}
                                } ->
           arrival_ts = Membrane.Time.seconds(sec) + Membrane.Time.microseconds(usec)
           %Membrane.Buffer{payload: payload, metadata: %{arrival_ts: arrival_ts}}

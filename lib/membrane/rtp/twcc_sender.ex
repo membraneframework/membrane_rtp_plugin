@@ -3,7 +3,7 @@ defmodule Membrane.RTP.TWCCSender do
   The module defines an element responsible for tagging outgoing packets with transport-wide sequence numbers and
   estimating available bandwidth.
   """
-  use Membrane.Filter
+  use Membrane.Filter, flow_control_hints?: false
 
   require Bitwise
 

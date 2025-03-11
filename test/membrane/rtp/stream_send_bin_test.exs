@@ -169,9 +169,9 @@ defmodule Membrane.RTP.StreamSendBinTest do
 
     assert_start_of_stream(pipeline, :rtp_sink)
 
-    for _ <- 1..@frames_count do
+    Enum.each(1..@frames_count, fn _i ->
       assert_pipeline_notified(pipeline, :rtp_sink, {:buffer, _buffer})
-    end
+    end)
 
     assert_end_of_stream(pipeline, :rtp_sink, :input)
 
