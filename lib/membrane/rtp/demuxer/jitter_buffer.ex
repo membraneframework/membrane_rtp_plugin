@@ -130,6 +130,8 @@ defmodule Membrane.RTP.Demuxer.JitterBuffer do
             Membrane.Time.as_milliseconds(initial_latency_left, :round)
           )
         end
+
+        pad_options.jitter_buffer_latency
       else
         0
       end
