@@ -239,7 +239,7 @@ defmodule Membrane.RTP.Demuxer do
   end
 
   @impl true
-  def handle_info({:get_actions, ssrc}, _context, state) do
+  def handle_info({:send_actions, ssrc}, _context, state) do
     stream_state = state.stream_states[ssrc]
 
     {actions, jitter_buffer_state} =

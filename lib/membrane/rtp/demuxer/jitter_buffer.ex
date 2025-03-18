@@ -207,7 +207,7 @@ defmodule Membrane.RTP.Demuxer.JitterBuffer do
           send_after_time = Time.as_milliseconds(latency - since_insertion, :round)
 
           if send_after_time > 0 do
-            Process.send_after(self(), {:get_actions, ssrc}, send_after_time)
+            Process.send_after(self(), {:send_actions, ssrc}, send_after_time)
           else
             nil
           end
