@@ -22,7 +22,7 @@ defmodule Membrane.RTP.MuxerDemuxerTest do
         |> child(:rtp_muxer, Membrane.RTP.Muxer)
         |> child(:rtp_demuxer, Membrane.RTP.Demuxer)
         |> via_out(:output,
-          options: [stream_id: {:encoding_name, :H264}, use_jitter_buffer: false]
+          options: [stream_id: {:encoding_name, :H264}, jitter_buffer_latency: 0]
         )
         |> child(:rtp_h264_depayloader, Membrane.RTP.H264.Depayloader)
         |> child(:sink, %Membrane.File.Sink{location: opts.output_path})

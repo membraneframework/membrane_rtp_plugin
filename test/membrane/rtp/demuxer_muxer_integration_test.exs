@@ -52,7 +52,7 @@ defmodule Membrane.RTP.DemuxerMuxerTest do
 
       spec =
         get_child(:rtp_demuxer)
-        |> via_out(:output, options: [stream_id: {:ssrc, ssrc}, use_jitter_buffer: false])
+        |> via_out(:output, options: [stream_id: {:ssrc, ssrc}, jitter_buffer_latency: 0])
         |> via_in(:input, options: [encoding: encoding_name])
         |> get_child(:rtp_muxer)
 

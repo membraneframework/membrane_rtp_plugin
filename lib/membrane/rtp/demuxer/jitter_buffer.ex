@@ -13,7 +13,6 @@ defmodule Membrane.RTP.Demuxer.JitterBuffer do
           %{
             stream_id: Demuxer.stream_id(),
             clock_rate: RTP.clock_rate(),
-            use_jitter_buffer: boolean(),
             jitter_buffer_latency: Membrane.Time.t()
           }
 
@@ -54,35 +53,25 @@ defmodule Membrane.RTP.Demuxer.JitterBuffer do
         ) :: State.t()
   def initialize_state_with_new_rtp_stream(packet, pad_options, payload_type_mapping) do
     {clock_rate, latency, initial_latency_waiting} =
-      case pad_options do
-        nil ->
-          {nil, nil, true}
+      if pad_options == nil do
+        {nil, nil, true}
+      else
+        %{clock_rate: clock_rate} =
+          RTP.PayloadFormat.resolve(
+            payload_type: packet.payload_type,
+            clock_rate: pad_options.clock_rate,
+            payload_type_mapping: payload_type_mapping
+          )
 
-        %{use_jitter_buffer: false} = pad_options ->
-          %{clock_rate: clock_rate} =
-            RTP.PayloadFormat.resolve(
-              payload_type: packet.payload_type,
-              clock_rate: pad_options.clock_rate,
-              payload_type_mapping: payload_type_mapping
-            )
-
-          {clock_rate, 0, false}
-
-        %{use_jitter_buffer: true} = pad_options ->
-          %{clock_rate: clock_rate} =
-            RTP.PayloadFormat.resolve(
-              payload_type: packet.payload_type,
-              clock_rate: pad_options.clock_rate,
-              payload_type_mapping: payload_type_mapping
-            )
-
+        if pad_options.jitter_buffer_latency > 0 do
           Process.send_after(
             self(),
             {:initial_latency_passed, packet.ssrc},
             Membrane.Time.as_milliseconds(pad_options.jitter_buffer_latency, :round)
           )
+        end
 
-          {clock_rate, pad_options.jitter_buffer_latency, true}
+        {clock_rate, pad_options.jitter_buffer_latency, pad_options.jitter_buffer_latency > 0}
       end
 
     %State{
@@ -116,27 +105,24 @@ defmodule Membrane.RTP.Demuxer.JitterBuffer do
         payload_type_mapping: payload_type_mapping
       )
 
-    latency =
-      if pad_options.use_jitter_buffer do
-        time_since_initialization =
-          Time.monotonic_time() - jitter_buffer_state.initialization_time
+    time_since_initialization =
+      Time.monotonic_time() - jitter_buffer_state.initialization_time
 
-        initial_latency_left = pad_options.jitter_buffer_latency - time_since_initialization
+    initial_latency_left = pad_options.jitter_buffer_latency - time_since_initialization
 
-        if initial_latency_left > 0 do
-          Process.send_after(
-            self(),
-            {:initial_latency_passed, ssrc},
-            Membrane.Time.as_milliseconds(initial_latency_left, :round)
-          )
-        end
+    if initial_latency_left > 0 do
+      Process.send_after(
+        self(),
+        {:initial_latency_passed, ssrc},
+        Membrane.Time.as_milliseconds(initial_latency_left, :round)
+      )
+    end
 
-        pad_options.jitter_buffer_latency
-      else
-        0
-      end
-
-    %State{jitter_buffer_state | clock_rate: clock_rate, latency: latency}
+    %State{
+      jitter_buffer_state
+      | clock_rate: clock_rate,
+        latency: pad_options.jitter_buffer_latency
+    }
   end
 
   @spec insert_buffer(State.t(), Membrane.Buffer.t(), Demuxer.stream_phase()) :: State.t()

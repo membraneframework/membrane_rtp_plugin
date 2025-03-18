@@ -66,19 +66,13 @@ defmodule Membrane.RTP.Demuxer do
         Clock rate of the stream. If not provided the demuxer will attempt to resolve it from payload type.
         """
       ],
-      use_jitter_buffer: [
-        spec: boolean(),
-        default: true,
-        description: """
-        Specifies whether to use an internal jitter buffer or not. The jitter buffer ensures that incoming packets are reordered based on their sequence
-        numbers. This functionality introduces some latency, so when the order of the packets is ensured by some other means the jitter buffer is redundant.
-        """
-      ],
       jitter_buffer_latency: [
-        spec: Membrane.Time.t(),
+        spec: Membrane.Time.non_neg(),
         default: Membrane.Time.milliseconds(200),
         description: """
-        Maximum latency introduced by the jitter buffer. Determines how long the element will wait for out-of-order packets if there are any gaps in sequence numbers.
+        The jitter buffer ensures that incoming packets are reordered based on their sequence numbers. This option specifies maximum latency
+        introduced by the jitter buffer, that is how long the element will wait for out-of-order packets if there are any gaps in sequence numbers. 
+        If the order of the packets is ensured by some other means the latency can be set to 0.
         """
       ]
     ]

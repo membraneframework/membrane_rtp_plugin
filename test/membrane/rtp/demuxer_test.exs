@@ -50,7 +50,6 @@ defmodule Membrane.RTP.DemuxerTest do
         |> via_out(:output,
           options: [
             stream_id: {:payload_type, opts.audio.payload_type},
-            use_jitter_buffer: opts.reorder_packets,
             jitter_buffer_latency: Membrane.Time.milliseconds(5)
           ]
         )
@@ -59,7 +58,6 @@ defmodule Membrane.RTP.DemuxerTest do
         |> via_out(:output,
           options: [
             stream_id: {:payload_type, opts.video.payload_type},
-            use_jitter_buffer: opts.reorder_packets,
             jitter_buffer_latency: Membrane.Time.milliseconds(5)
           ]
         )
