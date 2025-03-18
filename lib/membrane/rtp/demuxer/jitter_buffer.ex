@@ -170,7 +170,7 @@ defmodule Membrane.RTP.Demuxer.JitterBuffer do
 
       {actions, jitter_buffer_state} =
         (too_old_records ++ buffers)
-        |> Enum.flat_map_reduce(jitter_buffer_state, &record_to_action(&1, pad, &2))
+        |> Enum.flat_map_reduce(jitter_buffer_state, &record_to_action(&1, &2, pad))
 
       jitter_buffer_state = set_timer(jitter_buffer_state, ssrc)
 

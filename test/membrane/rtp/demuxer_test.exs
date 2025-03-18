@@ -49,14 +49,18 @@ defmodule Membrane.RTP.DemuxerTest do
         |> child(:demuxer, Membrane.RTP.Demuxer)
         |> via_out(:output,
           options: [
-            stream_id: {:payload_type, opts.audio.payload_type}
+            stream_id: {:payload_type, opts.audio.payload_type},
+            use_jitter_buffer: opts.reorder_packets,
+            jitter_buffer_latency: Membrane.Time.milliseconds(5)
           ]
         )
         |> child({:sink, opts.audio.ssrc}, Testing.Sink),
         get_child(:demuxer)
         |> via_out(:output,
           options: [
-            stream_id: {:payload_type, opts.video.payload_type}
+            stream_id: {:payload_type, opts.video.payload_type},
+            use_jitter_buffer: opts.reorder_packets,
+            jitter_buffer_latency: Membrane.Time.milliseconds(5)
           ]
         )
         |> child({:sink, opts.video.ssrc}, Testing.Sink)
@@ -79,10 +83,20 @@ defmodule Membrane.RTP.DemuxerTest do
       spec = [
         child(:pcap_source, %Membrane.Pcap.Source{path: opts.pcap_path})
         |> child(:demuxer, %Membrane.RTP.Demuxer{payload_type_mapping: @payload_type_mapping})
-        |> via_out(:output, options: [stream_id: {:encoding_name, :Sysy}])
+        |> via_out(:output,
+          options: [
+            stream_id: {:encoding_name, :Sysy},
+            jitter_buffer_latency: Membrane.Time.milliseconds(5)
+          ]
+        )
         |> child({:sink, opts.audio.ssrc}, Testing.Sink),
         get_child(:demuxer)
-        |> via_out(:output, options: [stream_id: {:encoding_name, :Oldman}])
+        |> via_out(:output,
+          options: [
+            stream_id: {:encoding_name, :Oldman},
+            jitter_buffer_latency: Membrane.Time.milliseconds(5)
+          ]
+        )
         |> child({:sink, opts.video.ssrc}, Testing.Sink)
       ]
 
@@ -100,14 +114,20 @@ defmodule Membrane.RTP.DemuxerTest do
         |> child(if opts.reorder_packets, do: Reorderer, else: Membrane.Debug.Filter)
         |> child(:demuxer, Membrane.RTP.Demuxer)
 
-      {[spec: spec], %{}}
+      {[spec: spec], %{use_jitter_buffer: opts.reorder_packets}}
     end
 
     @impl true
     def handle_child_notification({:new_rtp_stream, %{ssrc: ssrc}}, :demuxer, _ctx, state) do
       spec =
         get_child(:demuxer)
-        |> via_out(:output, options: [stream_id: {:ssrc, ssrc}])
+        |> via_out(:output,
+          options: [
+            stream_id: {:ssrc, ssrc},
+            use_jitter_buffer: state.use_jitter_buffer,
+            jitter_buffer_latency: Membrane.Time.milliseconds(5)
+          ]
+        )
         |> child({:sink, ssrc}, Testing.Sink)
 
       {[spec: spec], state}
