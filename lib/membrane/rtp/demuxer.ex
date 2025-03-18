@@ -101,7 +101,7 @@ defmodule Membrane.RTP.Demuxer do
       alias Membrane.RTP.Demuxer.JitterBuffer
 
       @type t :: %__MODULE__{
-              end_of_stream_buffered: boolean(),
+              end_of_stream: boolean(),
               phase: RTP.Demuxer.stream_phase(),
               pad_match_timer: reference() | nil,
               payload_type: RTP.payload_type(),
@@ -110,7 +110,7 @@ defmodule Membrane.RTP.Demuxer do
             }
 
       @enforce_keys [:payload_type, :phase, :pad_match_timer, :pad, :jitter_buffer_state]
-      defstruct @enforce_keys ++ [end_of_stream_buffered: false]
+      defstruct @enforce_keys ++ [end_of_stream: false]
     end
 
     @type t :: %__MODULE__{
@@ -168,17 +168,12 @@ defmodule Membrane.RTP.Demuxer do
 
         {buffer_actions, jitter_buffer_state} =
           stream_state.jitter_buffer_state
-          |> JitterBuffer.complete_state_initialization_with_pad_options(
-            ctx.pad_options,
-            stream_state.payload_type,
-            matching_stream_ssrc,
-            state.payload_type_mapping
-          )
-          |> JitterBuffer.get_actions(stream_state.phase, matching_stream_ssrc, pad)
+          |> JitterBuffer.initialize(pad, ctx.pad_options, state.payload_type_mapping)
+          |> JitterBuffer.get_output_actions(stream_state.phase)
 
         end_of_stream_actions =
-          if stream_state.end_of_stream_buffered do
-            JitterBuffer.get_end_of_stream_actions(jitter_buffer_state, pad)
+          if stream_state.end_of_stream do
+            JitterBuffer.get_end_of_stream_actions(jitter_buffer_state)
           else
             []
           end
@@ -216,48 +211,53 @@ defmodule Membrane.RTP.Demuxer do
   end
 
   @impl true
-  def handle_info({:initial_latency_passed, ssrc}, _context, state) do
+  def handle_info({:initial_latency_passed, ssrc}, _ctx, state) do
     stream_state = state.stream_states[ssrc]
 
-    {actions, jitter_buffer_state} =
-      stream_state.jitter_buffer_state
-      |> JitterBuffer.get_actions(stream_state.phase, ssrc, stream_state.pad)
+    if stream_state.end_of_stream do
+      {[], state}
+    else
+      {actions, jitter_buffer_state} =
+        stream_state.jitter_buffer_state
+        |> JitterBuffer.initial_latency_passed()
+        |> JitterBuffer.get_output_actions(stream_state.phase)
 
-    state =
-      put_in(
-        state.stream_states[ssrc].jitter_buffer_state,
-        %JitterBuffer.State{jitter_buffer_state | initial_latency_waiting: false}
-      )
+      state = put_in(state.stream_states[ssrc].jitter_buffer_state, jitter_buffer_state)
 
-    {actions, state}
+      {actions, state}
+    end
   end
 
   @impl true
-  def handle_info({:send_actions, ssrc}, _context, state) do
+  def handle_info({:send_actions, ssrc}, _ctx, state) do
     stream_state = state.stream_states[ssrc]
 
-    {actions, jitter_buffer_state} =
-      stream_state.jitter_buffer_state
-      |> JitterBuffer.get_actions(stream_state.phase, ssrc, stream_state.pad)
+    if stream_state.end_of_stream do
+      {[], state}
+    else
+      {actions, jitter_buffer_state} =
+        stream_state.jitter_buffer_state
+        |> JitterBuffer.latency_timer_expired()
+        |> JitterBuffer.get_output_actions(stream_state.phase)
 
-    state =
-      put_in(
-        state.stream_states[ssrc].jitter_buffer_state,
-        %JitterBuffer.State{jitter_buffer_state | max_latency_timer: nil}
-      )
+      state = put_in(state.stream_states[ssrc].jitter_buffer_state, jitter_buffer_state)
 
-    {actions, state}
+      {actions, state}
+    end
+  end
+
+  @impl true
+  def handle_info(message, _ctx, state) do
+    Membrane.Logger.warning("Ignoring message: #{inspect(message)}")
+    {[], state}
   end
 
   @impl true
   def handle_end_of_stream(:input, _ctx, state) do
     state.stream_states
     |> Enum.flat_map_reduce(state, fn {ssrc, stream_state}, state ->
-      actions =
-        JitterBuffer.get_end_of_stream_actions(stream_state.jitter_buffer_state, stream_state.pad)
-
-      state = put_in(state.stream_states[ssrc].end_of_stream_buffered, true)
-
+      actions = JitterBuffer.get_end_of_stream_actions(stream_state.jitter_buffer_state)
+      state = put_in(state.stream_states[ssrc].end_of_stream, true)
       {actions, state}
     end)
   end
@@ -296,7 +296,7 @@ defmodule Membrane.RTP.Demuxer do
     {buffer_actions, jitter_buffer_state} =
       stream_state.jitter_buffer_state
       |> JitterBuffer.insert_buffer(buffer, stream_state.phase)
-      |> JitterBuffer.get_actions(stream_state.phase, packet.ssrc, stream_state.pad)
+      |> JitterBuffer.get_output_actions(stream_state.phase)
 
     state = put_in(state.stream_states[packet.ssrc].jitter_buffer_state, jitter_buffer_state)
 
@@ -316,8 +316,7 @@ defmodule Membrane.RTP.Demuxer do
           State.t()
         ) :: {[Membrane.Element.Action.t()], State.t()}
   defp initialize_new_stream_state(nil, packet, _ctx, state) do
-    jitter_buffer_state =
-      JitterBuffer.initialize_state_with_new_rtp_stream(packet, nil, state.payload_type_mapping)
+    jitter_buffer_state = JitterBuffer.new(packet)
 
     stream_state = %State.StreamState{
       phase: :waiting_for_matching_pad,
@@ -339,8 +338,10 @@ defmodule Membrane.RTP.Demuxer do
 
   defp initialize_new_stream_state(pad_waiting_for_stream, packet, ctx, state) do
     jitter_buffer_state =
-      JitterBuffer.initialize_state_with_new_rtp_stream(
-        packet,
+      packet
+      |> JitterBuffer.new()
+      |> JitterBuffer.initialize(
+        pad_waiting_for_stream,
         ctx.pads[pad_waiting_for_stream].options,
         state.payload_type_mapping
       )

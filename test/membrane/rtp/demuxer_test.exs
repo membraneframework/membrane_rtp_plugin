@@ -112,7 +112,7 @@ defmodule Membrane.RTP.DemuxerTest do
         |> child(if opts.reorder_packets, do: Reorderer, else: Membrane.Debug.Filter)
         |> child(:demuxer, Membrane.RTP.Demuxer)
 
-      {[spec: spec], %{use_jitter_buffer: opts.reorder_packets}}
+      {[spec: spec], %{}}
     end
 
     @impl true
@@ -122,7 +122,6 @@ defmodule Membrane.RTP.DemuxerTest do
         |> via_out(:output,
           options: [
             stream_id: {:ssrc, ssrc},
-            use_jitter_buffer: state.use_jitter_buffer,
             jitter_buffer_latency: Membrane.Time.milliseconds(5)
           ]
         )
