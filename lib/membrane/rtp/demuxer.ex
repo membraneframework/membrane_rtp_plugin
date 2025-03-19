@@ -70,9 +70,9 @@ defmodule Membrane.RTP.Demuxer do
         spec: Membrane.Time.non_neg(),
         default: Membrane.Time.milliseconds(200),
         description: """
-        The jitter buffer ensures that incoming packets are reordered based on their sequence numbers. This option specifies maximum latency
+        Jitter buffer ensures that incoming packets are reordered based on their sequence numbers. This option specifies maximum latency
         introduced by the jitter buffer, that is how long the element will wait for out-of-order packets if there are any gaps in sequence numbers. 
-        If the order of the packets is ensured by some other means the latency can be set to 0.
+        If the order of the packets is ensured by some other means, the latency can be set to 0.
         """
       ]
     ]
