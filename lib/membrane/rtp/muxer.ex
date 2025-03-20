@@ -63,6 +63,15 @@ defmodule Membrane.RTP.Muxer do
 
   def_output_pad :output, accepted_format: %RemoteStream{type: :packetized, content_format: RTP}
 
+  def_options use_srtp: [
+                spec: false | {true, [ExLibSRTP.Policy.t()]},
+                default: false,
+                description: """
+                Specifies whether to use SRTP. Requires adding [srtp](https://github.com/membraneframework/elixir_libsrtp) dependency to work.
+                If set to true also takes a list of SRTP policies to use for decrypting packets. See `t:ExLibSRTP.Policy.t/0` for details.
+                """
+              ]
+
   defmodule State do
     @moduledoc false
     defmodule StreamState do
@@ -84,16 +93,23 @@ defmodule Membrane.RTP.Muxer do
     end
 
     @type t :: %__MODULE__{
-            stream_states: %{Pad.ref() => StreamState.t()}
+            stream_states: %{Pad.ref() => StreamState.t()},
+            srtp: RTP.SRTP.Wrapper.t()
           }
 
-    @enforce_keys []
+    @enforce_keys [:srtp]
     defstruct @enforce_keys ++ [stream_states: %{}]
   end
 
   @impl true
-  def handle_init(_ctx, _opts) do
-    {[], %State{}}
+  def handle_init(_ctx, opts) do
+    srtp =
+      case opts.use_srtp do
+        false -> nil
+        {true, policies} -> RTP.SRTP.Wrapper.initialize(policies)
+      end
+
+    {[], %State{srtp: srtp}}
   end
 
   @impl true
@@ -105,7 +121,7 @@ defmodule Membrane.RTP.Muxer do
   def handle_stream_format(pad, stream_format, ctx, state) do
     pad_options = ctx.pads[pad].options
 
-    ssrc = get_stream_ssrc(pad_options, state)
+    ssrc = get_stream_ssrc(pad_options.ssrc, state)
 
     encoding_name =
       @payload_format_to_encoding_name[stream_format.payload_format] ||
@@ -141,7 +157,7 @@ defmodule Membrane.RTP.Muxer do
 
   @impl true
   def handle_buffer(Pad.ref(:input, _ref) = pad_ref, buffer, _ctx, state) do
-    {rtp_metadata, metadata} = Map.pop(buffer.metadata, :rtp, %{})
+    rtp_metadata = Map.get(buffer.metadata, :rtp, %{})
     stream_state = state.stream_states[pad_ref]
 
     rtp_offset =
@@ -155,7 +171,7 @@ defmodule Membrane.RTP.Muxer do
 
     state = put_in(state.stream_states[pad_ref].sequence_number, sequence_number)
 
-    packet =
+    buffer_action =
       ExRTP.Packet.new(buffer.payload,
         payload_type: stream_state.payload_type,
         sequence_number: sequence_number,
@@ -164,16 +180,9 @@ defmodule Membrane.RTP.Muxer do
         csrc: Map.get(rtp_metadata, :csrcs, []),
         marker: Map.get(rtp_metadata, :marker, false)
       )
+      |> payload_packet(buffer, state)
 
-    raw_packet = ExRTP.Packet.encode(packet)
-
-    buffer = %Membrane.Buffer{
-      buffer
-      | payload: raw_packet,
-        metadata: Map.put(metadata, :rtp, %{packet | payload: <<>>})
-    }
-
-    {[buffer: {:output, buffer}], state}
+    {buffer_action, state}
   end
 
   @impl true
@@ -187,10 +196,35 @@ defmodule Membrane.RTP.Muxer do
     end
   end
 
-  defp get_stream_ssrc(pad_options, state) do
+  @spec payload_packet(ExRTP.Packet.t(), Membrane.Buffer.t(), State.t()) ::
+          [Membrane.Element.Action.t()]
+  defp payload_packet(packet, original_buffer, state) do
+    raw_packet = ExRTP.Packet.encode(packet)
+
+    case state.srtp do
+      nil -> raw_packet
+      srtp -> RTP.SRTP.Wrapper.protect(srtp, raw_packet)
+    end
+    |> case do
+      nil ->
+        []
+
+      rtp_packet ->
+        buffer = %Membrane.Buffer{
+          original_buffer
+          | payload: rtp_packet,
+            metadata: Map.put(original_buffer.metadata, :rtp, %{packet | payload: <<>>})
+        }
+
+        [buffer: {:output, buffer}]
+    end
+  end
+
+  @spec get_stream_ssrc(RTP.ssrc() | :random, State.t()) :: RTP.ssrc()
+  defp get_stream_ssrc(ssrc, state) do
     assigned_ssrcs = Enum.map(state.stream_states, fn {_pad_ref, %{ssrc: ssrc}} -> ssrc end)
 
-    case pad_options.ssrc do
+    case ssrc do
       :random ->
         Stream.repeatedly(fn -> Enum.random(0..@max_ssrc) end)
         |> Enum.find(&(&1 not in assigned_ssrcs))

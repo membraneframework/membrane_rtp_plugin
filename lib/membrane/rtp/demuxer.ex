@@ -105,6 +105,14 @@ defmodule Membrane.RTP.Demuxer do
                 This option determines the action to be taken after a stream has been announced with a 
                 `t:new_rtp_stream_notification/0` notification but the corresponding pad has not been connected within the specified timeout period.
                 """
+              ],
+              use_srtp: [
+                spec: false | {true, [ExLibSRTP.Policy.t()]},
+                default: false,
+                description: """
+                Specifies whether to use SRTP. Requires adding [srtp](https://github.com/membraneframework/elixir_libsrtp) dependency to work.
+                If set to true also takes a list of SRTP policies to use for decrypting packets. See `t:ExLibSRTP.Policy.t/0` for details.
+                """
               ]
 
   defmodule State do
@@ -138,17 +146,29 @@ defmodule Membrane.RTP.Demuxer do
     @type t :: %__MODULE__{
             payload_type_mapping: RTP.PayloadFormat.payload_type_mapping(),
             not_linked_pad_handling: %{action: :raise | :ignore, timeout: Membrane.Time.t()},
+            srtp: RTP.SRTP.Wrapper.t(),
             stream_states: %{RTP.ssrc() => StreamState.t()},
             pads_waiting_for_stream: %{Pad.ref() => Membrane.RTP.Demuxer.stream_id()}
           }
 
-    @enforce_keys [:not_linked_pad_handling, :payload_type_mapping]
+    @enforce_keys [:not_linked_pad_handling, :payload_type_mapping, :srtp]
     defstruct @enforce_keys ++ [stream_states: %{}, pads_waiting_for_stream: %{}]
   end
 
   @impl true
   def handle_init(_ctx, opts) do
-    {[], struct(State, Map.from_struct(opts))}
+    srtp =
+      case opts.use_srtp do
+        false -> nil
+        {true, policies} -> RTP.SRTP.Wrapper.initialize(policies)
+      end
+
+    opts =
+      opts
+      |> Map.from_struct()
+      |> Map.put(:srtp, srtp)
+
+    {[], struct(State, opts)}
   end
 
   @impl true
@@ -290,7 +310,20 @@ defmodule Membrane.RTP.Demuxer do
 
   @spec handle_rtp_packet(binary(), CallbackContext.t(), State.t()) ::
           {[Membrane.Element.Action.t()], State.t()}
-  defp handle_rtp_packet(raw_rtp_packet, ctx, state) do
+  defp handle_rtp_packet(rtp_packet, ctx, state) do
+    case state.srtp do
+      nil -> rtp_packet
+      srtp -> RTP.SRTP.Wrapper.unprotect(srtp, rtp_packet)
+    end
+    |> case do
+      nil -> {[], state}
+      raw_rtp_packet -> handle_raw_rtp_packet(raw_rtp_packet, ctx, state)
+    end
+  end
+
+  @spec handle_raw_rtp_packet(binary(), CallbackContext.t(), State.t()) ::
+          {[Membrane.Element.Action.t()], State.t()}
+  defp handle_raw_rtp_packet(raw_rtp_packet, ctx, state) do
     {:ok, packet} = ExRTP.Packet.decode(raw_rtp_packet)
 
     {new_stream_actions, state} =
