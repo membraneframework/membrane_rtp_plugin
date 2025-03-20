@@ -68,7 +68,7 @@ defmodule Membrane.RTP.Muxer do
                 default: false,
                 description: """
                 Specifies whether to use SRTP. Requires adding [srtp](https://github.com/membraneframework/elixir_libsrtp) dependency to work.
-                If set to true also takes a list of SRTP policies to use for decrypting packets. See `t:ExLibSRTP.Policy.t/0` for details.
+                If set to true also takes a list of SRTP policies to use for encrypting packets. See `t:ExLibSRTP.Policy.t/0` for details.
                 """
               ]
 
@@ -180,7 +180,7 @@ defmodule Membrane.RTP.Muxer do
 
     state = put_in(state.stream_states[pad_ref].sequence_number, sequence_number)
 
-    buffer_action =
+    packet =
       ExRTP.Packet.new(buffer.payload,
         payload_type: stream_state.payload_type,
         sequence_number: sequence_number,
@@ -189,7 +189,24 @@ defmodule Membrane.RTP.Muxer do
         csrc: Map.get(rtp_metadata, :csrcs, []),
         marker: Map.get(rtp_metadata, :marker, false)
       )
-      |> payload_packet(buffer, state)
+
+    buffer_action =
+      packet
+      |> ExRTP.Packet.encode()
+      |> protect_packet(state.srtp)
+      |> case do
+        nil ->
+          []
+
+        raw_packet ->
+          buffer = %Membrane.Buffer{
+            buffer
+            | payload: raw_packet,
+              metadata: Map.put(buffer.metadata, :rtp, %{packet | payload: <<>>})
+          }
+
+          [buffer: {:output, buffer}]
+      end
 
     {buffer_action, state}
   end
@@ -205,31 +222,22 @@ defmodule Membrane.RTP.Muxer do
     end
   end
 
-  @spec payload_packet(ExRTP.Packet.t(), Membrane.Buffer.t(), State.t()) ::
-          [Membrane.Element.Action.t()]
-  defp payload_packet(packet, original_buffer, state) do
-    raw_packet = ExRTP.Packet.encode(packet)
-
-    case state.srtp do
-      nil -> {:ok, raw_packet}
-      srtp -> apply(ExLibSRTP, :protect, [srtp, raw_packet])
+  @spec protect_packet(binary(), ExLibSRTP.t() | nil) :: binary() | nil
+  defp protect_packet(rtp_packet, srtp) do
+    case srtp do
+      nil -> {:ok, rtp_packet}
+      srtp -> apply(ExLibSRTP, :protect, [srtp, rtp_packet])
     end
     |> case do
-      {:ok, rtp_packet} ->
-        buffer = %Membrane.Buffer{
-          original_buffer
-          | payload: rtp_packet,
-            metadata: Map.put(original_buffer.metadata, :rtp, %{packet | payload: <<>>})
-        }
-
-        [buffer: {:output, buffer}]
+      {:ok, raw_rtp_packet} ->
+        raw_rtp_packet
 
       {:error, reason} when reason in [:replay_fail, :replay_old] ->
         Membrane.Logger.warning("Ignoring packet due to `#{reason}`")
-        []
+        nil
 
       {:error, reason} ->
-        raise "Failed to protect packet due to `#{reason}`"
+        raise "Failed to unprotect packet due to `#{reason}`"
     end
   end
 

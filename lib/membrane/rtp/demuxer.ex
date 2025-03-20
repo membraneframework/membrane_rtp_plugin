@@ -319,18 +319,27 @@ defmodule Membrane.RTP.Demuxer do
 
   @spec handle_rtp_packet(binary(), CallbackContext.t(), State.t()) ::
           {[Membrane.Element.Action.t()], State.t()}
-  defp handle_rtp_packet(rtp_packet, ctx, state) do
-    case state.srtp do
+  defp handle_rtp_packet(packet, ctx, state) do
+    unprotect_packet(packet, state.srtp)
+    |> case do
+      nil -> {[], state}
+      raw_packet -> handle_raw_rtp_packet(raw_packet, ctx, state)
+    end
+  end
+
+  @spec unprotect_packet(binary(), ExLibSRTP.t() | nil) :: binary() | nil
+  defp unprotect_packet(rtp_packet, srtp) do
+    case srtp do
       nil -> {:ok, rtp_packet}
       srtp -> apply(ExLibSRTP, :unprotect, [srtp, rtp_packet])
     end
     |> case do
       {:ok, raw_rtp_packet} ->
-        handle_raw_rtp_packet(raw_rtp_packet, ctx, state)
+        raw_rtp_packet
 
       {:error, reason} when reason in [:replay_fail, :replay_old] ->
         Membrane.Logger.warning("Ignoring packet due to `#{reason}`")
-        {[], state}
+        nil
 
       {:error, reason} ->
         raise "Failed to unprotect packet due to `#{reason}`"
