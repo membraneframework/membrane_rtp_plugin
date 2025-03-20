@@ -146,7 +146,7 @@ defmodule Membrane.RTP.Demuxer do
     @type t :: %__MODULE__{
             payload_type_mapping: RTP.PayloadFormat.payload_type_mapping(),
             not_linked_pad_handling: %{action: :raise | :ignore, timeout: Membrane.Time.t()},
-            srtp: RTP.SRTP.Wrapper.t(),
+            srtp: ExLibSRTP.t() | nil,
             stream_states: %{RTP.ssrc() => StreamState.t()},
             pads_waiting_for_stream: %{Pad.ref() => Membrane.RTP.Demuxer.stream_id()}
           }
@@ -159,8 +159,17 @@ defmodule Membrane.RTP.Demuxer do
   def handle_init(_ctx, opts) do
     srtp =
       case opts.use_srtp do
-        false -> nil
-        {true, policies} -> RTP.SRTP.Wrapper.initialize(policies)
+        false ->
+          nil
+
+        {true, policies} ->
+          if not Code.ensure_loaded?(ExLibSRTP) do
+            raise "Optional dependency :ex_libsrtp is required for SRTP"
+          end
+
+          srtp = apply(ExLibSRTP, :new, [])
+          Enum.each(policies, &apply(ExLibSRTP, :add_stream, [srtp, &1]))
+          srtp
       end
 
     opts =
@@ -312,12 +321,19 @@ defmodule Membrane.RTP.Demuxer do
           {[Membrane.Element.Action.t()], State.t()}
   defp handle_rtp_packet(rtp_packet, ctx, state) do
     case state.srtp do
-      nil -> rtp_packet
-      srtp -> RTP.SRTP.Wrapper.unprotect(srtp, rtp_packet)
+      nil -> {:ok, rtp_packet}
+      srtp -> apply(ExLibSRTP, :unprotect, [srtp, rtp_packet])
     end
     |> case do
-      nil -> {[], state}
-      raw_rtp_packet -> handle_raw_rtp_packet(raw_rtp_packet, ctx, state)
+      {:ok, raw_rtp_packet} ->
+        handle_raw_rtp_packet(raw_rtp_packet, ctx, state)
+
+      {:error, reason} when reason in [:replay_fail, :replay_old] ->
+        Membrane.Logger.warning("Ignoring packet due to `#{reason}`")
+        {[], state}
+
+      {:error, reason} ->
+        raise "Failed to unprotect packet due to `#{reason}`"
     end
   end
 

@@ -94,7 +94,7 @@ defmodule Membrane.RTP.Muxer do
 
     @type t :: %__MODULE__{
             stream_states: %{Pad.ref() => StreamState.t()},
-            srtp: RTP.SRTP.Wrapper.t()
+            srtp: ExLibSRTP.t() | nil
           }
 
     @enforce_keys [:srtp]
@@ -105,8 +105,17 @@ defmodule Membrane.RTP.Muxer do
   def handle_init(_ctx, opts) do
     srtp =
       case opts.use_srtp do
-        false -> nil
-        {true, policies} -> RTP.SRTP.Wrapper.initialize(policies)
+        false ->
+          nil
+
+        {true, policies} ->
+          if not Code.ensure_loaded?(ExLibSRTP) do
+            raise "Optional dependency :ex_libsrtp is required for SRTP"
+          end
+
+          srtp = apply(ExLibSRTP, :new, [])
+          Enum.each(policies, &apply(ExLibSRTP, :add_stream, [srtp, &1]))
+          srtp
       end
 
     {[], %State{srtp: srtp}}
@@ -202,14 +211,11 @@ defmodule Membrane.RTP.Muxer do
     raw_packet = ExRTP.Packet.encode(packet)
 
     case state.srtp do
-      nil -> raw_packet
-      srtp -> RTP.SRTP.Wrapper.protect(srtp, raw_packet)
+      nil -> {:ok, raw_packet}
+      srtp -> apply(ExLibSRTP, :protect, [srtp, raw_packet])
     end
     |> case do
-      nil ->
-        []
-
-      rtp_packet ->
+      {:ok, rtp_packet} ->
         buffer = %Membrane.Buffer{
           original_buffer
           | payload: rtp_packet,
@@ -217,6 +223,13 @@ defmodule Membrane.RTP.Muxer do
         }
 
         [buffer: {:output, buffer}]
+
+      {:error, reason} when reason in [:replay_fail, :replay_old] ->
+        Membrane.Logger.warning("Ignoring packet due to `#{reason}`")
+        []
+
+      {:error, reason} ->
+        raise "Failed to protect packet due to `#{reason}`"
     end
   end
 
