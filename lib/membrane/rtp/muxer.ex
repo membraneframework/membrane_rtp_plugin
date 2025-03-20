@@ -67,8 +67,8 @@ defmodule Membrane.RTP.Muxer do
                 spec: false | {true, [ExLibSRTP.Policy.t()]},
                 default: false,
                 description: """
-                Specifies whether to use SRTP. Requires adding [srtp](https://github.com/membraneframework/elixir_libsrtp) dependency to work.
-                If set to true also takes a list of SRTP policies to use for encrypting packets. See `t:ExLibSRTP.Policy.t/0` for details.
+                Specifies whether to use SRTP to encrypt the output stream. Requires adding [srtp](https://github.com/membraneframework/elixir_libsrtp) 
+                dependency to work. If set to true also takes a list of SRTP policies to use for encrypting packets. See `t:ExLibSRTP.Policy.t/0` for details.
                 """
               ]
 
