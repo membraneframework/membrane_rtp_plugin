@@ -13,7 +13,7 @@ defmodule Membrane.RTP.MuxerTest do
     use Membrane.Pipeline
 
     @impl true
-    def handle_init(_ctx, _opts) do
+    def handle_init(_ctx, opts) do
       spec = [
         child(:hackney_source, %Membrane.Hackney.Source{
           location:
@@ -27,7 +27,7 @@ defmodule Membrane.RTP.MuxerTest do
           output_alignment: :nalu
         })
         |> child(:h264_payloader, Membrane.RTP.H264.Payloader)
-        |> child(:rtp_muxer, Membrane.RTP.Muxer)
+        |> child(:rtp_muxer, %Membrane.RTP.Muxer{use_srtp: opts.use_srtp})
         |> child(:sink, Membrane.Testing.Sink),
         get_child(:mp4_demuxer)
         |> via_out(:output, options: [kind: :audio])
@@ -40,8 +40,20 @@ defmodule Membrane.RTP.MuxerTest do
     end
   end
 
-  test "Muxer muxes correct amount of packets" do
-    pipeline = Testing.Pipeline.start_supervised!(module: Pipeline)
+  describe "Muxer muxes correct amount of packets" do
+    test "when encrypting the stream with SRTP" do
+      policy = %ExLibSRTP.Policy{ssrc: :any_inbound, key: String.duplicate("b", 30)}
+      perform_test({true, [policy]})
+    end
+
+    test "when not encrypting the stream with SRTP" do
+      perform_test(false)
+    end
+  end
+
+  defp perform_test(use_srtp) do
+    pipeline =
+      Testing.Pipeline.start_supervised!(module: Pipeline, custom_args: %{use_srtp: use_srtp})
 
     %{audio: %{payload_type: audio_payload_type}, video: %{payload_type: video_payload_type}} =
       @rtp_output
