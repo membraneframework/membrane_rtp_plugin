@@ -23,7 +23,7 @@ defmodule Membrane.RTP.Muxer do
     Membrane.VP8 => :VP8,
     Membrane.AAC => :AAC,
     Membrane.Opus => :opus,
-    Membrane.Audio.Caps.MPEG => :MPA
+    Membrane.MPEGAudio => :MPA
   }
 
   def_input_pad :input,
