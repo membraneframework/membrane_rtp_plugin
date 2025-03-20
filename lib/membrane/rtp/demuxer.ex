@@ -24,7 +24,7 @@ defmodule Membrane.RTP.Demuxer do
     :VP8 => Membrane.VP8,
     :AAC => Membrane.AAC,
     :opus => Membrane.Opus,
-    :MPA => Membrane.Audio.Caps.MPEG
+    :MPA => Membrane.MPEGAudio
   }
   @typedoc """
   Metadata present in each output buffer. The `ExRTP.Packet.t()` struct contains 
@@ -416,7 +416,7 @@ defmodule Membrane.RTP.Demuxer do
     %{payload_format: %RTP.PayloadFormat{encoding_name: encoding_name}} =
       RTP.PayloadFormat.resolve(
         payload_type: stream_state.payload_type,
-        payload_type_mapping: state.payload_type_mapping
+        payload_type_mapping: payload_type_mapping
       )
 
     stream_format = %RTP{payload_format: @encoding_name_to_payload_format[encoding_name]}

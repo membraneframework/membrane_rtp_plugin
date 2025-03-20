@@ -22,7 +22,8 @@ defmodule Membrane.RTP.Muxer do
     Membrane.H265 => :H265,
     Membrane.VP8 => :VP8,
     Membrane.AAC => :AAC,
-    Membrane.Opus => :opus
+    Membrane.Opus => :opus,
+    Membrane.MPEGAudio => :MPA
   }
 
   def_input_pad :input,
