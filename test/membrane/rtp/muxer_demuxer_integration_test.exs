@@ -41,7 +41,7 @@ defmodule Membrane.RTP.MuxerDemuxerTest do
     @tag :tmp_dir
     test "when using SRTP encryption", %{tmp_dir: tmp_dir} do
       policy = %ExLibSRTP.Policy{ssrc: :any_inbound, key: String.duplicate("a", 30)}
-      perform_test({true, [policy]}, tmp_dir)
+      perform_test([policy], tmp_dir)
     end
   end
 

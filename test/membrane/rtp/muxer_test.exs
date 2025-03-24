@@ -43,7 +43,7 @@ defmodule Membrane.RTP.MuxerTest do
   describe "Muxer muxes correct amount of packets" do
     test "when encrypting the stream with SRTP" do
       policy = %ExLibSRTP.Policy{ssrc: :any_inbound, key: String.duplicate("b", 30)}
-      perform_test({true, [policy]})
+      perform_test([policy])
     end
 
     test "when not encrypting the stream with SRTP" do

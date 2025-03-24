@@ -64,11 +64,11 @@ defmodule Membrane.RTP.Muxer do
   def_output_pad :output, accepted_format: %RemoteStream{type: :packetized, content_format: RTP}
 
   def_options use_srtp: [
-                spec: false | {true, [ExLibSRTP.Policy.t()]},
+                spec: false | [ExLibSRTP.Policy.t()],
                 default: false,
                 description: """
                 Specifies whether to use SRTP to encrypt the output stream. Requires adding [srtp](https://github.com/membraneframework/elixir_libsrtp) 
-                dependency to work. If set to true also takes a list of SRTP policies to use for encrypting packets. See `t:ExLibSRTP.Policy.t/0` for details.
+                dependency to work. If true takes a list of SRTP policies to use for encrypting packets. See `t:ExLibSRTP.Policy.t/0` for details.
                 """
               ]
 
@@ -108,7 +108,7 @@ defmodule Membrane.RTP.Muxer do
         false ->
           nil
 
-        {true, policies} ->
+        policies ->
           if not Code.ensure_loaded?(ExLibSRTP) do
             raise "Optional dependency :ex_libsrtp is required for SRTP"
           end
@@ -223,14 +223,14 @@ defmodule Membrane.RTP.Muxer do
   end
 
   @spec protect_packet(binary(), ExLibSRTP.t() | nil) :: binary() | nil
+  defp protect_packet(rtp_packet, nil) do
+    rtp_packet
+  end
+
   defp protect_packet(rtp_packet, srtp) do
-    case srtp do
-      nil -> {:ok, rtp_packet}
-      srtp -> apply(ExLibSRTP, :protect, [srtp, rtp_packet])
-    end
-    |> case do
-      {:ok, raw_rtp_packet} ->
-        raw_rtp_packet
+    case apply(ExLibSRTP, :protect, [srtp, rtp_packet]) do
+      {:ok, protected_rtp_packet} ->
+        protected_rtp_packet
 
       {:error, reason} when reason in [:replay_fail, :replay_old] ->
         Membrane.Logger.warning("Ignoring packet due to `#{reason}`")

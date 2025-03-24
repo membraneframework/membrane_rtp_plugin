@@ -107,11 +107,11 @@ defmodule Membrane.RTP.Demuxer do
                 """
               ],
               use_srtp: [
-                spec: false | {true, [ExLibSRTP.Policy.t()]},
+                spec: false | [ExLibSRTP.Policy.t()],
                 default: false,
                 description: """
                 Specifies whether to use SRTP to decrypt the input streams. Requires adding [srtp](https://github.com/membraneframework/elixir_libsrtp) 
-                dependency to work. If set to true also takes a list of SRTP policies to use for decrypting packets. See `t:ExLibSRTP.Policy.t/0` for details.
+                dependency to work. If true takes a list of SRTP policies to use for decrypting packets. See `t:ExLibSRTP.Policy.t/0` for details.
                 """
               ]
 
@@ -162,7 +162,7 @@ defmodule Membrane.RTP.Demuxer do
         false ->
           nil
 
-        {true, policies} ->
+        policies ->
           if not Code.ensure_loaded?(ExLibSRTP) do
             raise "Optional dependency :ex_libsrtp is required for SRTP"
           end
@@ -320,20 +320,19 @@ defmodule Membrane.RTP.Demuxer do
   @spec handle_rtp_packet(binary(), CallbackContext.t(), State.t()) ::
           {[Membrane.Element.Action.t()], State.t()}
   defp handle_rtp_packet(packet, ctx, state) do
-    unprotect_packet(packet, state.srtp)
-    |> case do
+    case unprotect_packet(packet, state.srtp) do
       nil -> {[], state}
       raw_packet -> handle_raw_rtp_packet(raw_packet, ctx, state)
     end
   end
 
   @spec unprotect_packet(binary(), ExLibSRTP.t() | nil) :: binary() | nil
-  defp unprotect_packet(rtp_packet, srtp) do
-    case srtp do
-      nil -> {:ok, rtp_packet}
-      srtp -> apply(ExLibSRTP, :unprotect, [srtp, rtp_packet])
-    end
-    |> case do
+  defp unprotect_packet(rtp_packet, nil) do
+    rtp_packet
+  end
+
+  defp unprotect_packet(protected_rtp_packet, srtp) do
+    case apply(ExLibSRTP, :unprotect, [srtp, protected_rtp_packet]) do
       {:ok, raw_rtp_packet} ->
         raw_rtp_packet
 
