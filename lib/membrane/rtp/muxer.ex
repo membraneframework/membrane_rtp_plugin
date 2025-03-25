@@ -63,7 +63,7 @@ defmodule Membrane.RTP.Muxer do
 
   def_output_pad :output, accepted_format: %RemoteStream{type: :packetized, content_format: RTP}
 
-  def_options use_srtp: [
+  def_options srtp: [
                 spec: false | [ExLibSRTP.Policy.t()],
                 default: false,
                 description: """
@@ -104,7 +104,7 @@ defmodule Membrane.RTP.Muxer do
   @impl true
   def handle_init(_ctx, opts) do
     srtp =
-      case opts.use_srtp do
+      case opts.srtp do
         false ->
           nil
 

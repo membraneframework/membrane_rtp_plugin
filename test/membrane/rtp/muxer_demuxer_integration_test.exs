@@ -19,8 +19,8 @@ defmodule Membrane.RTP.MuxerDemuxerTest do
         })
         |> child(:realtimer, Membrane.Realtimer)
         |> child(:rtp_h264_payloader, Membrane.RTP.H264.Payloader)
-        |> child(:rtp_muxer, %Membrane.RTP.Muxer{use_srtp: opts.use_srtp})
-        |> child(:rtp_demuxer, %Membrane.RTP.Demuxer{use_srtp: opts.use_srtp})
+        |> child(:rtp_muxer, %Membrane.RTP.Muxer{srtp: opts.srtp})
+        |> child(:rtp_demuxer, %Membrane.RTP.Demuxer{srtp: opts.srtp})
         |> via_out(:output,
           options: [stream_id: {:encoding_name, :H264}]
         )
@@ -45,13 +45,13 @@ defmodule Membrane.RTP.MuxerDemuxerTest do
     end
   end
 
-  defp perform_test(use_srtp, tmp_dir) do
+  defp perform_test(srtp, tmp_dir) do
     output_path = Path.join(tmp_dir, "output.h264")
 
     pipeline =
       Testing.Pipeline.start_supervised!(
         module: MuxerDemuxerPipeline,
-        custom_args: %{input_path: @input_path, output_path: output_path, use_srtp: use_srtp}
+        custom_args: %{input_path: @input_path, output_path: output_path, srtp: srtp}
       )
 
     assert_start_of_stream(pipeline, :sink)

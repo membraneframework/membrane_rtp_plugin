@@ -106,7 +106,7 @@ defmodule Membrane.RTP.Demuxer do
                 `t:new_rtp_stream_notification/0` notification but the corresponding pad has not been connected within the specified timeout period.
                 """
               ],
-              use_srtp: [
+              srtp: [
                 spec: false | [ExLibSRTP.Policy.t()],
                 default: false,
                 description: """
@@ -158,7 +158,7 @@ defmodule Membrane.RTP.Demuxer do
   @impl true
   def handle_init(_ctx, opts) do
     srtp =
-      case opts.use_srtp do
+      case opts.srtp do
         false ->
           nil
 

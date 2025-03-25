@@ -27,7 +27,7 @@ defmodule Membrane.RTP.MuxerTest do
           output_alignment: :nalu
         })
         |> child(:h264_payloader, Membrane.RTP.H264.Payloader)
-        |> child(:rtp_muxer, %Membrane.RTP.Muxer{use_srtp: opts.use_srtp})
+        |> child(:rtp_muxer, %Membrane.RTP.Muxer{srtp: opts.srtp})
         |> child(:sink, Membrane.Testing.Sink),
         get_child(:mp4_demuxer)
         |> via_out(:output, options: [kind: :audio])
@@ -51,9 +51,9 @@ defmodule Membrane.RTP.MuxerTest do
     end
   end
 
-  defp perform_test(use_srtp) do
+  defp perform_test(srtp) do
     pipeline =
-      Testing.Pipeline.start_supervised!(module: Pipeline, custom_args: %{use_srtp: use_srtp})
+      Testing.Pipeline.start_supervised!(module: Pipeline, custom_args: %{srtp: srtp})
 
     %{audio: %{payload_type: audio_payload_type}, video: %{payload_type: video_payload_type}} =
       @rtp_output
