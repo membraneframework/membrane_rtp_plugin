@@ -59,6 +59,7 @@ defmodule Membrane.RTP.Plugin.MixProject do
       {:membrane_pcap_plugin,
        github: "membraneframework/membrane_pcap_plugin", tag: "v0.9.0", only: :test},
       {:membrane_hackney_plugin, "~> 0.11.0", only: :test},
+      {:membrane_realtimer_plugin, "~> 0.10.1", only: :test},
 
       # Dev
       {:ex_doc, "~> 0.28", only: :dev, runtime: false},

@@ -45,7 +45,7 @@ defmodule Membrane.RTP.DemuxerTest do
     def handle_init(_ctx, opts) do
       spec = [
         child(:pcap_source, %Membrane.Pcap.Source{path: opts.pcap_path})
-        |> child(if opts.reorder_packets, do: Reorderer, else: Membrane.Debug.Filter)
+        |> then(&if opts.reorder_packets, do: child(&1, Reorderer), else: &1)
         |> child(:demuxer, Membrane.RTP.Demuxer)
         |> via_out(:output,
           options: [
@@ -109,7 +109,7 @@ defmodule Membrane.RTP.DemuxerTest do
     def handle_init(_ctx, opts) do
       spec =
         child(:pcap_source, %Membrane.Pcap.Source{path: opts.pcap_path})
-        |> child(if opts.reorder_packets, do: Reorderer, else: Membrane.Debug.Filter)
+        |> then(&if opts.reorder_packets, do: child(&1, Reorderer), else: &1)
         |> child(:demuxer, Membrane.RTP.Demuxer)
 
       {[spec: spec], %{}}

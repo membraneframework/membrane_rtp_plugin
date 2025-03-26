@@ -109,8 +109,14 @@ defmodule Membrane.RTP.Demuxer do
               jitter_buffer_state: JitterBuffer.State.t()
             }
 
-      @enforce_keys [:payload_type, :phase, :pad_match_timer, :pad, :jitter_buffer_state]
-      defstruct @enforce_keys ++ [end_of_stream: false]
+      @enforce_keys [:payload_type, :jitter_buffer_state]
+      defstruct @enforce_keys ++
+                  [
+                    end_of_stream: false,
+                    phase: :waiting_for_matching_pad,
+                    pad_match_timer: nil,
+                    pad: nil
+                  ]
     end
 
     @type t :: %__MODULE__{
@@ -164,12 +170,11 @@ defmodule Membrane.RTP.Demuxer do
         {[stream_format: {pad, %RTP{}}, end_of_stream: pad], state}
 
       %{phase: :waiting_for_matching_pad} = stream_state ->
-        Process.cancel_timer(stream_state.pad_match_timer)
+        {stream_format_action, stream_state} =
+          bind_pad_to_stream(pad, ctx.pad_options, stream_state, state.payload_type_mapping)
 
         {buffer_actions, jitter_buffer_state} =
-          stream_state.jitter_buffer_state
-          |> JitterBuffer.initialize(pad, ctx.pad_options, state.payload_type_mapping)
-          |> JitterBuffer.get_output_actions(stream_state.phase)
+          JitterBuffer.get_output_actions(stream_state.jitter_buffer_state, stream_state.phase)
 
         end_of_stream_actions =
           if stream_state.end_of_stream do
@@ -178,16 +183,10 @@ defmodule Membrane.RTP.Demuxer do
             []
           end
 
-        stream_state = %State.StreamState{
-          stream_state
-          | phase: :matched_with_pad,
-            pad: pad,
-            jitter_buffer_state: jitter_buffer_state
-        }
-
+        stream_state = %State.StreamState{stream_state | jitter_buffer_state: jitter_buffer_state}
         state = put_in(state.stream_states[matching_stream_ssrc], stream_state)
 
-        {[stream_format: {pad, %RTP{}}] ++ buffer_actions ++ end_of_stream_actions, state}
+        {stream_format_action ++ buffer_actions ++ end_of_stream_actions, state}
     end
   end
 
@@ -310,54 +309,74 @@ defmodule Membrane.RTP.Demuxer do
   end
 
   @spec initialize_new_stream_state(
-          matching_pad :: Pad.ref() | nil,
+          Pad.ref() | nil,
           ExRTP.Packet.t(),
           CallbackContext.t(),
           State.t()
         ) :: {[Membrane.Element.Action.t()], State.t()}
-  defp initialize_new_stream_state(nil, packet, _ctx, state) do
+  defp initialize_new_stream_state(pad_waiting_for_stream, packet, ctx, state) do
     jitter_buffer_state = JitterBuffer.new(packet)
 
     stream_state = %State.StreamState{
-      phase: :waiting_for_matching_pad,
-      pad: nil,
-      pad_match_timer:
-        Process.send_after(
-          self(),
-          {:pad_match_timeout, packet.ssrc},
-          Membrane.Time.as_milliseconds(state.not_linked_pad_handling.timeout, :round)
-        ),
       payload_type: packet.payload_type,
       jitter_buffer_state: jitter_buffer_state
     }
 
-    state = put_in(state.stream_states[packet.ssrc], stream_state)
+    if pad_waiting_for_stream != nil do
+      {actions, stream_state} =
+        bind_pad_to_stream(
+          pad_waiting_for_stream,
+          ctx.pads[pad_waiting_for_stream].options,
+          stream_state,
+          state.payload_type_mapping
+        )
 
-    {[notify_parent: create_new_stream_notification(packet)], state}
+      {_stream_id, state} = pop_in(state.pads_waiting_for_stream[pad_waiting_for_stream])
+      state = put_in(state.stream_states[packet.ssrc], stream_state)
+      {actions, state}
+    else
+      stream_state = %State.StreamState{
+        stream_state
+        | pad_match_timer:
+            Process.send_after(
+              self(),
+              {:pad_match_timeout, packet.ssrc},
+              Membrane.Time.as_milliseconds(state.not_linked_pad_handling.timeout, :round)
+            )
+      }
+
+      state = put_in(state.stream_states[packet.ssrc], stream_state)
+      {[notify_parent: create_new_stream_notification(packet)], state}
+    end
   end
 
-  defp initialize_new_stream_state(pad_waiting_for_stream, packet, ctx, state) do
+  @spec bind_pad_to_stream(
+          Pad.ref(),
+          JitterBuffer.pad_options(),
+          State.StreamState.t(),
+          RTP.PayloadFormat.payload_type_mapping()
+        ) :: {[Membrane.Element.Action.t()], State.StreamState.t()}
+  defp bind_pad_to_stream(pad, pad_options, stream_state, payload_type_mapping) do
+    if stream_state.pad_match_timer != nil, do: Process.cancel_timer(stream_state.pad_match_timer)
+
     jitter_buffer_state =
-      packet
-      |> JitterBuffer.new()
-      |> JitterBuffer.initialize(
-        pad_waiting_for_stream,
-        ctx.pads[pad_waiting_for_stream].options,
-        state.payload_type_mapping
+      JitterBuffer.initialize(
+        stream_state.jitter_buffer_state,
+        pad,
+        pad_options,
+        payload_type_mapping
       )
 
-    stream_state = %State.StreamState{
-      phase: :matched_with_pad,
-      pad: pad_waiting_for_stream,
-      pad_match_timer: nil,
-      payload_type: packet.payload_type,
-      jitter_buffer_state: jitter_buffer_state
-    }
+    stream_state =
+      %State.StreamState{
+        stream_state
+        | phase: :matched_with_pad,
+          pad: pad,
+          pad_match_timer: nil,
+          jitter_buffer_state: jitter_buffer_state
+      }
 
-    state = put_in(state.stream_states[packet.ssrc], stream_state)
-    {_stream_id, state} = pop_in(state.pads_waiting_for_stream[pad_waiting_for_stream])
-
-    {[stream_format: {pad_waiting_for_stream, %RTP{}}], state}
+    {[stream_format: {pad, %RTP{}}], stream_state}
   end
 
   @spec find_matching_pad_for_stream(
