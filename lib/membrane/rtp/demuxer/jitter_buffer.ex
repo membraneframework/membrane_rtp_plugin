@@ -9,13 +9,6 @@ defmodule Membrane.RTP.Demuxer.JitterBuffer do
 
   @max_timestamp Bitwise.bsl(1, 32) - 1
 
-  @type pad_options ::
-          %{
-            stream_id: Demuxer.stream_id(),
-            clock_rate: RTP.clock_rate(),
-            jitter_buffer_latency: Membrane.Time.t()
-          }
-
   defmodule State do
     @moduledoc false
 
@@ -67,7 +60,7 @@ defmodule Membrane.RTP.Demuxer.JitterBuffer do
   @spec initialize(
           State.t(),
           Membrane.Pad.ref(),
-          pad_options(),
+          Demuxer.output_pad_options(),
           RTP.PayloadFormat.payload_type_mapping()
         ) :: State.t()
   def initialize(jitter_buffer_state, pad, pad_options, payload_type_mapping) do
@@ -110,28 +103,23 @@ defmodule Membrane.RTP.Demuxer.JitterBuffer do
     %State{jitter_buffer_state | initial_latency_waiting: false}
   end
 
-  @spec insert_buffer(State.t(), Membrane.Buffer.t(), Demuxer.stream_phase()) :: State.t()
-  def insert_buffer(jitter_buffer_state, buffer, stream_phase) do
-    case stream_phase do
-      :timed_out ->
+  @spec insert_buffer(State.t(), Membrane.Buffer.t()) :: State.t()
+  def insert_buffer(jitter_buffer_state, buffer) do
+    case BufferStore.insert_buffer(jitter_buffer_state.buffer_store, buffer) do
+      {:ok, buffer_store} ->
+        %State{jitter_buffer_state | buffer_store: buffer_store}
+
+      {:error, :late_packet} ->
+        Membrane.Logger.debug("Late packet has arrived")
         jitter_buffer_state
-
-      phase when phase in [:waiting_for_matching_pad, :matched_with_pad] ->
-        case BufferStore.insert_buffer(jitter_buffer_state.buffer_store, buffer) do
-          {:ok, buffer_store} ->
-            %State{jitter_buffer_state | buffer_store: buffer_store}
-
-          {:error, :late_packet} ->
-            Membrane.Logger.debug("Late packet has arrived")
-            jitter_buffer_state
-        end
     end
   end
 
-  @spec get_output_actions(State.t(), Demuxer.stream_phase()) ::
-          {[Membrane.Element.Action.t()], State.t()}
-  def get_output_actions(jitter_buffer_state, stream_phase) do
-    if stream_phase == :matched_with_pad and not jitter_buffer_state.initial_latency_waiting do
+  @spec get_output_actions(State.t()) :: {[Membrane.Element.Action.t()], State.t()}
+  def get_output_actions(jitter_buffer_state) do
+    if jitter_buffer_state.initial_latency_waiting do
+      {[], jitter_buffer_state}
+    else
       {too_old_records, buffer_store} =
         BufferStore.flush_older_than(
           jitter_buffer_state.buffer_store,
@@ -148,8 +136,6 @@ defmodule Membrane.RTP.Demuxer.JitterBuffer do
       jitter_buffer_state = set_timer(jitter_buffer_state)
 
       {actions, jitter_buffer_state}
-    else
-      {[], jitter_buffer_state}
     end
   end
 
@@ -180,7 +166,11 @@ defmodule Membrane.RTP.Demuxer.JitterBuffer do
           send_after_time = Time.as_milliseconds(latency - since_insertion, :round)
 
           if send_after_time > 0 do
-            Process.send_after(self(), {:send_actions, jitter_buffer_state.ssrc}, send_after_time)
+            Process.send_after(
+              self(),
+              {:latency_timer_expired, jitter_buffer_state.ssrc},
+              send_after_time
+            )
           else
             nil
           end

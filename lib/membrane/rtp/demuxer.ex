@@ -10,9 +10,10 @@ defmodule Membrane.RTP.Demuxer do
   """
 
   use Membrane.Filter
-  require Membrane.Pad
 
+  require Membrane.Pad
   require Membrane.Logger
+
   alias Membrane.Element.CallbackContext
   alias Membrane.{Pad, RemoteStream, RTCP, RTP}
   alias Membrane.RTP.Demuxer.JitterBuffer
@@ -41,7 +42,14 @@ defmodule Membrane.RTP.Demuxer do
           | {:encoding_name, RTP.encoding_name()}
           | {:payload_type, RTP.payload_type()}
 
-  @type stream_phase :: :waiting_for_matching_pad | :matched_with_pad | :timed_out
+  @type stream_phase :: :waiting_for_matching_pad | :bound_with_pad | :timed_out
+
+  @type output_pad_options ::
+          %{
+            stream_id: stream_id(),
+            clock_rate: RTP.clock_rate(),
+            jitter_buffer_latency: Membrane.Time.t()
+          }
 
   def_input_pad :input,
     accepted_format:
@@ -171,10 +179,10 @@ defmodule Membrane.RTP.Demuxer do
 
       %{phase: :waiting_for_matching_pad} = stream_state ->
         {stream_format_action, stream_state} =
-          bind_pad_to_stream(pad, ctx.pad_options, stream_state, state.payload_type_mapping)
+          bind_pad_with_stream(pad, ctx.pad_options, stream_state, state.payload_type_mapping)
 
         {buffer_actions, jitter_buffer_state} =
-          JitterBuffer.get_output_actions(stream_state.jitter_buffer_state, stream_state.phase)
+          get_output_actions(stream_state.jitter_buffer_state, stream_state.phase)
 
         end_of_stream_actions =
           if stream_state.end_of_stream do
@@ -219,7 +227,7 @@ defmodule Membrane.RTP.Demuxer do
       {actions, jitter_buffer_state} =
         stream_state.jitter_buffer_state
         |> JitterBuffer.initial_latency_passed()
-        |> JitterBuffer.get_output_actions(stream_state.phase)
+        |> get_output_actions(stream_state.phase)
 
       state = put_in(state.stream_states[ssrc].jitter_buffer_state, jitter_buffer_state)
 
@@ -228,7 +236,7 @@ defmodule Membrane.RTP.Demuxer do
   end
 
   @impl true
-  def handle_info({:send_actions, ssrc}, _ctx, state) do
+  def handle_info({:latency_timer_expired, ssrc}, _ctx, state) do
     stream_state = state.stream_states[ssrc]
 
     if stream_state.end_of_stream do
@@ -237,7 +245,7 @@ defmodule Membrane.RTP.Demuxer do
       {actions, jitter_buffer_state} =
         stream_state.jitter_buffer_state
         |> JitterBuffer.latency_timer_expired()
-        |> JitterBuffer.get_output_actions(stream_state.phase)
+        |> get_output_actions(stream_state.phase)
 
       state = put_in(state.stream_states[ssrc].jitter_buffer_state, jitter_buffer_state)
 
@@ -293,9 +301,14 @@ defmodule Membrane.RTP.Demuxer do
     }
 
     {buffer_actions, jitter_buffer_state} =
-      stream_state.jitter_buffer_state
-      |> JitterBuffer.insert_buffer(buffer, stream_state.phase)
-      |> JitterBuffer.get_output_actions(stream_state.phase)
+      case stream_state.phase do
+        phase when phase in [:waiting_for_matching_pad, :bound_with_pad] ->
+          JitterBuffer.insert_buffer(stream_state.jitter_buffer_state, buffer)
+
+        :timed_out ->
+          stream_state.jitter_buffer_state
+      end
+      |> get_output_actions(stream_state.phase)
 
     state = put_in(state.stream_states[packet.ssrc].jitter_buffer_state, jitter_buffer_state)
 
@@ -306,6 +319,18 @@ defmodule Membrane.RTP.Demuxer do
   defp handle_rtcp_packets(rtcp_packets, state) do
     Membrane.Logger.debug_verbose("Received RTCP Packet(s): #{inspect(rtcp_packets)}")
     {[], state}
+  end
+
+  @spec get_output_actions(JitterBuffer.State.t(), stream_phase()) ::
+          {[Membrane.Element.Action.t()], JitterBuffer.State.t()}
+  defp get_output_actions(jitter_buffer_state, stream_phase) do
+    case stream_phase do
+      :bound_with_pad ->
+        JitterBuffer.get_output_actions(jitter_buffer_state)
+
+      _invalid_phase ->
+        {[], jitter_buffer_state}
+    end
   end
 
   @spec initialize_new_stream_state(
@@ -324,7 +349,7 @@ defmodule Membrane.RTP.Demuxer do
 
     if pad_waiting_for_stream != nil do
       {actions, stream_state} =
-        bind_pad_to_stream(
+        bind_pad_with_stream(
           pad_waiting_for_stream,
           ctx.pads[pad_waiting_for_stream].options,
           stream_state,
@@ -350,13 +375,13 @@ defmodule Membrane.RTP.Demuxer do
     end
   end
 
-  @spec bind_pad_to_stream(
+  @spec bind_pad_with_stream(
           Pad.ref(),
-          JitterBuffer.pad_options(),
+          output_pad_options(),
           State.StreamState.t(),
           RTP.PayloadFormat.payload_type_mapping()
         ) :: {[Membrane.Element.Action.t()], State.StreamState.t()}
-  defp bind_pad_to_stream(pad, pad_options, stream_state, payload_type_mapping) do
+  defp bind_pad_with_stream(pad, pad_options, stream_state, payload_type_mapping) do
     if stream_state.pad_match_timer != nil, do: Process.cancel_timer(stream_state.pad_match_timer)
 
     jitter_buffer_state =
@@ -370,7 +395,7 @@ defmodule Membrane.RTP.Demuxer do
     stream_state =
       %State.StreamState{
         stream_state
-        | phase: :matched_with_pad,
+        | phase: :bound_with_pad,
           pad: pad,
           pad_match_timer: nil,
           jitter_buffer_state: jitter_buffer_state

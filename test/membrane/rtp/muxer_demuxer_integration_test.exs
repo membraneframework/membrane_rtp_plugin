@@ -15,7 +15,7 @@ defmodule Membrane.RTP.MuxerDemuxerTest do
         child(:source, %Membrane.File.Source{location: opts.input_path})
         |> child(:h264_parser, %Membrane.H264.Parser{
           output_alignment: :nalu,
-          generate_best_effort_timestamps: %{framerate: {90, 1}}
+          generate_best_effort_timestamps: %{framerate: {120, 1}}
         })
         |> child(:realtimer, Membrane.Realtimer)
         |> child(:rtp_h264_payloader, Membrane.RTP.H264.Payloader)
