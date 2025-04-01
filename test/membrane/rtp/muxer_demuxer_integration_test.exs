@@ -19,8 +19,8 @@ defmodule Membrane.RTP.MuxerDemuxerTest do
         })
         |> child(:realtimer, Membrane.Realtimer)
         |> child(:rtp_h264_payloader, Membrane.RTP.H264.Payloader)
-        |> child(:rtp_muxer, Membrane.RTP.Muxer)
-        |> child(:rtp_demuxer, Membrane.RTP.Demuxer)
+        |> child(:rtp_muxer, %Membrane.RTP.Muxer{srtp: opts.srtp})
+        |> child(:rtp_demuxer, %Membrane.RTP.Demuxer{srtp: opts.srtp})
         |> via_out(:output,
           options: [stream_id: {:encoding_name, :H264}]
         )
@@ -32,14 +32,26 @@ defmodule Membrane.RTP.MuxerDemuxerTest do
     end
   end
 
-  @tag :tmp_dir
-  test "Muxed and demuxed stream is the same as unchanged one", %{tmp_dir: tmp_dir} do
+  describe "Muxed and demuxed stream is the same as unchanged one" do
+    @tag :tmp_dir
+    test "when not using SRTP encryption", %{tmp_dir: tmp_dir} do
+      perform_test(false, tmp_dir)
+    end
+
+    @tag :tmp_dir
+    test "when using SRTP encryption", %{tmp_dir: tmp_dir} do
+      policy = %ExLibSRTP.Policy{ssrc: :any_inbound, key: String.duplicate("a", 30)}
+      perform_test([policy], tmp_dir)
+    end
+  end
+
+  defp perform_test(srtp, tmp_dir) do
     output_path = Path.join(tmp_dir, "output.h264")
 
     pipeline =
       Testing.Pipeline.start_supervised!(
         module: MuxerDemuxerPipeline,
-        custom_args: %{input_path: @input_path, output_path: output_path}
+        custom_args: %{input_path: @input_path, output_path: output_path, srtp: srtp}
       )
 
     assert_start_of_stream(pipeline, :sink)

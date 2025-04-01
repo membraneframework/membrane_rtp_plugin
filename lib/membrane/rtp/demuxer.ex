@@ -105,6 +105,14 @@ defmodule Membrane.RTP.Demuxer do
                 This option determines the action to be taken after a stream has been announced with a 
                 `t:new_rtp_stream_notification/0` notification but the corresponding pad has not been connected within the specified timeout period.
                 """
+              ],
+              srtp: [
+                spec: false | [ExLibSRTP.Policy.t()],
+                default: false,
+                description: """
+                Specifies whether to use SRTP to decrypt the input streams. Requires adding [srtp](https://github.com/membraneframework/elixir_libsrtp) 
+                dependency to work. If true takes a list of SRTP policies to use for decrypting packets. See `t:ExLibSRTP.Policy.t/0` for details.
+                """
               ]
 
   defmodule State do
@@ -138,17 +146,38 @@ defmodule Membrane.RTP.Demuxer do
     @type t :: %__MODULE__{
             payload_type_mapping: RTP.PayloadFormat.payload_type_mapping(),
             not_linked_pad_handling: %{action: :raise | :ignore, timeout: Membrane.Time.t()},
+            srtp: ExLibSRTP.t() | nil,
             stream_states: %{RTP.ssrc() => StreamState.t()},
             pads_waiting_for_stream: %{Pad.ref() => Membrane.RTP.Demuxer.stream_id()}
           }
 
-    @enforce_keys [:not_linked_pad_handling, :payload_type_mapping]
+    @enforce_keys [:not_linked_pad_handling, :payload_type_mapping, :srtp]
     defstruct @enforce_keys ++ [stream_states: %{}, pads_waiting_for_stream: %{}]
   end
 
   @impl true
   def handle_init(_ctx, opts) do
-    {[], struct(State, Map.from_struct(opts))}
+    srtp =
+      case opts.srtp do
+        false ->
+          nil
+
+        policies ->
+          if not Code.ensure_loaded?(ExLibSRTP) do
+            raise "Optional dependency :ex_libsrtp is required for SRTP"
+          end
+
+          srtp = apply(ExLibSRTP, :new, [])
+          Enum.each(policies, &apply(ExLibSRTP, :add_stream, [srtp, &1]))
+          srtp
+      end
+
+    opts =
+      opts
+      |> Map.from_struct()
+      |> Map.put(:srtp, srtp)
+
+    {[], struct(State, opts)}
   end
 
   @impl true
@@ -290,7 +319,35 @@ defmodule Membrane.RTP.Demuxer do
 
   @spec handle_rtp_packet(binary(), CallbackContext.t(), State.t()) ::
           {[Membrane.Element.Action.t()], State.t()}
-  defp handle_rtp_packet(raw_rtp_packet, ctx, state) do
+  defp handle_rtp_packet(packet, ctx, state) do
+    case unprotect_packet(packet, state.srtp) do
+      nil -> {[], state}
+      raw_packet -> handle_raw_rtp_packet(raw_packet, ctx, state)
+    end
+  end
+
+  @spec unprotect_packet(binary(), ExLibSRTP.t() | nil) :: binary() | nil
+  defp unprotect_packet(rtp_packet, nil) do
+    rtp_packet
+  end
+
+  defp unprotect_packet(protected_rtp_packet, srtp) do
+    case apply(ExLibSRTP, :unprotect, [srtp, protected_rtp_packet]) do
+      {:ok, raw_rtp_packet} ->
+        raw_rtp_packet
+
+      {:error, reason} when reason in [:replay_fail, :replay_old] ->
+        Membrane.Logger.warning("Ignoring packet due to `#{reason}`")
+        nil
+
+      {:error, reason} ->
+        raise "Failed to unprotect packet due to `#{reason}`"
+    end
+  end
+
+  @spec handle_raw_rtp_packet(binary(), CallbackContext.t(), State.t()) ::
+          {[Membrane.Element.Action.t()], State.t()}
+  defp handle_raw_rtp_packet(raw_rtp_packet, ctx, state) do
     {:ok, packet} = ExRTP.Packet.decode(raw_rtp_packet)
 
     {new_stream_actions, state} =

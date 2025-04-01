@@ -63,6 +63,15 @@ defmodule Membrane.RTP.Muxer do
 
   def_output_pad :output, accepted_format: %RemoteStream{type: :packetized, content_format: RTP}
 
+  def_options srtp: [
+                spec: false | [ExLibSRTP.Policy.t()],
+                default: false,
+                description: """
+                Specifies whether to use SRTP to encrypt the output stream. Requires adding [srtp](https://github.com/membraneframework/elixir_libsrtp) 
+                dependency to work. If true takes a list of SRTP policies to use for encrypting packets. See `t:ExLibSRTP.Policy.t/0` for details.
+                """
+              ]
+
   defmodule State do
     @moduledoc false
     defmodule StreamState do
@@ -84,16 +93,32 @@ defmodule Membrane.RTP.Muxer do
     end
 
     @type t :: %__MODULE__{
-            stream_states: %{Pad.ref() => StreamState.t()}
+            stream_states: %{Pad.ref() => StreamState.t()},
+            srtp: ExLibSRTP.t() | nil
           }
 
-    @enforce_keys []
+    @enforce_keys [:srtp]
     defstruct @enforce_keys ++ [stream_states: %{}]
   end
 
   @impl true
-  def handle_init(_ctx, _opts) do
-    {[], %State{}}
+  def handle_init(_ctx, opts) do
+    srtp =
+      case opts.srtp do
+        false ->
+          nil
+
+        policies ->
+          if not Code.ensure_loaded?(ExLibSRTP) do
+            raise "Optional dependency :ex_libsrtp is required for SRTP"
+          end
+
+          srtp = apply(ExLibSRTP, :new, [])
+          Enum.each(policies, &apply(ExLibSRTP, :add_stream, [srtp, &1]))
+          srtp
+      end
+
+    {[], %State{srtp: srtp}}
   end
 
   @impl true
@@ -105,7 +130,7 @@ defmodule Membrane.RTP.Muxer do
   def handle_stream_format(pad, stream_format, ctx, state) do
     pad_options = ctx.pads[pad].options
 
-    ssrc = get_stream_ssrc(pad_options, state)
+    ssrc = get_stream_ssrc(pad_options.ssrc, state)
 
     encoding_name =
       @payload_format_to_encoding_name[stream_format.payload_format] ||
@@ -141,7 +166,7 @@ defmodule Membrane.RTP.Muxer do
 
   @impl true
   def handle_buffer(Pad.ref(:input, _ref) = pad_ref, buffer, _ctx, state) do
-    {rtp_metadata, metadata} = Map.pop(buffer.metadata, :rtp, %{})
+    rtp_metadata = Map.get(buffer.metadata, :rtp, %{})
     stream_state = state.stream_states[pad_ref]
 
     rtp_offset =
@@ -165,15 +190,25 @@ defmodule Membrane.RTP.Muxer do
         marker: Map.get(rtp_metadata, :marker, false)
       )
 
-    raw_packet = ExRTP.Packet.encode(packet)
+    buffer_action =
+      packet
+      |> ExRTP.Packet.encode()
+      |> protect_packet(state.srtp)
+      |> case do
+        nil ->
+          []
 
-    buffer = %Membrane.Buffer{
-      buffer
-      | payload: raw_packet,
-        metadata: Map.put(metadata, :rtp, %{packet | payload: <<>>})
-    }
+        raw_packet ->
+          buffer = %Membrane.Buffer{
+            buffer
+            | payload: raw_packet,
+              metadata: Map.put(buffer.metadata, :rtp, %{packet | payload: <<>>})
+          }
 
-    {[buffer: {:output, buffer}], state}
+          [buffer: {:output, buffer}]
+      end
+
+    {buffer_action, state}
   end
 
   @impl true
@@ -187,10 +222,30 @@ defmodule Membrane.RTP.Muxer do
     end
   end
 
-  defp get_stream_ssrc(pad_options, state) do
+  @spec protect_packet(binary(), ExLibSRTP.t() | nil) :: binary() | nil
+  defp protect_packet(rtp_packet, nil) do
+    rtp_packet
+  end
+
+  defp protect_packet(rtp_packet, srtp) do
+    case apply(ExLibSRTP, :protect, [srtp, rtp_packet]) do
+      {:ok, protected_rtp_packet} ->
+        protected_rtp_packet
+
+      {:error, reason} when reason in [:replay_fail, :replay_old] ->
+        Membrane.Logger.warning("Ignoring packet due to `#{reason}`")
+        nil
+
+      {:error, reason} ->
+        raise "Failed to unprotect packet due to `#{reason}`"
+    end
+  end
+
+  @spec get_stream_ssrc(RTP.ssrc() | :random, State.t()) :: RTP.ssrc()
+  defp get_stream_ssrc(ssrc, state) do
     assigned_ssrcs = Enum.map(state.stream_states, fn {_pad_ref, %{ssrc: ssrc}} -> ssrc end)
 
-    case pad_options.ssrc do
+    case ssrc do
       :random ->
         Stream.repeatedly(fn -> Enum.random(0..@max_ssrc) end)
         |> Enum.find(&(&1 not in assigned_ssrcs))
