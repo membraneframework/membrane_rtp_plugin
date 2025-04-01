@@ -144,10 +144,10 @@ defmodule Membrane.RTP.Demuxer do
     end
 
     @type t :: %__MODULE__{
+            stream_states: %{RTP.ssrc() => StreamState.t()},
             payload_type_mapping: RTP.PayloadFormat.payload_type_mapping(),
             not_linked_pad_handling: %{action: :raise | :ignore, timeout: Membrane.Time.t()},
             srtp: ExLibSRTP.t() | nil,
-            stream_states: %{RTP.ssrc() => StreamState.t()},
             pads_waiting_for_stream: %{Pad.ref() => Membrane.RTP.Demuxer.stream_id()}
           }
 
