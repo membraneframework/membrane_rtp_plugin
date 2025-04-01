@@ -63,7 +63,12 @@ defmodule Membrane.RTP.Muxer do
 
   def_output_pad :output, accepted_format: %RemoteStream{type: :packetized, content_format: RTP}
 
-  def_options srtp: [
+  def_options payload_type_mapping: [
+                spec: RTP.PayloadFormat.payload_type_mapping(),
+                default: %{},
+                description: "Mapping of the custom RTP payload types ( > 95)."
+              ],
+              srtp: [
                 spec: false | [ExLibSRTP.Policy.t()],
                 default: false,
                 description: """
@@ -94,10 +99,11 @@ defmodule Membrane.RTP.Muxer do
 
     @type t :: %__MODULE__{
             stream_states: %{Pad.ref() => StreamState.t()},
+            payload_type_mapping: RTP.PayloadFormat.payload_type_mapping(),
             srtp: ExLibSRTP.t() | nil
           }
 
-    @enforce_keys [:srtp]
+    @enforce_keys [:srtp, :payload_type_mapping]
     defstruct @enforce_keys ++ [stream_states: %{}]
   end
 
@@ -118,7 +124,7 @@ defmodule Membrane.RTP.Muxer do
           srtp
       end
 
-    {[], %State{srtp: srtp}}
+    {[], %State{srtp: srtp, payload_type_mapping: opts.payload_type_mapping}}
   end
 
   @impl true
@@ -140,7 +146,8 @@ defmodule Membrane.RTP.Muxer do
       RTP.PayloadFormat.resolve(
         encoding_name: encoding_name,
         payload_type: pad_options.payload_type,
-        clock_rate: pad_options.clock_rate
+        clock_rate: pad_options.clock_rate,
+        payload_type_mapping: state.payload_type_mapping
       )
 
     if payload_type == nil do
