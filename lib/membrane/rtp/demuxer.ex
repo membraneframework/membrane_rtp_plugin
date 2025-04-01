@@ -470,13 +470,21 @@ defmodule Membrane.RTP.Demuxer do
           jitter_buffer_state: jitter_buffer_state
       }
 
-    %{payload_format: %RTP.PayloadFormat{encoding_name: encoding_name}} =
+    %{payload_format: payload_format} =
       RTP.PayloadFormat.resolve(
         payload_type: stream_state.payload_type,
         payload_type_mapping: payload_type_mapping
       )
 
-    stream_format = %RTP{payload_format: @encoding_name_to_payload_format[encoding_name]}
+    stream_format =
+      case payload_format do
+        nil ->
+          %RTP{}
+
+        %RTP.PayloadFormat{encoding_name: encoding_name} ->
+          %RTP{payload_format: @encoding_name_to_payload_format[encoding_name]}
+      end
+
     {[stream_format: {pad, stream_format}], stream_state}
   end
 
