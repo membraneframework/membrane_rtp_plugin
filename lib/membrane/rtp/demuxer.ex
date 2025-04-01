@@ -200,21 +200,25 @@ defmodule Membrane.RTP.Demuxer do
 
   @impl true
   def handle_info({:pad_match_timeout, ssrc}, _ctx, state) do
-    case state.not_linked_pad_handling.action do
-      :raise ->
-        raise "Pad corresponding to ssrc #{ssrc} not connected within specified timeout"
+    if state.stream_states[ssrc].phase == :waiting_for_matching_pad do
+      case state.not_linked_pad_handling.action do
+        :raise ->
+          raise "Pad corresponding to ssrc #{ssrc} not connected within specified timeout"
 
-      :warn ->
-        Membrane.Logger.warning(
-          "Pad corresponding to ssrc #{ssrc} not connected within specified timeout"
-        )
+        :warn ->
+          Membrane.Logger.warning(
+            "Pad corresponding to ssrc #{ssrc} not connected within specified timeout"
+          )
 
-      :ignore ->
-        :ok
+        :ignore ->
+          :ok
+      end
+
+      state = put_in(state.stream_states[ssrc].phase, :timed_out)
+      {[], state}
+    else
+      {[], state}
     end
-
-    state = put_in(state.stream_states[ssrc].phase, :timed_out)
-    {[], state}
   end
 
   @impl true
