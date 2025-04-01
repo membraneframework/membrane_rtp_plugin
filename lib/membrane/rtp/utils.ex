@@ -12,7 +12,8 @@ defmodule Membrane.RTP.Utils do
     with size when size > 0 <- byte_size(binary),
          padding_size = :binary.last(binary),
          payload_size = byte_size(binary) - padding_size,
-         <<stripped_payload::binary-size(payload_size), _::binary-size(padding_size)>> <- binary do
+         <<stripped_payload::binary-size(payload_size), _padding::binary-size(padding_size)>> <-
+           binary do
       {:ok, {stripped_payload, padding_size}}
     else
       _error -> :error

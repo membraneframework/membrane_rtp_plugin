@@ -18,6 +18,14 @@ defmodule Membrane.RTP.Demuxer do
   alias Membrane.{Pad, RemoteStream, RTCP, RTP}
   alias Membrane.RTP.Demuxer.JitterBuffer
 
+  @encoding_name_to_payload_format %{
+    :H264 => Membrane.H264,
+    :H265 => Membrane.H265,
+    :VP8 => Membrane.VP8,
+    :AAC => Membrane.AAC,
+    :opus => Membrane.Opus,
+    :MPA => Membrane.MPEGAudio
+  }
   @typedoc """
   Metadata present in each output buffer. The `ExRTP.Packet.t()` struct contains 
   parsed fields of the packet's header. The `payload` field of this struct will 
@@ -405,7 +413,14 @@ defmodule Membrane.RTP.Demuxer do
           jitter_buffer_state: jitter_buffer_state
       }
 
-    {[stream_format: {pad, %RTP{}}], stream_state}
+    %{payload_format: %RTP.PayloadFormat{encoding_name: encoding_name}} =
+      RTP.PayloadFormat.resolve(
+        payload_type: stream_state.payload_type,
+        payload_type_mapping: payload_type_mapping
+      )
+
+    stream_format = %RTP{payload_format: @encoding_name_to_payload_format[encoding_name]}
+    {[stream_format: {pad, stream_format}], stream_state}
   end
 
   @spec find_matching_pad_for_stream(

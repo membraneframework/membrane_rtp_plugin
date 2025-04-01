@@ -72,7 +72,7 @@ defmodule Membrane.RTP.Session.BinTest do
     end
 
     @impl true
-    def handle_demand(:output, size, :buffers, _ctx, %{pause_after: [pause | _]} = state) do
+    def handle_demand(:output, size, :buffers, _ctx, %{pause_after: [pause | _other]} = state) do
       {[demand: {:input, min(size, pause - state.cnt)}], state}
     end
 

@@ -3,7 +3,7 @@ defmodule Membrane.RTP.TWCCReceiver do
   The module defines an element responsible for recording transport-wide statistics of incoming packets
   and generating TWCC feedbacks.
   """
-  use Membrane.Filter
+  use Membrane.Filter, flow_control_hints?: false
 
   require Bitwise
 

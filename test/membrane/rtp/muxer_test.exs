@@ -27,14 +27,12 @@ defmodule Membrane.RTP.MuxerTest do
           output_alignment: :nalu
         })
         |> child(:h264_payloader, Membrane.RTP.H264.Payloader)
-        |> via_in(:input, options: [encoding: :H264])
         |> child(:rtp_muxer, Membrane.RTP.Muxer)
         |> child(:sink, Membrane.Testing.Sink),
         get_child(:mp4_demuxer)
         |> via_out(:output, options: [kind: :audio])
         |> child(:aac_parser, %Membrane.AAC.Parser{out_encapsulation: :none})
         |> child(:aac_payloader, %Membrane.RTP.AAC.Payloader{mode: :hbr, frames_per_packet: 1})
-        |> via_in(:input, options: [encoding: :AAC])
         |> get_child(:rtp_muxer)
       ]
 

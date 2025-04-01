@@ -3,7 +3,7 @@ defmodule Membrane.RTCP.Parser do
   Element responsible for receiving raw RTCP packets, parsing them and emitting proper RTCP events.
   """
 
-  use Membrane.Filter
+  use Membrane.Filter, flow_control_hints?: false
 
   require Membrane.Logger
   alias Membrane.Buffer

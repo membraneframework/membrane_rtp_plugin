@@ -11,7 +11,7 @@ defmodule Membrane.RTP.SSRCRouter do
   pad of id `{:input, id}`, if no such pad exists the router simply drops the event.
   """
 
-  use Membrane.Filter
+  use Membrane.Filter, flow_control_hints?: false
 
   require Membrane.Logger
   require Membrane.TelemetryMetrics

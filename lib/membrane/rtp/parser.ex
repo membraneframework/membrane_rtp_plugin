@@ -16,7 +16,7 @@ defmodule Membrane.RTP.Parser do
   `:marker`, `:extension`. See `Membrane.RTP.Header` for their meaning and specifications.
   """
 
-  use Membrane.Filter
+  use Membrane.Filter, flow_control_hints?: false
 
   require Membrane.Logger
   alias Membrane.Buffer
