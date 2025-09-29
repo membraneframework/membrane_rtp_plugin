@@ -84,9 +84,9 @@ defmodule Membrane.RTP.Muxer do
 
     defmodule StreamState do
       @moduledoc false
-      alias Membrane.RTP
-
       use Bunch.Access
+
+      alias Membrane.RTP
 
       @type t :: %__MODULE__{
               ssrc: RTP.ssrc(),
