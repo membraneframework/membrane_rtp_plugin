@@ -1,10 +1,10 @@
 defmodule Membrane.RTP.Muxer do
   @moduledoc """
-  Element that combines multiple streams into a single RTP stream. 
+  Element that combines multiple streams into a single RTP stream.
 
-  Each new input stream is assigned a unique SSRC that the packets transporting this stream will have. 
-  The demuxer will try to resolve what `payload_type` and `clock_rate` should be assumed based on the 
-  incoming stream format and passed pad options. 
+  Each new input stream is assigned a unique SSRC that the packets transporting this stream will have.
+  The demuxer will try to resolve what `payload_type` and `clock_rate` should be assumed based on the
+  incoming stream format and passed pad options.
   Timestamps are calculated based on assumed `clock_rate`.
   """
   use Membrane.Filter
@@ -48,7 +48,7 @@ defmodule Membrane.RTP.Muxer do
         spec: RTP.encoding_name() | nil,
         default: nil,
         description: """
-        Encoding name of the stream that will be used if the muxer fails to infer it from incoming stream format. 
+        Encoding name of the stream that will be used if the muxer fails to infer it from incoming stream format.
         Used for determining payload_type, if it wasn't provided.
         """
       ],
@@ -72,16 +72,21 @@ defmodule Membrane.RTP.Muxer do
                 spec: false | [ExLibSRTP.Policy.t()],
                 default: false,
                 description: """
-                Specifies whether to use SRTP to encrypt the output stream. Requires adding [srtp](https://github.com/membraneframework/elixir_libsrtp) 
+                Specifies whether to use SRTP to encrypt the output stream. Requires adding [srtp](https://github.com/membraneframework/elixir_libsrtp)
                 dependency to work. If true takes a list of SRTP policies to use for encrypting packets. See `t:ExLibSRTP.Policy.t/0` for details.
                 """
               ]
 
   defmodule State do
     @moduledoc false
+
+    use Bunch.Access
+
     defmodule StreamState do
       @moduledoc false
       alias Membrane.RTP
+
+      use Bunch.Access
 
       @type t :: %__MODULE__{
               ssrc: RTP.ssrc(),
@@ -219,10 +224,20 @@ defmodule Membrane.RTP.Muxer do
   end
 
   @impl true
-  def handle_end_of_stream(Pad.ref(:input, _ref) = pad_ref, _ctx, state) do
-    state = put_in(state.stream_states[pad_ref].end_of_stream, true)
+  def handle_end_of_stream(Pad.ref(:input, _ref) = pad_ref, ctx, state) do
+    state =
+      if is_map_key(state.stream_states, pad_ref) do
+        state |> put_in([:stream_states, pad_ref, :end_of_stream], true)
+      else
+        state |> put_in([:stream_states, pad_ref], %{end_of_stream: true})
+      end
 
-    if Enum.all?(Enum.map(state.stream_states, fn {_pad_ref, %{end_of_stream: eos}} -> eos end)) do
+    Map.keys(state.stream_states)
+    |> Enum.all?(fn pad_ref ->
+      (ctx.pads[pad_ref] == nil or ctx.pads[pad_ref].start_of_stream?) and
+        state.stream_states[pad_ref].end_of_stream
+    end)
+    |> if do
       {[end_of_stream: :output], state}
     else
       {[], state}
