@@ -229,13 +229,21 @@ defmodule Membrane.RTP.Muxer do
       if is_map_key(state.stream_states, pad_ref) do
         state |> put_in([:stream_states, pad_ref, :end_of_stream], true)
       else
-        state |> put_in([:stream_states, pad_ref], %{end_of_stream: true})
+        state
       end
 
-    Map.keys(state.stream_states)
+    all_input_pad_refs =
+      ctx.pads
+      |> Enum.flat_map(fn {pad_ref, %{direction: direction}} ->
+        if direction == :input, do: [pad_ref], else: []
+      end)
+      |> Enum.concat(Map.keys(state.stream_states))
+      |> Enum.uniq()
+
+    all_input_pad_refs
     |> Enum.all?(fn pad_ref ->
-      (ctx.pads[pad_ref] == nil or ctx.pads[pad_ref].start_of_stream?) and
-        state.stream_states[pad_ref].end_of_stream
+      (ctx.pads[pad_ref] != nil and ctx.pads[pad_ref].end_of_stream?) or
+        (state.stream_states[pad_ref] != nil and state.stream_states[pad_ref].end_of_stream)
     end)
     |> if do
       {[end_of_stream: :output], state}
