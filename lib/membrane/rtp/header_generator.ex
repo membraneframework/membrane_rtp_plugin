@@ -85,7 +85,7 @@ defmodule Membrane.RTP.HeaderGenerator do
       extensions: Map.get(rtp_metadata, :extensions, [])
     }
 
-    buffer = %Membrane.Buffer{
+    buffer = %{
       buffer
       | metadata: Map.put(metadata, :rtp, header),
         payload: buffer.payload

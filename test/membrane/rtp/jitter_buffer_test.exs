@@ -69,7 +69,7 @@ defmodule Membrane.RTP.JitterBufferTest do
 
       flush_index = @base_seq_number - 1
 
-      store = %BufferStore{
+      store = %{
         state.store
         | flush_index: flush_index,
           highest_incoming_index: flush_index
@@ -81,7 +81,7 @@ defmodule Membrane.RTP.JitterBufferTest do
           store
         end
 
-      state = %State{state | store: store}
+      state = %{state | store: store}
 
       assert {commands, %State{store: result_store}} =
                JitterBuffer.handle_buffer(:input, first_buffer, nil, state)
@@ -97,7 +97,7 @@ defmodule Membrane.RTP.JitterBufferTest do
     test "outputs discontinuity and late buffer", %{state: state, buffer: buffer} do
       flush_index = @base_seq_number - 2
 
-      store = %BufferStore{
+      store = %{
         state.store
         | flush_index: flush_index,
           highest_incoming_index: flush_index
@@ -122,7 +122,7 @@ defmodule Membrane.RTP.JitterBufferTest do
     test "dumps store if event was end of stream", %{state: state, buffer: buffer} do
       flush_index = @base_seq_number - 2
 
-      store = %BufferStore{
+      store = %{
         state.store
         | flush_index: flush_index,
           highest_incoming_index: flush_index

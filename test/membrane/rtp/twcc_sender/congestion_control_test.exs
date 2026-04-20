@@ -22,7 +22,7 @@ defmodule Membrane.RTP.TWCCSender.CongestionControlTest do
         cc.last_bandwidth_increase_ts - report_interval
       end
 
-    cc = %CongestionControl{cc | last_bandwidth_increase_ts: last_bandwidth_increase_ts}
+    cc = %{cc | last_bandwidth_increase_ts: last_bandwidth_increase_ts}
 
     simulate_updates(
       CongestionControl.update(

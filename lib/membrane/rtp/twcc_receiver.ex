@@ -182,7 +182,7 @@ defmodule Membrane.RTP.TWCCReceiver do
   defp buffer_actions(actions, pad, state) do
     actions = Qex.new(actions)
 
-    %State{
+    %{
       state
       | buffered_actions: Map.update(state.buffered_actions, pad, actions, &Qex.join(&1, actions))
     }

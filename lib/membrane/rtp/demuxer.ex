@@ -228,7 +228,7 @@ defmodule Membrane.RTP.Demuxer do
             []
           end
 
-        stream_state = %State.StreamState{stream_state | jitter_buffer_state: jitter_buffer_state}
+        stream_state = %{stream_state | jitter_buffer_state: jitter_buffer_state}
         state = put_in(state.stream_states[matching_stream_ssrc], stream_state)
 
         {stream_format_action ++ buffer_actions ++ end_of_stream_actions, state}
@@ -462,7 +462,7 @@ defmodule Membrane.RTP.Demuxer do
       )
 
     stream_state =
-      %State.StreamState{
+      %{
         stream_state
         | phase: :bound_with_pad,
           pad: pad,

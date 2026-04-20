@@ -164,7 +164,7 @@ defmodule Membrane.RTP.TWCCSender.CongestionControl do
         del_var_th
       end
 
-    cc = %__MODULE__{
+    cc = %{
       cc
       | m_hat: m_hat,
         var_v_hat: var_v_hat,
@@ -189,9 +189,9 @@ defmodule Membrane.RTP.TWCCSender.CongestionControl do
       now - underuse_start_ts >= cc.signal_time_threshold and m_hat <= prev_m_hat
 
     if trigger_underuse? do
-      {:underuse, %__MODULE__{cc | underuse_start_ts: now, overuse_start_ts: nil}}
+      {:underuse, %{cc | underuse_start_ts: now, overuse_start_ts: nil}}
     else
-      {:no_signal, %__MODULE__{cc | underuse_start_ts: underuse_start_ts, overuse_start_ts: nil}}
+      {:no_signal, %{cc | underuse_start_ts: underuse_start_ts, overuse_start_ts: nil}}
     end
   end
 
@@ -204,14 +204,14 @@ defmodule Membrane.RTP.TWCCSender.CongestionControl do
     trigger_overuse? = now - overuse_start_ts >= cc.signal_time_threshold and m_hat >= prev_m_hat
 
     if trigger_overuse? do
-      {:overuse, %__MODULE__{cc | underuse_start_ts: nil, overuse_start_ts: now}}
+      {:overuse, %{cc | underuse_start_ts: nil, overuse_start_ts: now}}
     else
-      {:no_signal, %__MODULE__{cc | underuse_start_ts: nil, overuse_start_ts: overuse_start_ts}}
+      {:no_signal, %{cc | underuse_start_ts: nil, overuse_start_ts: overuse_start_ts}}
     end
   end
 
   defp make_signal(cc, _prev_m_hat),
-    do: {:normal, %__MODULE__{cc | underuse_start_ts: nil, overuse_start_ts: nil}}
+    do: {:normal, %{cc | underuse_start_ts: nil, overuse_start_ts: nil}}
 
   # +----+--------+-----------+------------+--------+
   # |     \ State |   Hold    |  Increase  |Decrease|
@@ -294,11 +294,11 @@ defmodule Membrane.RTP.TWCCSender.CongestionControl do
 
     a_hat = min(1.5 * cc.r_hat.value, a_hat)
 
-    %__MODULE__{cc | a_hat: a_hat, last_bandwidth_increase_ts: now}
+    %{cc | a_hat: a_hat, last_bandwidth_increase_ts: now}
   end
 
   defp decrease_receiver_bandwidth(cc) do
-    %__MODULE__{
+    %{
       cc
       | a_hat: @beta * cc.r_hat.value,
         decrease_r_hats: Enum.take([cc.r_hat | cc.decrease_r_hats], @decrease_r_hats_kept)

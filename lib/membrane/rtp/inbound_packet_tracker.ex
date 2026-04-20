@@ -139,7 +139,7 @@ defmodule Membrane.RTP.InboundPacketTracker do
         true -> lost
       end
 
-    state = %State{
+    state = %{
       state
       | expected_prior: expected,
         received_prior: received,
@@ -200,7 +200,7 @@ defmodule Membrane.RTP.InboundPacketTracker do
         {new_jitter, transit}
       end
 
-    %State{state | jitter: jitter, transit: transit}
+    %{state | jitter: jitter, transit: transit}
   end
 
   defp repair_sequence_number(%Buffer{} = buffer, %State{

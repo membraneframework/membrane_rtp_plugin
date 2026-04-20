@@ -9,7 +9,6 @@ if Code.ensure_loaded?(ExLibSRTP) do
 
     require Membrane.Logger
 
-    alias Membrane.Buffer
     alias Membrane.SRTP
 
     def_input_pad :input, accepted_format: _any, flow_control: :auto
@@ -43,7 +42,7 @@ if Code.ensure_loaded?(ExLibSRTP) do
     def handle_buffer(:input, buffer, _ctx, state) do
       case ExLibSRTP.unprotect_rtcp(state.srtp, buffer.payload) do
         {:ok, payload} ->
-          {[buffer: {:output, %Buffer{buffer | payload: payload}}], state}
+          {[buffer: {:output, %{buffer | payload: payload}}], state}
 
         {:error, reason} when reason in [:replay_fail, :replay_old] ->
           Membrane.Logger.debug("""

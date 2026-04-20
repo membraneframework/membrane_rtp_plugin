@@ -84,7 +84,7 @@ defmodule Membrane.RTP.Demuxer.JitterBuffer do
       )
     end
 
-    %State{
+    %{
       jitter_buffer_state
       | pad: pad,
         clock_rate: clock_rate,
@@ -95,19 +95,19 @@ defmodule Membrane.RTP.Demuxer.JitterBuffer do
 
   @spec latency_timer_expired(State.t()) :: State.t()
   def latency_timer_expired(jitter_buffer_state) do
-    %State{jitter_buffer_state | max_latency_timer: nil}
+    %{jitter_buffer_state | max_latency_timer: nil}
   end
 
   @spec initial_latency_passed(State.t()) :: State.t()
   def initial_latency_passed(jitter_buffer_state) do
-    %State{jitter_buffer_state | initial_latency_waiting: false}
+    %{jitter_buffer_state | initial_latency_waiting: false}
   end
 
   @spec insert_buffer(State.t(), Membrane.Buffer.t()) :: State.t()
   def insert_buffer(jitter_buffer_state, buffer) do
     case BufferStore.insert_buffer(jitter_buffer_state.buffer_store, buffer) do
       {:ok, buffer_store} ->
-        %State{jitter_buffer_state | buffer_store: buffer_store}
+        %{jitter_buffer_state | buffer_store: buffer_store}
 
       {:error, :late_packet} ->
         Membrane.Logger.debug("Late packet has arrived")
@@ -127,7 +127,7 @@ defmodule Membrane.RTP.Demuxer.JitterBuffer do
         )
 
       {buffers, buffer_store} = BufferStore.flush_ordered(buffer_store)
-      jitter_buffer_state = %State{jitter_buffer_state | buffer_store: buffer_store}
+      jitter_buffer_state = %{jitter_buffer_state | buffer_store: buffer_store}
 
       {actions, jitter_buffer_state} =
         (too_old_records ++ buffers)
@@ -209,10 +209,10 @@ defmodule Membrane.RTP.Demuxer.JitterBuffer do
       end
 
     timestamp = div(Time.seconds(rtp_timestamp - timestamp_base), jitter_buffer_state.clock_rate)
-    buffer = %Membrane.Buffer{record.buffer | pts: timestamp}
+    buffer = %{record.buffer | pts: timestamp}
     actions = if buffer.payload == <<>>, do: [], else: [buffer: {jitter_buffer_state.pad, buffer}]
 
-    jitter_buffer_state = %State{
+    jitter_buffer_state = %{
       jitter_buffer_state
       | timestamp_base: timestamp_base,
         previous_timestamp: rtp_timestamp
