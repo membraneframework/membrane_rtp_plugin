@@ -11,9 +11,9 @@ defmodule Membrane.RTP.InboundPacketTracker do
   require Bitwise
   require Membrane.Logger
 
+  alias Membrane.{Buffer, RTP, Time}
   alias Membrane.RTCP.ReceiverReport
   alias Membrane.RTP.{RetransmissionRequestEvent, SequenceNumberTracker}
-  alias Membrane.{Buffer, RTP, Time}
 
   @max_diff 9000
 

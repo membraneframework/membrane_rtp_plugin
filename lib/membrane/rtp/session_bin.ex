@@ -69,10 +69,10 @@ defmodule Membrane.RTP.SessionBin do
 
   require Bitwise
   require Membrane.Logger
+  alias Membrane.{RemoteStream, RTCP, RTP, SRTP}
   alias Membrane.RTP.{PayloadFormat, Session}
   alias Membrane.RTP.SessionBin.RTXInfo
   alias Membrane.RTP.SSRCRouter.StreamsInfo
-  alias Membrane.{RemoteStream, RTCP, RTP, SRTP}
 
   @type new_stream_notification_t :: Membrane.RTP.SSRCRouter.new_stream_notification_t()
 

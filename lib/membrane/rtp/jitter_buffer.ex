@@ -8,8 +8,8 @@ defmodule Membrane.RTP.JitterBuffer do
   require Bitwise
   require Membrane.Logger
   alias __MODULE__.{BufferStore, Record}
-  alias Membrane.RTP.Utils
   alias Membrane.{RTP, Time}
+  alias Membrane.RTP.Utils
 
   @type packet_index :: non_neg_integer()
 

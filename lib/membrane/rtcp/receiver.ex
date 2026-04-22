@@ -14,9 +14,9 @@ defmodule Membrane.RTCP.Receiver do
     TransportFeedbackPacket
   }
 
+  alias Membrane.{RTCP, RTP}
   alias Membrane.RTCPEvent
   alias Membrane.Time
-  alias Membrane.{RTCP, RTP}
 
   def_input_pad :input, accepted_format: _any, flow_control: :auto
   def_output_pad :output, accepted_format: _any, flow_control: :auto

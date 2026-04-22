@@ -7,9 +7,9 @@ defmodule Membrane.RTP.JitterBuffer.BufferStore do
   use Bunch
   use Bunch.Access
   require Bitwise
-  alias Membrane.RTP.JitterBuffer.Record
-  alias Membrane.RTP.{JitterBuffer, Utils}
   alias Membrane.{Buffer, RTP}
+  alias Membrane.RTP.{JitterBuffer, Utils}
+  alias Membrane.RTP.JitterBuffer.Record
 
   @seq_number_limit Bitwise.bsl(1, 16)
 

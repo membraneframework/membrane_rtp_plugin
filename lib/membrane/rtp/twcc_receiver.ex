@@ -9,8 +9,8 @@ defmodule Membrane.RTP.TWCCReceiver do
 
   alias __MODULE__.PacketInfoStore
   alias Membrane.RTCP.TransportFeedbackPacket
-  alias Membrane.RTP.Header
   alias Membrane.{RTCPEvent, RTP, Time}
+  alias Membrane.RTP.Header
 
   @feedback_count_limit Bitwise.bsl(1, 8)
 
