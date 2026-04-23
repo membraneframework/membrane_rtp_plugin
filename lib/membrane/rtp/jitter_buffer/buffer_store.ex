@@ -35,7 +35,7 @@ defmodule Membrane.RTP.JitterBuffer.BufferStore do
           flush_index: JitterBuffer.packet_index() | nil,
           highest_incoming_index: JitterBuffer.packet_index() | nil,
           heap: Heap.t(),
-          set: MapSet.t(),
+          set: any(),
           rollover_count: non_neg_integer()
         }
 
