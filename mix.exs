@@ -62,15 +62,14 @@ defmodule Membrane.RTP.Plugin.MixProject do
       {:membrane_realtimer_plugin, "~> 0.10.1", only: :test},
 
       # Dev
-      {:ex_doc, "~> 0.34", only: :dev, runtime: false},
-      {:dialyxir, "~> 1.4", only: :dev, runtime: false},
-      {:credo, "~> 1.7", only: :dev, runtime: false}
+      {:ex_doc, ">= 0.0.0", only: :dev, runtime: false},
+      {:dialyxir, ">= 0.0.0", only: :dev, runtime: false},
+      {:credo, ">= 0.0.0", only: :dev, runtime: false}
     ]
   end
 
   defp dialyzer() do
     opts = [
-      plt_add_apps: [:ex_libsrtp, :syntax_tools],
       flags: [:error_handling]
     ]
 
