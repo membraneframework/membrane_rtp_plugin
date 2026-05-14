@@ -476,7 +476,7 @@ defmodule Membrane.RTP.SessionBin do
     {rtx_links_generator, awaiting_rtx_links} =
       Map.pop(state.awaiting_rtx_links, ssrc, fn _twcc, _ctx -> [] end)
 
-    state = %{state | awaiting_rtx_links: awaiting_rtx_links}
+    state = %State{state | awaiting_rtx_links: awaiting_rtx_links}
 
     structure = List.flatten([twcc_children, router_link, rtx_links_generator.(use_twcc?, ctx)])
     {[spec: structure], state}

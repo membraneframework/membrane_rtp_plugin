@@ -134,7 +134,7 @@ defmodule Membrane.RTP.SSRCRouter do
       |> Enum.filter(fn {_ssrc, p} -> p != pad end)
       |> Map.new()
 
-    {[], %{state | input_pads: new_pads}}
+    {[], %State{state | input_pads: new_pads}}
   end
 
   @impl true

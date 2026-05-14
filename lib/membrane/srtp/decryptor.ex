@@ -99,7 +99,7 @@ if Code.ensure_loaded?(ExLibSRTP) do
 
           {:ok, {payload, padding_size}} = Utils.strip_padding(payload, has_padding == 1)
           metadata = put_in(buffer.metadata, [:rtp, :padding_size], padding_size)
-          buffer = %{buffer | metadata: metadata, payload: payload}
+          buffer = %Buffer{buffer | metadata: metadata, payload: payload}
 
           {[buffer: {:output, buffer}], state}
 

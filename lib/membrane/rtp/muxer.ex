@@ -211,7 +211,7 @@ defmodule Membrane.RTP.Muxer do
           []
 
         raw_packet ->
-          buffer = %{
+          buffer = %Membrane.Buffer{
             buffer
             | payload: raw_packet,
               metadata: Map.put(buffer.metadata, :rtp, %{packet | payload: <<>>})

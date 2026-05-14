@@ -118,7 +118,7 @@ if Code.ensure_loaded?(ExLibSRTP) do
 
       case protection_result do
         {:ok, payload} ->
-          [%{buffer | payload: payload}]
+          [%Buffer{buffer | payload: payload}]
 
         {:error, reason} when is_protection_error_fatal(packet_type, reason) ->
           raise "Failed to protect #{inspect(packet_type)} due to unhandled error #{reason}"

@@ -79,7 +79,7 @@ defmodule Membrane.RTP.JitterBuffer do
       |> BufferStore.dump()
       |> Enum.flat_map_reduce(state, &record_to_actions/2)
 
-    {actions ++ [end_of_stream: :output], %{state | store: %BufferStore{}}}
+    {actions ++ [end_of_stream: :output], %State{state | store: %BufferStore{}}}
   end
 
   @impl true
@@ -87,7 +87,7 @@ defmodule Membrane.RTP.JitterBuffer do
     state =
       case BufferStore.insert_buffer(store, buffer) do
         {:ok, result} ->
-          %{state | store: result}
+          %State{state | store: result}
 
         {:error, :late_packet} ->
           Membrane.Logger.debug("Late packet has arrived")
@@ -101,7 +101,7 @@ defmodule Membrane.RTP.JitterBuffer do
   def handle_buffer(:input, buffer, _context, %State{store: store} = state) do
     case BufferStore.insert_buffer(store, buffer) do
       {:ok, result} ->
-        state = %{state | store: result}
+        state = %State{state | store: result}
         send_buffers(state)
 
       {:error, :late_packet} ->
@@ -115,13 +115,13 @@ defmodule Membrane.RTP.JitterBuffer do
 
   @impl true
   def handle_info(:initial_latency_passed, _context, state) do
-    state = %{state | waiting?: false}
+    state = %State{state | waiting?: false}
     send_buffers(state)
   end
 
   @impl true
   def handle_info(:send_buffers, _context, state) do
-    state = %{state | max_latency_timer: nil}
+    state = %State{state | max_latency_timer: nil}
     send_buffers(state)
   end
 
@@ -152,7 +152,7 @@ defmodule Membrane.RTP.JitterBuffer do
           Process.send_after(self(), :send_buffers, send_after_time)
       end
 
-    %{state | max_latency_timer: new_timer}
+    %State{state | max_latency_timer: new_timer}
   end
 
   defp set_timer(%State{max_latency_timer: timer} = state) when timer != nil, do: state
@@ -180,7 +180,7 @@ defmodule Membrane.RTP.JitterBuffer do
       end
 
     timestamp = div((rtp_timestamp - timestamp_base) * Time.second(), state.clock_rate)
-    buffer = %{buffer | pts: timestamp}
+    buffer = %Membrane.Buffer{buffer | pts: timestamp}
     # An empty buffer is usually a WebRTC probing packet that should be skipped.
     actions = if buffer.payload == <<>>, do: [], else: [buffer: {:output, buffer}]
     state = %{state | timestamp_base: timestamp_base, previous_timestamp: rtp_timestamp}

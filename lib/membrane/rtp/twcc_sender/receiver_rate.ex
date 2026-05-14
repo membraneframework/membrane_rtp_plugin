@@ -57,7 +57,7 @@ defmodule Membrane.RTP.TWCCSender.ReceiverRate do
 
     value = 1 / (Time.as_milliseconds(rr.window, :round) / 1000) * received_sizes_sum
 
-    %{rr | value: value, packets_received: packets_received}
+    %__MODULE__{rr | value: value, packets_received: packets_received}
   end
 
   defp resolve_receive_deltas(receive_deltas, reference_time, packet_sizes) do
