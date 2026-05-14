@@ -42,7 +42,7 @@ defmodule Membrane.RTP.TWCCSender.ReceiverRate do
     do_update(rr, packets_received)
   end
 
-  defp do_update(rr, packets_received) do
+  defp do_update(%__MODULE__{} = rr, packets_received) do
     {last_packet_timestamp, _last_packet_size} = Qex.last!(packets_received)
     threshold = last_packet_timestamp - rr.window
 

@@ -63,7 +63,7 @@ defmodule Membrane.RTP.Demuxer.JitterBuffer do
           Demuxer.output_pad_options(),
           RTP.PayloadFormat.payload_type_mapping()
         ) :: State.t()
-  def initialize(jitter_buffer_state, pad, pad_options, payload_type_mapping) do
+  def initialize(%State{} = jitter_buffer_state, pad, pad_options, payload_type_mapping) do
     %{clock_rate: clock_rate} =
       RTP.PayloadFormat.resolve(
         payload_type: jitter_buffer_state.payload_type,
@@ -94,17 +94,17 @@ defmodule Membrane.RTP.Demuxer.JitterBuffer do
   end
 
   @spec latency_timer_expired(State.t()) :: State.t()
-  def latency_timer_expired(jitter_buffer_state) do
+  def latency_timer_expired(%State{} = jitter_buffer_state) do
     %State{jitter_buffer_state | max_latency_timer: nil}
   end
 
   @spec initial_latency_passed(State.t()) :: State.t()
-  def initial_latency_passed(jitter_buffer_state) do
+  def initial_latency_passed(%State{} = jitter_buffer_state) do
     %State{jitter_buffer_state | initial_latency_waiting: false}
   end
 
   @spec insert_buffer(State.t(), Membrane.Buffer.t()) :: State.t()
-  def insert_buffer(jitter_buffer_state, buffer) do
+  def insert_buffer(%State{} = jitter_buffer_state, %Membrane.Buffer{} = buffer) do
     case BufferStore.insert_buffer(jitter_buffer_state.buffer_store, buffer) do
       {:ok, buffer_store} ->
         %State{jitter_buffer_state | buffer_store: buffer_store}
@@ -116,7 +116,7 @@ defmodule Membrane.RTP.Demuxer.JitterBuffer do
   end
 
   @spec get_output_actions(State.t()) :: {[Membrane.Element.Action.t()], State.t()}
-  def get_output_actions(jitter_buffer_state) do
+  def get_output_actions(%State{} = jitter_buffer_state) do
     if jitter_buffer_state.initial_latency_waiting do
       {[], jitter_buffer_state}
     else
@@ -189,8 +189,11 @@ defmodule Membrane.RTP.Demuxer.JitterBuffer do
     {[event: {jitter_buffer_state.pad, %Membrane.Event.Discontinuity{}}], jitter_buffer_state}
   end
 
-  defp record_to_action(record, jitter_buffer_state) do
-    rtp_timestamp = record.buffer.metadata.rtp.timestamp
+  defp record_to_action(
+         %Record{buffer: %Membrane.Buffer{} = buffer},
+         %State{} = jitter_buffer_state
+       ) do
+    rtp_timestamp = buffer.metadata.rtp.timestamp
 
     # timestamps in RTP don't have to be monotonic therefore there can be
     # a situation where in 2 consecutive packets the latter packet will have smaller timestamp
@@ -209,7 +212,7 @@ defmodule Membrane.RTP.Demuxer.JitterBuffer do
       end
 
     timestamp = div(Time.seconds(rtp_timestamp - timestamp_base), jitter_buffer_state.clock_rate)
-    buffer = %Membrane.Buffer{record.buffer | pts: timestamp}
+    buffer = %Membrane.Buffer{buffer | pts: timestamp}
     actions = if buffer.payload == <<>>, do: [], else: [buffer: {jitter_buffer_state.pad, buffer}]
 
     jitter_buffer_state = %State{

@@ -106,7 +106,7 @@ if Code.ensure_loaded?(ExLibSRTP) do
       {[buffer: {:output, protect_buffer(buffer, state.srtp)}], state}
     end
 
-    defp protect_buffer(buffer, srtp) do
+    defp protect_buffer(%Buffer{} = buffer, srtp) do
       %Buffer{payload: payload} = buffer
       packet_type = RTP.Packet.identify(payload)
 

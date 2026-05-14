@@ -81,7 +81,7 @@ if Code.ensure_loaded?(ExLibSRTP) do
     def handle_event(pad, other, ctx, state), do: super(pad, other, ctx, state)
 
     @impl true
-    def handle_buffer(:input, buffer, _ctx, state) do
+    def handle_buffer(:input, %Buffer{} = buffer, _ctx, state) do
       %Buffer{
         payload: payload,
         metadata: %{rtp: %{total_header_size: total_header_size}}

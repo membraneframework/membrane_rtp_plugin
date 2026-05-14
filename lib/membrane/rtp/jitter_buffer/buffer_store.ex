@@ -141,12 +141,12 @@ defmodule Membrane.RTP.JitterBuffer.BufferStore do
   @spec do_insert_buffer(t(), Buffer.t(), RTP.Header.sequence_number_t()) ::
           {:ok, t()} | {:error, insert_error()}
   defp do_insert_buffer(%__MODULE__{flush_index: nil} = store, buffer, 0) do
-    store = add_record(store, Record.new(buffer, @seq_number_limit), :next)
+    %__MODULE__{} = store = add_record(store, Record.new(buffer, @seq_number_limit), :next)
     {:ok, %__MODULE__{store | flush_index: @seq_number_limit - 1}}
   end
 
   defp do_insert_buffer(%__MODULE__{flush_index: nil} = store, buffer, seq_num) do
-    store = add_record(store, Record.new(buffer, seq_num), :current)
+    %__MODULE__{} = store = add_record(store, Record.new(buffer, seq_num), :current)
     {:ok, %__MODULE__{store | flush_index: seq_num - 1}}
   end
 
@@ -221,7 +221,7 @@ defmodule Membrane.RTP.JitterBuffer.BufferStore do
        when last >= added_index,
        do: store
 
-  defp update_roc(%{rollover_count: roc} = store, :next),
+  defp update_roc(%__MODULE__{rollover_count: roc} = store, :next),
     do: %__MODULE__{store | rollover_count: roc + 1}
 
   defp update_roc(store, _record_rollover), do: store

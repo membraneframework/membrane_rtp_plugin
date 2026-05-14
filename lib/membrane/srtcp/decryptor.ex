@@ -40,7 +40,7 @@ if Code.ensure_loaded?(ExLibSRTP) do
     end
 
     @impl true
-    def handle_buffer(:input, buffer, _ctx, state) do
+    def handle_buffer(:input, %Buffer{} = buffer, _ctx, state) do
       case ExLibSRTP.unprotect_rtcp(state.srtp, buffer.payload) do
         {:ok, payload} ->
           {[buffer: {:output, %Buffer{buffer | payload: payload}}], state}

@@ -7,7 +7,7 @@ defmodule Membrane.RTP.TWCCSender.CongestionControlTest do
   defp simulate_updates(cc, _report_interval, [], [], [], [], []), do: cc
 
   defp simulate_updates(
-         cc,
+         %CongestionControl{} = cc,
          report_interval,
          [reference_time | remaining_reference_times],
          [receive_deltas | remaining_receive_deltas],

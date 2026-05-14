@@ -166,7 +166,7 @@ defmodule Membrane.RTP.JitterBuffer.BufferStoreTest do
     end
 
     test "returns nil when heap is not empty, but the next buffer is not present", %{
-      store: store
+      store: %BufferStore{} = store
     } do
       broken_store = %BufferStore{store | flush_index: @base_index - 1}
       assert {nil, new_store} = BufferStore.flush_one(broken_store)
@@ -188,7 +188,7 @@ defmodule Membrane.RTP.JitterBuffer.BufferStoreTest do
       end)
     end
 
-    test "handles rollover", %{base_store: base_store} do
+    test "handles rollover", %{base_store: %BufferStore{} = base_store} do
       store = %BufferStore{base_store | flush_index: 65_533}
       before_rollover_seq_nums = 65_534..65_535
       after_rollover_seq_nums = 0..10
@@ -208,7 +208,7 @@ defmodule Membrane.RTP.JitterBuffer.BufferStoreTest do
       assert store.rollover_count == 1
     end
 
-    test "handles empty rollover", %{base_store: base_store} do
+    test "handles empty rollover", %{base_store: %BufferStore{} = base_store} do
       store = %BufferStore{base_store | flush_index: 65_533}
       base_data = Enum.into(65_534..65_535, [])
       store = enum_into_store(base_data, store)

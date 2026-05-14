@@ -179,7 +179,7 @@ defmodule Membrane.RTP.TWCCReceiver do
     }
   end
 
-  defp buffer_actions(actions, pad, state) do
+  defp buffer_actions(actions, pad, %State{} = state) do
     actions = Qex.new(actions)
 
     %State{

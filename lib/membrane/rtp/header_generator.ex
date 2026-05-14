@@ -63,7 +63,7 @@ defmodule Membrane.RTP.HeaderGenerator do
   end
 
   @impl true
-  def handle_buffer(:input, buffer, _ctx, state) do
+  def handle_buffer(:input, %Membrane.Buffer{} = buffer, _ctx, state) do
     {rtp_metadata, metadata} = Map.pop(buffer.metadata, :rtp, %{})
 
     rtp_offset =

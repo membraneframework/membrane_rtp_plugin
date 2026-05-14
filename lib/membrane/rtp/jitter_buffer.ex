@@ -74,7 +74,7 @@ defmodule Membrane.RTP.JitterBuffer do
 
   @impl true
   def handle_end_of_stream(:input, _context, %State{store: store} = state) do
-    {actions, state} =
+    {actions, %State{} = state} =
       store
       |> BufferStore.dump()
       |> Enum.flat_map_reduce(state, &record_to_actions/2)
@@ -114,13 +114,13 @@ defmodule Membrane.RTP.JitterBuffer do
   def handle_event(pad, event, ctx, state), do: super(pad, event, ctx, state)
 
   @impl true
-  def handle_info(:initial_latency_passed, _context, state) do
+  def handle_info(:initial_latency_passed, _context, %State{} = state) do
     state = %State{state | waiting?: false}
     send_buffers(state)
   end
 
   @impl true
-  def handle_info(:send_buffers, _context, state) do
+  def handle_info(:send_buffers, _context, %State{} = state) do
     state = %State{state | max_latency_timer: nil}
     send_buffers(state)
   end
@@ -162,7 +162,7 @@ defmodule Membrane.RTP.JitterBuffer do
     {action, state}
   end
 
-  defp record_to_actions(%Record{buffer: buffer}, state) do
+  defp record_to_actions(%Record{buffer: %Membrane.Buffer{} = buffer}, state) do
     %{timestamp: rtp_timestamp} = buffer.metadata.rtp
     timestamp_base = state.timestamp_base || rtp_timestamp
     previous_timestamp = state.previous_timestamp || rtp_timestamp

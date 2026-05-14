@@ -122,7 +122,7 @@ defmodule Membrane.RTP.TWCCSender.CongestionControl do
     end
   end
 
-  defp update_metrics(cc, [recv_delta | recv_deltas], [send_delta | send_deltas]) do
+  defp update_metrics(%__MODULE__{} = cc, [recv_delta | recv_deltas], [send_delta | send_deltas]) do
     %__MODULE__{
       m_hat: prev_m_hat,
       e: e,
@@ -210,7 +210,7 @@ defmodule Membrane.RTP.TWCCSender.CongestionControl do
     end
   end
 
-  defp make_signal(cc, _prev_m_hat),
+  defp make_signal(%__MODULE__{} = cc, _prev_m_hat),
     do: {:normal, %__MODULE__{cc | underuse_start_ts: nil, overuse_start_ts: nil}}
 
   # +----+--------+-----------+------------+--------+
@@ -269,7 +269,7 @@ defmodule Membrane.RTP.TWCCSender.CongestionControl do
     end
   end
 
-  defp increase_receiver_bandwidth(cc, packet_sizes, rtt) do
+  defp increase_receiver_bandwidth(%__MODULE__{} = cc, packet_sizes, rtt) do
     %__MODULE__{
       a_hat: prev_a_hat,
       last_bandwidth_increase_ts: last_bandwidth_increase_ts
@@ -297,7 +297,7 @@ defmodule Membrane.RTP.TWCCSender.CongestionControl do
     %__MODULE__{cc | a_hat: a_hat, last_bandwidth_increase_ts: now}
   end
 
-  defp decrease_receiver_bandwidth(cc) do
+  defp decrease_receiver_bandwidth(%__MODULE__{} = cc) do
     %__MODULE__{
       cc
       | a_hat: @beta * cc.r_hat.value,

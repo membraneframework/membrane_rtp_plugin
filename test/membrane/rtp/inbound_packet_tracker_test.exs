@@ -58,7 +58,9 @@ defmodule Membrane.RTP.InboundPacketTrackerTest do
                  timestamped_buf.metadata.rtp.timestamp
     end
 
-    test "update packet's sequence number if there have been discarded packets", %{state: state} do
+    test "update packet's sequence number if there have been discarded packets", %{
+      state: %InboundPacketTracker.State{} = state
+    } do
       state = %InboundPacketTracker.State{state | discarded: 10}
 
       # in sequence number range
