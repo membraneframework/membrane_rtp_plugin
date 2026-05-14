@@ -13,7 +13,7 @@ defmodule Membrane.RTP.Demuxer.JitterBuffer do
     @moduledoc false
 
     @type t :: %__MODULE__{
-            buffer_store: RTP.JitterBuffer.BufferStore.t(),
+            buffer_store: RTP.JitterBuffer.BufferStore.t() | nil,
             ssrc: RTP.ssrc(),
             payload_type: RTP.payload_type(),
             pad: Membrane.Pad.ref() | nil,
@@ -37,7 +37,7 @@ defmodule Membrane.RTP.Demuxer.JitterBuffer do
 
     defstruct @enforce_keys ++
                 [
-                  buffer_store: %RTP.JitterBuffer.BufferStore{},
+                  buffer_store: nil,
                   pad: nil,
                   clock_rate: nil,
                   latency: nil,
