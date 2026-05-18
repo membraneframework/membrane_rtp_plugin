@@ -402,6 +402,9 @@ defmodule Membrane.RTP.Demuxer do
     end
   end
 
+  # The opaque MapSet.internal type inside BufferStore leaks through JitterBuffer.State into
+  # StreamState, causing call_without_opaque when passing a freshly constructed stream_state.
+  @dialyzer {:nowarn_function, initialize_new_stream_state: 4}
   @spec initialize_new_stream_state(
           Pad.ref() | nil,
           ExRTP.Packet.t(),

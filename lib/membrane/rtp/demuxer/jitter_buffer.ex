@@ -37,7 +37,7 @@ defmodule Membrane.RTP.Demuxer.JitterBuffer do
 
     defstruct @enforce_keys ++
                 [
-                  buffer_store: %RTP.JitterBuffer.BufferStore{},
+                  buffer_store: nil,
                   pad: nil,
                   clock_rate: nil,
                   latency: nil,
@@ -45,9 +45,13 @@ defmodule Membrane.RTP.Demuxer.JitterBuffer do
                 ]
   end
 
+  # MapSet.internal is @opaque and flows through BufferStore into State; dialyzer
+  # sees the concrete struct fields and reports a contract_with_opaque violation.
+  @dialyzer {:nowarn_function, new: 1}
   @spec new(ExRTP.Packet.t()) :: State.t()
   def new(packet) do
     %State{
+      buffer_store: %RTP.JitterBuffer.BufferStore{},
       ssrc: packet.ssrc,
       payload_type: packet.payload_type,
       initial_latency_waiting: true,
