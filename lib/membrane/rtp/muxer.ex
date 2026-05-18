@@ -37,6 +37,24 @@ defmodule Membrane.RTP.Muxer do
         SSRC that this stream will be assigned. If not provided, a random free value will be assigned.
         """
       ],
+      initial_sequence_number: [
+        spec: ExRTP.Packet.uint16() | :random,
+        default: :random,
+        description: """
+        Sequence number that will be assigned to the first packet of this stream. Sequence numbers of 
+        subsequent packets will be determined by incrementing this value. If not provided, a random 
+        free value will be assigned.
+        """
+      ],
+      initial_timestamp: [
+        spec: ExRTP.Packet.uint16() | :random,
+        default: :random,
+        description: """
+        RTP Timestamp that will be assigned to the first packet of this stream. Timestamps of subsequent 
+        packets will be calculated starting from this value. If not provided, a random free value will
+        be assigned.
+        """
+      ],
       payload_type: [
         spec: RTP.payload_type() | nil,
         default: nil,
@@ -165,8 +183,16 @@ defmodule Membrane.RTP.Muxer do
 
     new_stream_state = %State.StreamState{
       ssrc: ssrc,
-      sequence_number: Enum.random(0..@max_sequence_number),
-      initial_timestamp: Enum.random(0..@max_timestamp),
+      sequence_number:
+        if(pad_options.initial_sequence_number == :random,
+          do: Enum.random(0..@max_sequence_number),
+          else: pad_options.initial_sequence_number
+        ),
+      initial_timestamp:
+        if(pad_options.initial_timestamp == :random,
+          do: Enum.random(0..@max_timestamp),
+          else: pad_options.initial_timestamp
+        ),
       clock_rate: clock_rate,
       payload_type: payload_type
     }
