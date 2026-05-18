@@ -208,24 +208,27 @@ defmodule Membrane.RTP.Muxer do
     stream_state = state.stream_states[pad_ref]
 
     rtp_offset =
-      buffer.pts
-      |> Membrane.Time.as_seconds()
-      |> Numbers.mult(stream_state.clock_rate)
-      |> Ratio.trunc()
+      div(
+        buffer.pts * stream_state.clock_rate + div(Membrane.Time.second(), 2),
+        Membrane.Time.second()
+      )
 
     timestamp = rem(stream_state.initial_timestamp + rtp_offset, @max_timestamp + 1)
-    sequence_number = rem(stream_state.sequence_number + 1, @max_sequence_number + 1)
-
-    state = put_in(state.stream_states[pad_ref].sequence_number, sequence_number)
 
     packet =
       ExRTP.Packet.new(buffer.payload,
         payload_type: stream_state.payload_type,
-        sequence_number: sequence_number,
+        sequence_number: stream_state.sequence_number,
         timestamp: timestamp,
         ssrc: stream_state.ssrc,
         csrc: Map.get(rtp_metadata, :csrcs, []),
         marker: Map.get(rtp_metadata, :marker, false)
+      )
+
+    state =
+      update_in(
+        state.stream_states[pad_ref].sequence_number,
+        &rem(&1 + 1, @max_sequence_number + 1)
       )
 
     buffer_action =
