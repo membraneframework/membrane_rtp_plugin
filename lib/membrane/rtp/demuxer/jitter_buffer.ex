@@ -37,7 +37,7 @@ defmodule Membrane.RTP.Demuxer.JitterBuffer do
 
     defstruct @enforce_keys ++
                 [
-                  buffer_store: nil,
+                  buffer_store: %RTP.JitterBuffer.BufferStore{},
                   pad: nil,
                   clock_rate: nil,
                   latency: nil,
