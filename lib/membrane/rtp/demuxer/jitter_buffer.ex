@@ -37,7 +37,7 @@ defmodule Membrane.RTP.Demuxer.JitterBuffer do
 
     defstruct @enforce_keys ++
                 [
-                  buffer_store: nil,
+                  buffer_store: %RTP.JitterBuffer.BufferStore{},
                   pad: nil,
                   clock_rate: nil,
                   latency: nil,
@@ -51,7 +51,6 @@ defmodule Membrane.RTP.Demuxer.JitterBuffer do
   @spec new(ExRTP.Packet.t()) :: State.t()
   def new(packet) do
     %State{
-      buffer_store: %RTP.JitterBuffer.BufferStore{},
       ssrc: packet.ssrc,
       payload_type: packet.payload_type,
       initial_latency_waiting: true,
