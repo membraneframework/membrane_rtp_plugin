@@ -62,15 +62,19 @@ defmodule Membrane.RTP.JitterBufferTest do
       assert new_state == state
     end
 
-    test "adds it and when it fills the gap, returns all buffers in order", %{state: state} do
+    test "adds it and when it fills the gap, returns all buffers in order", %{
+      state: %State{} = state
+    } do
       first_buffer = BufferFactory.sample_buffer(@base_seq_number)
       second_buffer = BufferFactory.sample_buffer(@base_seq_number + 1)
       third_buffer = BufferFactory.sample_buffer(@base_seq_number + 2)
 
       flush_index = @base_seq_number - 1
 
+      %BufferStore{} = base_store = state.store
+
       store = %BufferStore{
-        state.store
+        base_store
         | flush_index: flush_index,
           highest_incoming_index: flush_index
       }
@@ -97,8 +101,10 @@ defmodule Membrane.RTP.JitterBufferTest do
     test "outputs discontinuity and late buffer", %{state: state, buffer: buffer} do
       flush_index = @base_seq_number - 2
 
+      %BufferStore{} = base_store = state.store
+
       store = %BufferStore{
-        state.store
+        base_store
         | flush_index: flush_index,
           highest_incoming_index: flush_index
       }
@@ -122,8 +128,10 @@ defmodule Membrane.RTP.JitterBufferTest do
     test "dumps store if event was end of stream", %{state: state, buffer: buffer} do
       flush_index = @base_seq_number - 2
 
+      %BufferStore{} = base_store = state.store
+
       store = %BufferStore{
-        state.store
+        base_store
         | flush_index: flush_index,
           highest_incoming_index: flush_index
       }

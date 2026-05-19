@@ -128,7 +128,7 @@ defmodule Membrane.RTP.SSRCRouter do
   end
 
   @impl true
-  def handle_pad_removed(Pad.ref(:input, _id) = pad, _ctx, state) do
+  def handle_pad_removed(Pad.ref(:input, _id) = pad, _ctx, %State{} = state) do
     new_pads =
       state.input_pads
       |> Enum.filter(fn {_ssrc, p} -> p != pad end)

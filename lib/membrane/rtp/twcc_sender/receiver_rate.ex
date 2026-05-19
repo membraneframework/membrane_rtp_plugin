@@ -12,14 +12,14 @@ defmodule Membrane.RTP.TWCCSender.ReceiverRate do
           # time window for measuring the received bitrate, between [0.5, 1]s (reffered to as "T" in the draft)
           window: Time.t(),
           # accumulator for packets and their timestamps that have been received in last `window` time
-          packets_received: Qex.t({Time.t(), pos_integer()})
+          packets_received: Qex.t()
         }
 
   @enforce_keys [:window]
   defstruct @enforce_keys ++ [:value, packets_received: Qex.new()]
 
   @spec new(Time.t()) :: t()
-  def new(window), do: %__MODULE__{window: window}
+  def new(window), do: %__MODULE__{window: window, packets_received: Qex.new()}
 
   @spec update(t(), Time.t(), [Time.t() | :not_received], [pos_integer()]) :: t()
   def update(%__MODULE__{value: nil} = rr, reference_time, receive_deltas, packet_sizes) do
@@ -42,7 +42,7 @@ defmodule Membrane.RTP.TWCCSender.ReceiverRate do
     do_update(rr, packets_received)
   end
 
-  defp do_update(rr, packets_received) do
+  defp do_update(%__MODULE__{} = rr, packets_received) do
     {last_packet_timestamp, _last_packet_size} = Qex.last!(packets_received)
     threshold = last_packet_timestamp - rr.window
 

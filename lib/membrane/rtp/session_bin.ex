@@ -69,10 +69,10 @@ defmodule Membrane.RTP.SessionBin do
 
   require Bitwise
   require Membrane.Logger
+  alias Membrane.{RemoteStream, RTCP, RTP, SRTP}
   alias Membrane.RTP.{PayloadFormat, Session}
   alias Membrane.RTP.SessionBin.RTXInfo
   alias Membrane.RTP.SSRCRouter.StreamsInfo
-  alias Membrane.{RemoteStream, RTCP, RTP, SRTP}
 
   @type new_stream_notification_t :: Membrane.RTP.SSRCRouter.new_stream_notification_t()
 
@@ -421,7 +421,7 @@ defmodule Membrane.RTP.SessionBin do
   end
 
   @impl true
-  def handle_pad_added(Pad.ref(:output, ssrc) = pad, ctx, state) do
+  def handle_pad_added(Pad.ref(:output, ssrc) = pad, ctx, %State{} = state) do
     %{
       depayloader: depayloader,
       clock_rate: clock_rate,
@@ -450,7 +450,7 @@ defmodule Membrane.RTP.SessionBin do
 
     {maybe_twcc, rtp_extensions} = Keyword.pop(rtp_extensions, :twcc)
     use_twcc? = maybe_twcc != nil
-    {twcc_children, state} = maybe_spawn_twcc_receiver(maybe_twcc, ctx, state)
+    {twcc_children, %State{} = state} = maybe_spawn_twcc_receiver(maybe_twcc, ctx, state)
 
     ssrc_router_pad_options = [
       encoding: encoding,

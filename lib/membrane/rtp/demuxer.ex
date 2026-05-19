@@ -215,7 +215,7 @@ defmodule Membrane.RTP.Demuxer do
         {[stream_format: {pad, %RTP{}}, end_of_stream: pad], state}
 
       %{phase: :waiting_for_matching_pad} = stream_state ->
-        {stream_format_action, stream_state} =
+        {stream_format_action, %State.StreamState{} = stream_state} =
           bind_pad_with_stream(pad, ctx.pad_options, stream_state, state.payload_type_mapping)
 
         {buffer_actions, jitter_buffer_state} =
@@ -402,6 +402,9 @@ defmodule Membrane.RTP.Demuxer do
     end
   end
 
+  # The opaque MapSet.internal type inside BufferStore leaks through JitterBuffer.State into
+  # StreamState, causing call_without_opaque when passing a freshly constructed stream_state.
+  @dialyzer {:nowarn_function, initialize_new_stream_state: 4}
   @spec initialize_new_stream_state(
           Pad.ref() | nil,
           ExRTP.Packet.t(),
@@ -450,7 +453,12 @@ defmodule Membrane.RTP.Demuxer do
           State.StreamState.t(),
           RTP.PayloadFormat.payload_type_mapping()
         ) :: {[Membrane.Element.Action.t()], State.StreamState.t()}
-  defp bind_pad_with_stream(pad, pad_options, stream_state, payload_type_mapping) do
+  defp bind_pad_with_stream(
+         pad,
+         pad_options,
+         %State.StreamState{} = stream_state,
+         payload_type_mapping
+       ) do
     if stream_state.pad_match_timer != nil, do: Process.cancel_timer(stream_state.pad_match_timer)
 
     jitter_buffer_state =

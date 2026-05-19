@@ -11,9 +11,9 @@ defmodule Membrane.RTP.InboundPacketTracker do
   require Bitwise
   require Membrane.Logger
 
+  alias Membrane.{Buffer, RTP, Time}
   alias Membrane.RTCP.ReceiverReport
   alias Membrane.RTP.{RetransmissionRequestEvent, SequenceNumberTracker}
-  alias Membrane.{Buffer, RTP, Time}
 
   @max_diff 9000
 
@@ -107,7 +107,7 @@ defmodule Membrane.RTP.InboundPacketTracker do
   end
 
   @impl true
-  def handle_event(:input, %ReceiverReport.StatsRequestEvent{}, _ctx, state) do
+  def handle_event(:input, %ReceiverReport.StatsRequestEvent{}, _ctx, %State{} = state) do
     %State{
       received: received,
       received_prior: received_prior,
@@ -181,7 +181,7 @@ defmodule Membrane.RTP.InboundPacketTracker do
     max_idx - base_seq + 1
   end
 
-  defp update_jitter(state, %Buffer{metadata: metadata}) do
+  defp update_jitter(%State{} = state, %Buffer{metadata: metadata}) do
     %State{clock_rate: clock_rate, jitter: last_jitter, transit: last_transit} = state
 
     # Algorithm from https://tools.ietf.org/html/rfc3550#appendix-A.8

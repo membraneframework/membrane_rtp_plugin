@@ -4,9 +4,9 @@ defmodule Membrane.RTP.Session.BinTest do
   import Membrane.Testing.Assertions
 
   require Membrane.Logger
+  alias Membrane.{RemoteStream, RTCP, RTP}
   alias Membrane.RTP.PayloadFormat
   alias Membrane.Testing
-  alias Membrane.{RemoteStream, RTCP, RTP}
 
   @rtp_input %{
     pcap: "test/fixtures/rtp/session/demo_rtp.pcap",

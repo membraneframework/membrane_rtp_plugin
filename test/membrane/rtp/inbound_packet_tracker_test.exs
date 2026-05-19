@@ -58,7 +58,9 @@ defmodule Membrane.RTP.InboundPacketTrackerTest do
                  timestamped_buf.metadata.rtp.timestamp
     end
 
-    test "update packet's sequence number if there have been discarded packets", %{state: state} do
+    test "update packet's sequence number if there have been discarded packets", %{
+      state: %InboundPacketTracker.State{} = state
+    } do
       state = %InboundPacketTracker.State{state | discarded: 10}
 
       # in sequence number range
@@ -77,7 +79,7 @@ defmodule Membrane.RTP.InboundPacketTrackerTest do
 
       assert buffer.metadata.rtp.sequence_number == @max_seq_number - 5 + 1
 
-      state = %InboundPacketTracker.State{state | repair_sequence_numbers?: false}
+      state = %{state | repair_sequence_numbers?: false}
       buffer = BufferFactory.sample_buffer(100)
 
       assert {[buffer: {:output, buffer}], _state} =

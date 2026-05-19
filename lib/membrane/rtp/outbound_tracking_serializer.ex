@@ -10,7 +10,6 @@ defmodule Membrane.RTP.OutboundTrackingSerializer do
 
   require Membrane.Logger
   require Membrane.TelemetryMetrics
-  alias Membrane.RTCP.TransportFeedbackPacket.NACK
   alias Membrane.{Buffer, Payload, RemoteStream, RTCP, RTCPEvent, RTP, Time}
   alias Membrane.RTCP.FeedbackPacket.{FIR, PLI}
   alias Membrane.RTCP.TransportFeedbackPacket.NACK

@@ -1,7 +1,7 @@
 defmodule Membrane.RTP.Plugin.MixProject do
   use Mix.Project
 
-  @version "0.31.1"
+  @version "0.31.2"
   @github_url "https://github.com/membraneframework/membrane_rtp_plugin"
 
   def project do
@@ -62,20 +62,20 @@ defmodule Membrane.RTP.Plugin.MixProject do
       {:membrane_realtimer_plugin, "~> 0.10.1", only: :test},
 
       # Dev
-      {:ex_doc, "~> 0.28", only: :dev, runtime: false},
-      {:dialyxir, "~> 1.1", only: :dev, runtime: false},
-      {:credo, "~> 1.5", only: :dev, runtime: false}
+      {:ex_doc, ">= 0.0.0", only: :dev, runtime: false},
+      {:dialyxir, ">= 0.0.0", only: :dev, runtime: false},
+      {:credo, ">= 0.0.0", only: :dev, runtime: false}
     ]
   end
 
   defp dialyzer() do
     opts = [
-      plt_add_apps: [:ex_libsrtp],
       flags: [:error_handling]
     ]
 
     if System.get_env("CI") == "true" do
       # Store PLTs in cacheable directory for CI
+      File.mkdir_p!(Path.join([__DIR__, "priv", "plts"]))
       [plt_local_path: "priv/plts", plt_core_path: "priv/plts"] ++ opts
     else
       opts
@@ -96,7 +96,7 @@ defmodule Membrane.RTP.Plugin.MixProject do
   defp docs do
     [
       main: "readme",
-      extras: ["README.md", LICENSE: [title: License]],
+      extras: ["README.md", LICENSE: [title: "License"]],
       formatters: ["html"],
       source_ref: "v#{@version}",
       nest_modules_by_prefix: [

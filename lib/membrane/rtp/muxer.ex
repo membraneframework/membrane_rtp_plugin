@@ -177,7 +177,7 @@ defmodule Membrane.RTP.Muxer do
   end
 
   @impl true
-  def handle_buffer(Pad.ref(:input, _ref) = pad_ref, buffer, _ctx, state) do
+  def handle_buffer(Pad.ref(:input, _ref) = pad_ref, %Membrane.Buffer{} = buffer, _ctx, state) do
     rtp_metadata = Map.get(buffer.metadata, :rtp, %{})
     stream_state = state.stream_states[pad_ref]
 
