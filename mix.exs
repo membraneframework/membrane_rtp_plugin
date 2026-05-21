@@ -1,7 +1,7 @@
 defmodule Membrane.RTP.Plugin.MixProject do
   use Mix.Project
 
-  @version "0.31.2"
+  @version "0.31.3"
   @github_url "https://github.com/membraneframework/membrane_rtp_plugin"
 
   def project do
