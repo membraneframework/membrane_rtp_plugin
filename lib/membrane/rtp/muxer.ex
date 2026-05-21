@@ -37,6 +37,24 @@ defmodule Membrane.RTP.Muxer do
         SSRC that this stream will be assigned. If not provided, a random free value will be assigned.
         """
       ],
+      initial_sequence_number: [
+        spec: ExRTP.Packet.uint16() | :random,
+        default: :random,
+        description: """
+        Sequence number that will be assigned to the first packet of this stream. Sequence numbers of 
+        subsequent packets will be determined by incrementing this value. This value should be generated 
+        randomly to prevent known payload attacks.
+        """
+      ],
+      initial_timestamp: [
+        spec: ExRTP.Packet.uint16() | :random,
+        default: :random,
+        description: """
+        RTP Timestamp that will be assigned to the first packet of this stream. Timestamps of subsequent 
+        packets will be calculated starting from this value. This value should be generated 
+        randomly to prevent known payload attacks.
+        """
+      ],
       payload_type: [
         spec: RTP.payload_type() | nil,
         default: nil,
@@ -165,8 +183,16 @@ defmodule Membrane.RTP.Muxer do
 
     new_stream_state = %State.StreamState{
       ssrc: ssrc,
-      sequence_number: Enum.random(0..@max_sequence_number),
-      initial_timestamp: Enum.random(0..@max_timestamp),
+      sequence_number:
+        if(pad_options.initial_sequence_number == :random,
+          do: Enum.random(0..@max_sequence_number),
+          else: pad_options.initial_sequence_number
+        ),
+      initial_timestamp:
+        if(pad_options.initial_timestamp == :random,
+          do: Enum.random(0..@max_timestamp),
+          else: pad_options.initial_timestamp
+        ),
       clock_rate: clock_rate,
       payload_type: payload_type
     }
@@ -188,18 +214,21 @@ defmodule Membrane.RTP.Muxer do
       |> Ratio.trunc()
 
     timestamp = rem(stream_state.initial_timestamp + rtp_offset, @max_timestamp + 1)
-    sequence_number = rem(stream_state.sequence_number + 1, @max_sequence_number + 1)
-
-    state = put_in(state.stream_states[pad_ref].sequence_number, sequence_number)
 
     packet =
       ExRTP.Packet.new(buffer.payload,
         payload_type: stream_state.payload_type,
-        sequence_number: sequence_number,
+        sequence_number: stream_state.sequence_number,
         timestamp: timestamp,
         ssrc: stream_state.ssrc,
         csrc: Map.get(rtp_metadata, :csrcs, []),
         marker: Map.get(rtp_metadata, :marker, false)
+      )
+
+    state =
+      update_in(
+        state.stream_states[pad_ref].sequence_number,
+        &rem(&1 + 1, @max_sequence_number + 1)
       )
 
     buffer_action =

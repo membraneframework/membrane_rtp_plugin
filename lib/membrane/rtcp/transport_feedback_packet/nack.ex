@@ -55,13 +55,13 @@ defmodule Membrane.RTCP.TransportFeedbackPacket.NACK do
     for <<packet_id::unsigned-size(16), bit_mask::unsigned-size(16) <- nack_fci>> do
       next_lost_packets =
         0..15
-        |> Enum.map(fn i ->
-          if (bit_mask >>> i &&& 1) == 1 do
-            mod_16bit(packet_id + i + 1)
+        |> Enum.map(
+          &if (bit_mask >>> &1 &&& 1) == 1 do
+            mod_16bit(packet_id + &1 + 1)
           else
             nil
           end
-        end)
+        )
         |> Enum.reject(&is_nil/1)
 
       [packet_id | next_lost_packets]
