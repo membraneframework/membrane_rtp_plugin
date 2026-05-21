@@ -42,8 +42,8 @@ defmodule Membrane.RTP.Muxer do
         default: :random,
         description: """
         Sequence number that will be assigned to the first packet of this stream. Sequence numbers of 
-        subsequent packets will be determined by incrementing this value. If not provided, a random 
-        free value will be assigned.
+        subsequent packets will be determined by incrementing this value. This value should be generated 
+        randomly to prevent known payload attacks.
         """
       ],
       initial_timestamp: [
@@ -51,8 +51,8 @@ defmodule Membrane.RTP.Muxer do
         default: :random,
         description: """
         RTP Timestamp that will be assigned to the first packet of this stream. Timestamps of subsequent 
-        packets will be calculated starting from this value. If not provided, a random free value will
-        be assigned.
+        packets will be calculated starting from this value. This value should be generated 
+        randomly to prevent known payload attacks.
         """
       ],
       payload_type: [
@@ -208,10 +208,10 @@ defmodule Membrane.RTP.Muxer do
     stream_state = state.stream_states[pad_ref]
 
     rtp_offset =
-      div(
-        buffer.pts * stream_state.clock_rate + div(Membrane.Time.second(), 2),
-        Membrane.Time.second()
-      )
+      buffer.pts
+      |> Membrane.Time.as_seconds()
+      |> Numbers.mult(stream_state.clock_rate)
+      |> Ratio.trunc()
 
     timestamp = rem(stream_state.initial_timestamp + rtp_offset, @max_timestamp + 1)
 
