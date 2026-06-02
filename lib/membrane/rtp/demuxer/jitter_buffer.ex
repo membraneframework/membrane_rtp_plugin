@@ -214,8 +214,16 @@ defmodule Membrane.RTP.Demuxer.JitterBuffer do
         :current -> jitter_buffer_state.timestamp_base
       end
 
-    timestamp = div(Time.seconds(rtp_timestamp - timestamp_base), jitter_buffer_state.clock_rate)
-    buffer = %Membrane.Buffer{buffer | pts: timestamp}
+    buffer =
+      case jitter_buffer_state.clock_rate do
+        nil ->
+          buffer
+
+        clock_rate ->
+          timestamp = div(Time.seconds(rtp_timestamp - timestamp_base), clock_rate)
+          %Membrane.Buffer{buffer | pts: timestamp}
+      end
+
     actions = if buffer.payload == <<>>, do: [], else: [buffer: {jitter_buffer_state.pad, buffer}]
 
     jitter_buffer_state = %State{
