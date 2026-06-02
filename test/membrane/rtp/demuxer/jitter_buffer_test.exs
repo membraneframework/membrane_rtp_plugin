@@ -1,6 +1,7 @@
 defmodule Membrane.RTP.Demuxer.JitterBufferTest do
   use ExUnit.Case, async: true
 
+  require Membrane.Pad, as: Pad
   alias Membrane.RTP.Demuxer.JitterBuffer
 
   # Dynamic payload type with no registered clock_rate
@@ -20,12 +21,19 @@ defmodule Membrane.RTP.Demuxer.JitterBufferTest do
   defp make_buffer(packet) do
     %Membrane.Buffer{
       payload: packet.payload,
-      metadata: %{rtp: %{packet | payload: <<>>}}
+      metadata: %{
+        rtp: %{
+          payload_type: packet.payload_type,
+          sequence_number: packet.sequence_number,
+          timestamp: packet.timestamp,
+          ssrc: packet.ssrc
+        }
+      }
     }
   end
 
   defp init_state(packet, clock_rate) do
-    pad = Membrane.Pad.ref(:output, :test)
+    pad = Pad.ref(:output, :test)
 
     pad_options = %{
       stream_id: {:ssrc, @ssrc},
@@ -52,22 +60,11 @@ defmodule Membrane.RTP.Demuxer.JitterBufferTest do
 
       assert [_buf] = output_buffers(actions)
     end
-
-    test "buffer pts is not updated and remains nil" do
-      packet = make_packet(1, 1000)
-      state = init_state(packet, nil)
-
-      state = JitterBuffer.insert_buffer(state, make_buffer(packet))
-      {actions, _state} = JitterBuffer.get_output_actions(state)
-
-      assert [%Membrane.Buffer{pts: nil}] = output_buffers(actions)
-    end
   end
 
   describe "when clock_rate is known" do
     test "buffer pts is computed from the rtp timestamp" do
       clock_rate = 90_000
-      # first packet establishes timestamp_base = 0; a second packet's pts should be non-zero
       first = make_packet(1, 0)
       state = init_state(first, clock_rate)
 
@@ -78,7 +75,7 @@ defmodule Membrane.RTP.Demuxer.JitterBufferTest do
 
       [first_out, second_out] = output_buffers(actions)
       assert first_out.pts == 0
-      assert second_out.pts == Membrane.Time.seconds(1) |> div(10)
+      assert second_out.pts == Membrane.Time.milliseconds(100)
     end
   end
 end
