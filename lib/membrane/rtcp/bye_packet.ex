@@ -16,7 +16,7 @@ defmodule Membrane.RTCP.ByePacket do
   @impl true
   def decode(packet, count) do
     ssrcs_size = count * 4
-    <<ssrcs::binary-size(ssrcs_size), reason::binary>> = packet
+    <<ssrcs::binary-size(^ssrcs_size), reason::binary>> = packet
 
     ssrcs =
       ssrcs

@@ -76,7 +76,7 @@ defmodule Membrane.RTCP.Packet do
   defp do_parse(<<raw_header::binary-size(4), body_and_rest::binary>>, acc) do
     with {:ok, %{header: header, body_size: length, padding?: padding?}} <-
            Header.parse(raw_header),
-         <<body::binary-size(length), rest::binary>> <- body_and_rest,
+         <<body::binary-size(^length), rest::binary>> <- body_and_rest,
          {:ok, {body, _padding}} <- RTP.Utils.strip_padding(body, padding?) do
       case parse_packet(body, header) do
         {:ok, packet} ->

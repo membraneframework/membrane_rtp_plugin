@@ -2,8 +2,6 @@ defmodule Membrane.RTP.TWCCSender.CongestionControl do
   @moduledoc false
   # The module implements [Google congestion control algorithm](https://datatracker.ietf.org/doc/html/draft-ietf-rmcat-gcc-02).
 
-  require Membrane.Logger
-
   alias Membrane.RTP.TWCCSender.ReceiverRate
   alias Membrane.Time
 

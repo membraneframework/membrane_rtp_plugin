@@ -70,7 +70,8 @@ defmodule Membrane.RTP.OutboundTrackingSerializer do
             extension_mapping: RTP.SessionBin.rtp_extension_mapping_t(),
             any_buffer_sent?: boolean(),
             rtcp_output_pad: Membrane.Pad.ref() | nil,
-            stats_acc: %{}
+            stats_acc: %{},
+            telemetry_label: Membrane.TelemetryMetrics.label()
           }
 
     defstruct ssrc: 0,
@@ -84,7 +85,8 @@ defmodule Membrane.RTP.OutboundTrackingSerializer do
                 rtp_timestamp: 0,
                 sender_packet_count: 0,
                 sender_octet_count: 0
-              }
+              },
+              telemetry_label: []
   end
 
   @impl true
