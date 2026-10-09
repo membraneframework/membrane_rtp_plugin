@@ -94,7 +94,7 @@ if Code.ensure_loaded?(ExLibSRTP) do
           # decrypted payload contains the header that we can simply strip without any parsing as we know its length
           remaining_header_size = total_header_size * 8 - 3
 
-          <<_ver::2, has_padding::1, _header::bitstring-size(remaining_header_size),
+          <<_ver::2, has_padding::1, _header::bitstring-size(^remaining_header_size),
             payload::binary>> = payload
 
           {:ok, {payload, padding_size}} = Utils.strip_padding(payload, has_padding == 1)

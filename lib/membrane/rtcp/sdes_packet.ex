@@ -89,7 +89,7 @@ defmodule Membrane.RTCP.SdesPacket do
   defp parse_items(<<0::8, rest::binary>>, acc) do
     # skip padding unitil next 32-bit boundary
     to_skip = rest |> bit_size |> rem(32)
-    <<_skipped::size(to_skip), next_chunk::binary>> = rest
+    <<_skipped::size(^to_skip), next_chunk::binary>> = rest
     {:ok, acc, next_chunk}
   end
 

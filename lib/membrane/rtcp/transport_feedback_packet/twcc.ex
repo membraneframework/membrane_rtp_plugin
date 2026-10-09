@@ -158,7 +158,7 @@ defmodule Membrane.RTCP.TransportFeedbackPacket.TWCC do
     # note about 1-bit symbols: the draft does not specify this,
     # but libwebrtc treats <<1::1>> as a "packet received, small delta" status
     new_status =
-      for <<(<<symbol::size(symbol_size)>> <- symbol_list)>>,
+      for <<(<<symbol::size(^symbol_size)>> <- symbol_list)>>,
         do: BiMap.fetch_key!(@packet_status_flags, symbol)
 
     parse_packet_status(rest, packets_left - packets_parsed, parsed_status ++ new_status)
