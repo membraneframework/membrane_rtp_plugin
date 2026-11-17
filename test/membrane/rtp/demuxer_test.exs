@@ -181,4 +181,64 @@ defmodule Membrane.RTP.DemuxerTest do
       perform_test(DynamicPipeline, true)
     end
   end
+
+  describe "Demuxer drops packets that cannot be parsed" do
+    # libavformat and gortsplib drop such packets and carry on; one of them used to
+    # take the whole pipeline down.
+    test "and keeps demuxing the stream" do
+      import Membrane.ChildrenSpec
+
+      packet = fn sequence_number ->
+        ExRTP.Packet.new(<<sequence_number>>,
+          payload_type: 96,
+          sequence_number: sequence_number,
+          timestamp: sequence_number * 3000,
+          ssrc: 0x1234
+        )
+        |> ExRTP.Packet.encode()
+      end
+
+      <<truncated_header::binary-size(7), _rest::binary>> = packet.(2)
+      # the padding bit is set, but the last byte claims more padding than there is data
+      bad_padding = <<2::2, 1::1, 0::5, 96, 3::16, 9000::32, 0x1234::32, 200>>
+
+      payloads = [packet.(1), <<>>, <<0x80>>, truncated_header, bad_padding, packet.(4)]
+
+      log =
+        ExUnit.CaptureLog.capture_log(fn ->
+          pipeline =
+            Testing.Pipeline.start_link_supervised!(
+              spec:
+                child(:source, %Testing.Source{
+                  output: payloads,
+                  stream_format: %Membrane.RemoteStream{
+                    type: :packetized,
+                    content_format: Membrane.RTP
+                  }
+                })
+                |> child(:demuxer, Membrane.RTP.Demuxer)
+                |> via_out(:output,
+                  options: [
+                    stream_id: {:payload_type, 96},
+                    clock_rate: 90_000,
+                    jitter_buffer_latency: 0
+                  ]
+                )
+                |> child(:sink, Testing.Sink)
+            )
+
+          assert_sink_buffer(pipeline, :sink, %Membrane.Buffer{payload: <<1>>})
+          assert_sink_buffer(pipeline, :sink, %Membrane.Buffer{payload: <<4>>})
+          assert_end_of_stream(pipeline, :sink)
+          Testing.Pipeline.terminate(pipeline)
+        end)
+
+      # all four are reported, and only the first with the warning that announces the rest
+      assert [_first, _second, _third, _fourth, _rest] =
+               String.split(log, "Dropping a malformed RTP packet")
+
+      assert [_before, _after] =
+               String.split(log, "Further ones will be logged at the debug level")
+    end
+  end
 end
