@@ -326,12 +326,9 @@ defmodule Membrane.RTP.Demuxer do
 
   defp classify_packet(_too_short), do: :malformed
 
-  # A packet that cannot be parsed is dropped, the way other receivers treat it,
-  # instead of taking the whole stream down with it.
   @spec drop_malformed_packet(binary(), term(), State.t()) ::
           {[Membrane.Element.Action.t()], State.t()}
   defp drop_malformed_packet(packet, reason, %State{malformed_packet_logged?: false} = state) do
-    # a stream that has such packets tends to have many, so only the first is a warning
     Membrane.Logger.warning("""
     Dropping a malformed RTP packet of #{byte_size(packet)} bytes: #{inspect(reason)}. \
     Further ones will be logged at the debug level.

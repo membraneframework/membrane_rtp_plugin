@@ -183,8 +183,6 @@ defmodule Membrane.RTP.DemuxerTest do
   end
 
   describe "Demuxer drops packets that cannot be parsed" do
-    # libavformat and gortsplib drop such packets and carry on; one of them used to
-    # take the whole pipeline down.
     test "and keeps demuxing the stream" do
       import Membrane.ChildrenSpec
 
@@ -233,7 +231,6 @@ defmodule Membrane.RTP.DemuxerTest do
           Testing.Pipeline.terminate(pipeline)
         end)
 
-      # all four are reported, and only the first with the warning that announces the rest
       assert [_first, _second, _third, _fourth, _rest] =
                String.split(log, "Dropping a malformed RTP packet")
 
