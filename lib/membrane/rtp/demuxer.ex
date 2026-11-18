@@ -148,11 +148,17 @@ defmodule Membrane.RTP.Demuxer do
             payload_type_mapping: RTP.PayloadFormat.payload_type_mapping(),
             not_linked_pad_handling: %{action: :raise | :ignore, timeout: Membrane.Time.t()},
             srtp: ExLibSRTP.t() | nil,
-            pads_waiting_for_stream: %{Pad.ref() => Membrane.RTP.Demuxer.stream_id()}
+            pads_waiting_for_stream: %{Pad.ref() => Membrane.RTP.Demuxer.stream_id()},
+            malformed_packet_logged?: boolean()
           }
 
     @enforce_keys [:not_linked_pad_handling, :payload_type_mapping, :srtp]
-    defstruct @enforce_keys ++ [stream_states: %{}, pads_waiting_for_stream: %{}]
+    defstruct @enforce_keys ++
+                [
+                  stream_states: %{},
+                  pads_waiting_for_stream: %{},
+                  malformed_packet_logged?: false
+                ]
   end
 
   @impl true
@@ -190,6 +196,7 @@ defmodule Membrane.RTP.Demuxer do
     case classify_packet(payload) do
       :rtp -> handle_rtp_packet(payload, ctx, state)
       :rtcp -> handle_rtcp_packets(payload, state)
+      :malformed -> drop_malformed_packet(payload, :not_enough_data, state)
     end
   end
 
@@ -310,11 +317,32 @@ defmodule Membrane.RTP.Demuxer do
     end)
   end
 
-  @spec classify_packet(binary()) :: :rtp | :rtcp
+  @spec classify_packet(binary()) :: :rtp | :rtcp | :malformed
   defp classify_packet(<<_first_byte, _marker::1, payload_type::7, _rest::binary>>) do
     if payload_type in 64..95,
       do: :rtcp,
       else: :rtp
+  end
+
+  defp classify_packet(_too_short), do: :malformed
+
+  @spec drop_malformed_packet(binary(), term(), State.t()) ::
+          {[Membrane.Element.Action.t()], State.t()}
+  defp drop_malformed_packet(packet, reason, %State{malformed_packet_logged?: false} = state) do
+    Membrane.Logger.warning("""
+    Dropping a malformed RTP packet of #{byte_size(packet)} bytes: #{inspect(reason)}. \
+    Further ones will be logged at the debug level.
+    """)
+
+    {[], %State{state | malformed_packet_logged?: true}}
+  end
+
+  defp drop_malformed_packet(packet, reason, state) do
+    Membrane.Logger.debug(
+      "Dropping a malformed RTP packet of #{byte_size(packet)} bytes: #{inspect(reason)}"
+    )
+
+    {[], state}
   end
 
   @spec handle_rtp_packet(binary(), CallbackContext.t(), State.t()) ::
@@ -348,8 +376,15 @@ defmodule Membrane.RTP.Demuxer do
   @spec handle_raw_rtp_packet(binary(), CallbackContext.t(), State.t()) ::
           {[Membrane.Element.Action.t()], State.t()}
   defp handle_raw_rtp_packet(raw_rtp_packet, ctx, state) do
-    {:ok, packet} = ExRTP.Packet.decode(raw_rtp_packet)
+    case ExRTP.Packet.decode(raw_rtp_packet) do
+      {:ok, packet} -> handle_decoded_rtp_packet(packet, ctx, state)
+      {:error, reason} -> drop_malformed_packet(raw_rtp_packet, reason, state)
+    end
+  end
 
+  @spec handle_decoded_rtp_packet(ExRTP.Packet.t(), CallbackContext.t(), State.t()) ::
+          {[Membrane.Element.Action.t()], State.t()}
+  defp handle_decoded_rtp_packet(packet, ctx, state) do
     {new_stream_actions, state} =
       if Map.has_key?(state.stream_states, packet.ssrc) do
         {[], state}
